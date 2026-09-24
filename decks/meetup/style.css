@@ -1,0 +1,123 @@
+/* Dutch K8s Meetup — CNCF branding */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+
+:root {
+  --k8s-blue: #326CE5;
+  --k8s-blue-mid: #3B7FD4;
+  --k8s-orange: #E8A33D;
+  --k8s-red: #C0392B;
+  --k8s-ink: #1a1e2e;
+  --footer-h: 28px;
+}
+
+html, body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+
+.slidev-layout {
+  background: #fff !important;
+  color: var(--k8s-ink);
+  padding-bottom: var(--footer-h) !important;
+}
+
+#slidev-progress-bar { display: none; }
+
+/* Global footer — CSS bar + JS-injected text (dynamic slide number) */
+body::after {
+  content: "";
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--footer-h);
+  background: var(--k8s-blue);
+  z-index: 999;
+  pointer-events: none;
+}
+.global-k8s-footer {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: var(--footer-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 18px;
+  z-index: 1000;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 10.5px;
+  pointer-events: none;
+}
+.global-k8s-footer-left {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.global-k8s-footer-right {
+  display: flex; align-items: center; gap: 18px;
+  color: #c7dbff;
+  font-weight: 500;
+}
+.global-k8s-footer-num {
+  color: #fff;
+  font-weight: 700;
+  min-width: 14px;
+  text-align: right;
+}
+
+/* Print: per-slide footer bar */
+@media print {
+  body::after, .global-k8s-footer { display: none; }
+  .slidev-layout::after {
+    content: "Dutch Kubernetes/Cloud Native Meetup  \00a0\00a0\00a0  Cloud Native Computing Foundation";
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: var(--footer-h);
+    background: var(--k8s-blue);
+    color: #fff;
+    font-size: 9px;
+    display: flex;
+    align-items: center;
+    padding: 0 14px;
+  }
+}
+
+/* Cover orange title */
+.cover-title {
+  color: var(--k8s-orange);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 0.95;
+}
+
+/* Agenda bullets */
+.agenda-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.agenda-list li {
+  padding: 7px 0;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: #222;
+}
+.agenda-list li:last-child { border-bottom: none; }
+.agenda-list li strong { font-weight: 700; }
+
+/* Host circles */
+.host-img {
+  width: 148px;
+  height: 148px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 4px solid #fff;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.06);
+}
+
+/* Community stats red */
+.stats-red { color: #B91C1C; }
+
+/* Images framed */
+.img-card {
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+  border: 1px solid #e8e8e8;
+}

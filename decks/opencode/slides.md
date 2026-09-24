@@ -17,13 +17,9 @@ fonts:
   serif: Newsreader
   mono: DM Mono
 colorSchema: light
-class: text-left
 highlighter: shiki
 lineNumbers: false
 css: unocss
----
-
----
 layout: cover
 background: "#0a0a0f"
 class: text-white relative overflow-hidden

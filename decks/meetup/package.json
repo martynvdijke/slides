@@ -1,0 +1,8 @@
+{
+  "name": "meetup",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md",
+    "build": "slidev build slides.md --out ../../dist/meetup --base ${BASE_PATH:-/}meetup/"
+  }
+}
