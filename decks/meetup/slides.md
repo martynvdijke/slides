@@ -222,6 +222,47 @@ layout: center
 class: "bg-white text-center"
 ---
 
+<div class="w-full max-w-4xl mx-auto">
+
+<div class="text-[13px] font-bold uppercase tracking-[0.25em] text-[#326CE5]">House rules</div>
+
+<h2 class="text-[38px] font-extrabold tracking-tight text-[#0f172a] mt-3">Ask a question, get a sweet</h2>
+
+<p class="text-[15px] text-[#475569] mt-3">Put your hand up and ask the speakers anything — every question earns you a sweet.</p>
+
+<div class="mt-9 grid grid-cols-2 gap-6 text-left">
+
+<div class="cta-card">
+  <svg class="w-[46px] h-[46px]" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+    <path d="M20 32 L4 20 L8 32 L4 44 Z" fill="#E8A33D" stroke="#0f172a" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M44 32 L60 20 L56 32 L60 44 Z" fill="#E8A33D" stroke="#0f172a" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="32" cy="32" r="15" fill="#C0392B" stroke="#0f172a" stroke-width="2"/>
+    <path d="M26 19 Q22 32 26 45" stroke="#fff" stroke-width="3" fill="none" opacity="0.85"/>
+    <path d="M38 19 Q42 32 38 45" stroke="#fff" stroke-width="3" fill="none" opacity="0.85"/>
+  </svg>
+  <div class="text-[20px] font-bold text-[#0f172a] mt-3">Every question = a sweet</div>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-[#475569]">No question too small or too silly. The more you ask, the more sweets you collect.</p>
+</div>
+
+<div class="cta-card">
+  <svg class="w-[46px] h-[46px]" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+    <rect x="27" y="4" width="10" height="10" rx="2" fill="#B45309" stroke="#0f172a" stroke-width="2"/>
+    <path d="M28 14 h8 v10 l6 10 a14 14 0 0 1 -20 0 l6 -10 z" fill="#FDE68A" stroke="#0f172a" stroke-width="2" stroke-linejoin="round"/>
+    <rect x="18" y="40" width="28" height="16" rx="3" fill="#FACC15" stroke="#0f172a" stroke-width="2"/>
+  </svg>
+  <div class="text-[20px] font-bold text-[#0f172a] mt-3">Most sweets left wins limoncello</div>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-[#475569]">At the end of the night, the person still holding the most uneaten sweets goes home with a bottle of limoncello.</p>
+</div>
+
+</div>
+
+</div>
+
+---
+layout: center
+class: "bg-white text-center"
+---
+
 <div class="event-card">
 
 <div class="flex items-center justify-center gap-2">
