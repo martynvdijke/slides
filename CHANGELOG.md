@@ -1,3 +1,10 @@
+## [1.2.2](https://github.com/martynvdijke/slides/compare/v1.2.1...v1.2.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* **meetup:** correct host photo crop for both hosts ([6beb8b2](https://github.com/martynvdijke/slides/commit/6beb8b2d29dc44a4c01b0910cb644a851b50eab0))
+
 ## [1.2.1](https://github.com/martynvdijke/slides/compare/v1.2.0...v1.2.1) (2026-09-24)
 
 
