@@ -95,7 +95,7 @@ class: "bg-white text-center"
 </div>
 
 <div class="flex flex-col items-center">
-  <img src="/host-martyn.png" class="host-img" style="object-position: center top" alt="Martyn van Dijke" />
+  <img src="/host-martyn.png" class="host-img" alt="Martyn van Dijke" />
   <div class="mt-4 text-[18px] font-bold text-[#0f172a]">Martyn van Dijke</div>
 </div>
 
