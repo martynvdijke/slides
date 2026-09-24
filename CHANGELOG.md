@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/martynvdijke/slides/compare/v1.3.0...v1.3.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **meetup:** repeat call-for-speakers slide before the first talk ([b07e4f9](https://github.com/martynvdijke/slides/commit/b07e4f928ccdf8ad93a703e2c175ccc76a4fe8dd))
+
 # [1.3.0](https://github.com/martynvdijke/slides/compare/v1.2.3...v1.3.0) (2026-09-24)
 
 
