@@ -238,6 +238,25 @@ class: "bg-white px-12 py-10"
 
 </div>
 
+---
+layout: default
+class: "bg-white px-12 py-10"
+---
+Pascal Widdershoven & Luk van den Borne (Kabisa) Running k8s at sea
+
+---
+layout: default
+class: "bg-white px-12 py-10"
+---
+Food
+
+---
+layout: default
+class: "bg-white px-12 py-10"
+---
+Manuel Mascarenhas & Ronald van Zandvoort (ASML): Taking flight with Cilium eBPF – Is that you Icarus?
+
+
 <!--
 Stay in touch — three channels, bold prefix as in original.
 -->
