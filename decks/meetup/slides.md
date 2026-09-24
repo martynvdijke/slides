@@ -258,7 +258,6 @@ class: "bg-white text-center"
 </div>
 
 ---
-
 layout: center
 class: "bg-white text-center"
 ---
@@ -288,7 +287,6 @@ Reposting our cousins' event! Two full days of talks, workshops and hallway conv
 </div>
 
 ---
-
 layout: center
 class: "bg-white text-center"
 ---
