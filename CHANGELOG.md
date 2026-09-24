@@ -1,3 +1,10 @@
+## [1.2.3](https://github.com/martynvdijke/slides/compare/v1.2.2...v1.2.3) (2026-09-24)
+
+
+### Bug Fixes
+
+* **meetup:** credit Sjuul on the call-for-speakers slide ([3231a13](https://github.com/martynvdijke/slides/commit/3231a13cc057fd20251486cca45945be24ae1c2f))
+
 ## [1.2.2](https://github.com/martynvdijke/slides/compare/v1.2.1...v1.2.2) (2026-09-24)
 
 
