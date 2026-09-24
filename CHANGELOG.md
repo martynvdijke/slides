@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/martynvdijke/slides/compare/v1.1.0...v1.2.0) (2026-09-24)
+
+
+### Features
+
+* **meetup:** add call for speakers and hosts slide ([8fdbf36](https://github.com/martynvdijke/slides/commit/8fdbf3600d7e5782be830142bc727a1c996535fc))
+
 # [1.1.0](https://github.com/martynvdijke/slides/compare/v1.0.0...v1.1.0) (2026-09-24)
 
 
