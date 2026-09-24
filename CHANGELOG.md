@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/martynvdijke/slides/compare/v1.2.3...v1.3.0) (2026-09-24)
+
+
+### Features
+
+* **meetup:** design talk and pizza-break event cards ([4cb80f3](https://github.com/martynvdijke/slides/commit/4cb80f36cd654e7fbb57b9eee9b191a843c65f08))
+
 ## [1.2.3](https://github.com/martynvdijke/slides/compare/v1.2.2...v1.2.3) (2026-09-24)
 
 
