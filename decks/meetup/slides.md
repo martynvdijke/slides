@@ -189,6 +189,43 @@ layout: center
 class: "bg-white text-center"
 ---
 
+<div class="w-full max-w-4xl mx-auto">
+
+<div class="text-[13px] font-bold uppercase tracking-[0.25em] text-[#326CE5]">Your turn</div>
+
+<h2 class="text-[38px] font-extrabold tracking-tight text-[#0f172a] mt-3">Want to present? Want to help host?</h2>
+
+<p class="text-[15px] text-[#475569] mt-3">Every meetup is powered by people who put their hand up — and that could be you.</p>
+
+<div class="mt-9 grid grid-cols-2 gap-6 text-left">
+
+<div class="cta-card">
+  <div class="text-[20px] font-bold text-[#0f172a]">Give a talk</div>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-[#475569]">Got a war story, a deep dive, or a live demo? 20–45 minutes on anything Kubernetes, cloud-native or AI. First-time speakers very welcome.</p>
+</div>
+
+<div class="cta-card">
+  <div class="text-[20px] font-bold text-[#0f172a]">Help host</div>
+  <p class="mt-2 text-[13.5px] leading-relaxed text-[#475569]">Offer a venue, sponsor the pizzas, or just help things run on the night. No experience needed — we'll show you the ropes.</p>
+</div>
+
+</div>
+
+<div class="mt-8 text-[13px] text-[#0f172a]">
+  Talk to <span class="font-bold">Gareth</span> or <span class="font-bold">Martyn</span> &nbsp;·&nbsp; <span class="font-bold">info@cloudnative.amsterdam</span> &nbsp;·&nbsp; <span class="font-bold">community.cncf.io/amsterdam</span>
+</div>
+
+</div>
+
+<!--
+Call to action — recruit speakers and hosts for the next meetup.
+-->
+
+---
+layout: center
+class: "bg-white text-center"
+---
+
 <div class="flex flex-col items-center justify-center">
 
 <div class="text-[54px] font-extrabold tracking-tight text-[#0f172a]">See you soon!</div>

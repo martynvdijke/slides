@@ -121,3 +121,13 @@ body::after {
   box-shadow: 0 4px 18px rgba(0,0,0,0.08);
   border: 1px solid #e8e8e8;
 }
+
+/* Call-to-action cards (speak / host) */
+.cta-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-top: 3px solid var(--k8s-blue);
+  border-radius: 12px;
+  padding: 20px 22px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.05);
+}
