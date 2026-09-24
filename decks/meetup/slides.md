@@ -95,7 +95,7 @@ class: "bg-white text-center"
 </div>
 
 <div class="flex flex-col items-center">
-  <img src="/host-martyn.png" class="host-img" alt="Martyn van Dijke" />
+  <img src="/host-martyn.png" class="host-img" style="object-position: center top" alt="Martyn van Dijke" />
   <div class="mt-4 text-[18px] font-bold text-[#0f172a]">Martyn van Dijke</div>
 </div>
 
@@ -221,17 +221,6 @@ class: "bg-white text-center"
 Call to action — recruit speakers and hosts for the next meetup.
 -->
 
----
-layout: center
-class: "bg-white text-center"
----
-
-<div class="flex flex-col items-center justify-center">
-
-<div class="text-[54px] font-extrabold tracking-tight text-[#0f172a]">See you soon!</div>
-
-
-</div>
 ---
 layout: default
 class: "bg-white px-12 py-10"
