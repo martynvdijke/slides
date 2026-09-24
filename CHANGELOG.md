@@ -1,3 +1,10 @@
+# [1.1.0](https://github.com/martynvdijke/slides/compare/v1.0.0...v1.1.0) (2026-09-24)
+
+
+### Features
+
+* publish multiple decks (opencode, meetup) ([74aadff](https://github.com/martynvdijke/slides/commit/74aadff51d39e6e1c0f9156bd153074395429e94))
+
 # 1.0.0 (2026-09-24)
 
 
