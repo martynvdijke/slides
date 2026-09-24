@@ -255,10 +255,40 @@ class: "bg-white text-center"
 </div>
 
 </div>
+</div>
+
+---
+
+layout: center
+class: "bg-white text-center"
+---
+
+<div class="event-card">
+
+<div class="flex items-center justify-center gap-2">
+  <span class="event-eyebrow">Upcoming event</span>
+  <span class="event-dot">·</span>
+  <span class="event-time">29 – 30 October 2026</span>
+</div>
+
+<h2 class="event-title mt-4">Dutch Cloud Native Day</h2>
+
+<div class="event-divider"></div>
+
+<p class="event-subline mt-4">Jaarbeurs, Utrecht, The Netherlands</p>
+
+<p class="text-[13.5px] leading-relaxed text-[#475569] mt-3">
+Reposting our cousins' event! Two full days of talks, workshops and hallway conversations — sign up as the agenda is insanely good and the event will be memorable as always.
+</p>
+
+<div class="mt-4">
+  <span class="event-company-pill">Discount code: DCND26-CLOU-TH47</span>
+</div>
 
 </div>
 
 ---
+
 layout: center
 class: "bg-white text-center"
 ---
