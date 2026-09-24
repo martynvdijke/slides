@@ -1,0 +1,8 @@
+{
+  "name": "DECK_NAME",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md",
+    "build": "slidev build slides.md --out ../../dist/DECK_NAME --base ${BASE_PATH:-/}DECK_NAME/"
+  }
+}

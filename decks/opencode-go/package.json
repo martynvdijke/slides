@@ -1,0 +1,8 @@
+{
+  "name": "opencode-go",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md",
+    "build": "slidev build slides.md --out ../../dist/opencode-go --base ${BASE_PATH:-/}opencode-go/"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "slides",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "decks/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present && node scripts/build-index.mjs"
+  },
+  "devDependencies": {
+    "@slidev/cli": "^53.0.0",
+    "@slidev/theme-default": "^0.25.0",
+    "@slidev/theme-seriph": "^0.25.0"
+  }
+}
