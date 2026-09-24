@@ -1,3 +1,10 @@
+# [1.5.0](https://github.com/martynvdijke/slides/compare/v1.4.0...v1.5.0) (2026-09-24)
+
+
+### Features
+
+* **meetup:** add Dutch Cloud Native Day event slide before first talk ([0a41b63](https://github.com/martynvdijke/slides/commit/0a41b63fabd91dc3518dbee2ce390d896a3a7572))
+
 # [1.4.0](https://github.com/martynvdijke/slides/compare/v1.3.1...v1.4.0) (2026-09-24)
 
 
