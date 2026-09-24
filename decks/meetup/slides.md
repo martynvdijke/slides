@@ -212,7 +212,7 @@ class: "bg-white text-center"
 </div>
 
 <div class="mt-8 text-[13px] text-[#0f172a]">
-  Talk to <span class="font-bold">Gareth</span> or <span class="font-bold">Martyn</span> &nbsp;·&nbsp; <span class="font-bold">info@cloudnative.amsterdam</span> &nbsp;·&nbsp; <span class="font-bold">community.cncf.io/amsterdam</span>
+  Talk to <span class="font-bold">Gareth</span> or <span class="font-bold">Martyn</span> or <span class="font-bold">Sjuul</span> 
 </div>
 
 </div>
