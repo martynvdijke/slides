@@ -1,3 +1,10 @@
+## [1.2.1](https://github.com/martynvdijke/slides/compare/v1.2.0...v1.2.1) (2026-09-24)
+
+
+### Bug Fixes
+
+* **meetup:** align host photos and remove 'See you soon' slide ([3eda28f](https://github.com/martynvdijke/slides/commit/3eda28fbd5a55fcec5e8a86bc5a102a00a8c4496))
+
 # [1.2.0](https://github.com/martynvdijke/slides/compare/v1.1.0...v1.2.0) (2026-09-24)
 
 
