@@ -132,3 +132,89 @@ body::after {
   padding: 20px 22px;
   box-shadow: 0 4px 18px rgba(0,0,0,0.05);
 }
+
+/* Event transition cards (talk + break) */
+.event-card {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-top: 3px solid var(--k8s-blue);
+  border-radius: 16px;
+  padding: 30px 36px 28px;
+  box-shadow: 0 8px 28px rgba(15,42,74,0.08);
+  max-width: 760px;
+  width: 100%;
+  margin: 0 auto;
+}
+.event-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--k8s-blue);
+}
+.event-time {
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #475569;
+}
+.event-dot {
+  color: #cbd5e1;
+  font-weight: 700;
+}
+.event-title {
+  font-size: 36px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  color: #0f172a;
+}
+.event-title--sm {
+  font-size: 30px;
+}
+.event-speakers {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+  letter-spacing: -0.01em;
+}
+.event-company-pill {
+  display: inline-block;
+  background: #0f2a4a;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 7px 16px;
+  border-radius: 999px;
+}
+.event-subline {
+  font-size: 14.5px;
+  color: #64748b;
+  font-weight: 500;
+}
+.pizza-icon-wrap {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.06);
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+}
+.pizza-icon {
+  width: 62px;
+  height: 62px;
+  display: block;
+}
+.event-divider {
+  width: 36px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--k8s-blue);
+  opacity: 0.9;
+  margin: 14px auto 0;
+}

@@ -189,6 +189,100 @@ layout: center
 class: "bg-white text-center"
 ---
 
+<div class="event-card">
+
+<div class="flex items-center justify-center gap-2">
+  <span class="event-eyebrow">1st Talk</span>
+  <span class="event-dot">·</span>
+  <span class="event-time">18:05 – 18:50</span>
+</div>
+
+<h2 class="event-title mt-4">Running k8s at sea</h2>
+
+<div class="event-divider"></div>
+
+<div class="event-speakers mt-4">Pascal Widdershoven & Luk van den Borne</div>
+
+<div class="mt-3">
+  <span class="event-company-pill">Kabisa</span>
+</div>
+
+</div>
+
+---
+layout: center
+class: "bg-white text-center"
+---
+
+<div class="event-card">
+
+<div class="pizza-icon-wrap" aria-hidden="true">
+<svg class="pizza-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- crust -->
+  <path d="M12 22 Q50 2 88 22 L84 32 Q50 12 16 32 Z" fill="#E8A33D" stroke="#0f172a" stroke-width="2.2" stroke-linejoin="round"/>
+  <!-- cheese slice -->
+  <path d="M16 32 L50 92 L84 32 Q50 12 16 32 Z" fill="#FFF7CC" stroke="#0f172a" stroke-width="2.2" stroke-linejoin="round"/>
+  <!-- melted cheese highlight -->
+  <path d="M28 38 Q32 42 28 46 Q30 42 28 38" stroke="#E8A33D" stroke-width="1.4" stroke-linecap="round" opacity="0.9"/>
+  <path d="M68 42 Q72 46 68 50 Q70 46 68 42" stroke="#E8A33D" stroke-width="1.4" stroke-linecap="round" opacity="0.9"/>
+  <!-- pepperoni -->
+  <circle cx="38" cy="49" r="7.2" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
+  <circle cx="62" cy="53" r="6.4" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
+  <circle cx="50" cy="71" r="5.8" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
+  <!-- pepperoni shine -->
+  <circle cx="36.2" cy="47.2" r="1.1" fill="white" opacity="0.85"/>
+  <circle cx="60.5" cy="51.2" r="1" fill="white" opacity="0.85"/>
+  <circle cx="48.6" cy="69.2" r="0.9" fill="white" opacity="0.85"/>
+  <!-- cheese dots -->
+  <circle cx="46" cy="38" r="1.3" fill="#E8A33D" opacity="0.9"/>
+  <circle cx="54" cy="44" r="1.1" fill="#E8A33D" opacity="0.9"/>
+  <circle cx="42" cy="62" r="1.1" fill="#E8A33D" opacity="0.9"/>
+  <circle cx="58" cy="64" r="1.2" fill="#E8A33D" opacity="0.9"/>
+</svg>
+</div>
+
+<div class="flex items-center justify-center gap-2">
+  <span class="event-eyebrow">Break</span>
+  <span class="event-dot">·</span>
+  <span class="event-time">18:50 – 19:30</span>
+</div>
+
+<h2 class="event-title mt-3">Pizza break</h2>
+
+<div class="event-subline mt-2">Grab a slice and mingle</div>
+
+</div>
+
+---
+layout: center
+class: "bg-white text-center"
+---
+
+<div class="event-card">
+
+<div class="flex items-center justify-center gap-2">
+  <span class="event-eyebrow">2nd Talk</span>
+  <span class="event-dot">·</span>
+  <span class="event-time">19:30 – 20:15</span>
+</div>
+
+<h2 class="event-title event-title--sm mt-4">Taking flight with Cilium eBPF<br/><span class="font-extrabold">– Is that you Icarus?</span></h2>
+
+<div class="event-divider"></div>
+
+<div class="event-speakers mt-4">Manuel Mascarenhas & Ronald van Zandvoort</div>
+
+<div class="mt-3">
+  <span class="event-company-pill">ASML</span>
+</div>
+
+</div>
+
+---
+layout: center
+class: "bg-white text-center"
+---
+
 <div class="w-full max-w-4xl mx-auto">
 
 <div class="text-[13px] font-bold uppercase tracking-[0.25em] text-[#326CE5]">Your turn</div>
@@ -237,25 +331,6 @@ class: "bg-white px-12 py-10"
 <div><span class="font-bold">info@cloudnative.amsterdam</span></div>
 
 </div>
-
----
-layout: default
-class: "bg-white px-12 py-10"
----
-Pascal Widdershoven & Luk van den Borne (Kabisa) Running k8s at sea
-
----
-layout: default
-class: "bg-white px-12 py-10"
----
-Food
-
----
-layout: default
-class: "bg-white px-12 py-10"
----
-Manuel Mascarenhas & Ronald van Zandvoort (ASML): Taking flight with Cilium eBPF – Is that you Icarus?
-
 
 <!--
 Stay in touch — three channels, bold prefix as in original.
