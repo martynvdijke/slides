@@ -1,3 +1,10 @@
+## [1.5.2](https://github.com/martynvdijke/slides/compare/v1.5.1...v1.5.2) (2026-09-24)
+
+
+### Bug Fixes
+
+* slides ([21005d8](https://github.com/martynvdijke/slides/commit/21005d8bb7617230a62e2babbe1a81f5503efcef))
+
 ## [1.5.1](https://github.com/martynvdijke/slides/compare/v1.5.0...v1.5.1) (2026-09-24)
 
 # [1.5.0](https://github.com/martynvdijke/slides/compare/v1.4.0...v1.5.0) (2026-09-24)
