@@ -1,3 +1,10 @@
+# [1.6.0](https://github.com/martynvdijke/slides/compare/v1.5.3...v1.6.0) (2026-09-28)
+
+
+### Features
+
+* **meetup:** add live QR ask-me-anything slide ([570b00a](https://github.com/martynvdijke/slides/commit/570b00af4ccf8264212e2ef80c03395231120b1a))
+
 ## [1.5.3](https://github.com/martynvdijke/slides/compare/v1.5.2...v1.5.3) (2026-09-25)
 
 ## [1.5.2](https://github.com/martynvdijke/slides/compare/v1.5.1...v1.5.2) (2026-09-24)
