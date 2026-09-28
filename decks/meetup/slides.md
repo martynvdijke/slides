@@ -418,6 +418,15 @@ Call to action — recruit speakers and hosts for the next meetup.
 -->
 
 ---
+layout: center
+---
+
+# Ask me anything
+
+<!-- Replace YOUR-EVENT-CODE with the real event code (e.g. from the meetup app /admin page) -->
+<LiveQr event="YOUR-EVENT-CODE" base="http://localhost:6280" />
+
+---
 layout: default
 class: "bg-white px-12 py-10"
 ---
