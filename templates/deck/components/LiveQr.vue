@@ -5,10 +5,13 @@
  * for more control.
  */
 withDefaults(defineProps<{
-  event: string
+  event?: string
+  room?: string
   base?: string
   results?: boolean
 }>(), {
+  event: '',
+  room: '',
   base: '',
   results: true,
 })
@@ -16,9 +19,9 @@ withDefaults(defineProps<{
 
 <template>
   <div class="liveqr-wrap">
-    <LiveJoin :event="event" :base="base" />
+    <LiveJoin :event="event" :room="room" :base="base" />
     <div class="liveqr-panel">
-      <LiveQuestion :event="event" :base="base" :show-results="results" />
+      <LiveQuestion :event="event" :room="room" :base="base" :show-results="results" />
     </div>
   </div>
 </template>

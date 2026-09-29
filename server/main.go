@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -43,6 +44,7 @@ func main() {
 	dbPath := getEnv("DB_PATH", "./slides.db")
 	handlers.MediaDir = getEnv("MEDIA_DIR", "./media")
 	decksDir := getEnv("DECKS_DIR", "./dist")
+	initCORS()
 
 	if err := os.MkdirAll(handlers.MediaDir, 0o755); err != nil {
 		log.Fatalf("create media dir: %v", err)
@@ -196,18 +198,51 @@ func main() {
 	}
 }
 
+// CORS configuration. By default any origin may read the public API without
+// credentials (so GitHub Pages decks can fetch state and open the WS). Origins
+// listed in CORS_ORIGINS additionally get Access-Control-Allow-Credentials so
+// the in-slide presenter panel can use the admin API cross-origin. Use "*" in
+// CORS_ORIGINS to allow any origin, still without credentials.
+var (
+	corsAllowAll bool
+	corsAllowed  = map[string]bool{}
+)
+
+func initCORS() {
+	for _, raw := range strings.Split(os.Getenv("CORS_ORIGINS"), ",") {
+		origin := strings.TrimSpace(raw)
+		if origin == "" {
+			continue
+		}
+		if origin == "*" {
+			corsAllowAll = true
+			continue
+		}
+		corsAllowed[strings.TrimRight(origin, "/")] = true
+	}
+}
+
 func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
-		// Allow slide decks hosted elsewhere (e.g. GitHub Pages) to read the
-		// public API. No credentials are allowed, so cookies are not exposed;
-		// admin and audience flows stay same-origin.
 		if origin := r.Header.Get("Origin"); origin != "" {
-			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Vary", "Origin")
+			normalized := strings.TrimRight(origin, "/")
+			w.Header().Add("Vary", "Origin")
+			switch {
+			case corsAllowed[normalized]:
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+			case corsAllowAll:
+				w.Header().Set("Access-Control-Allow-Origin", "*")
+			default:
+				// Read-only reflection: any origin may read public data, but
+				// cookies are never accepted without an explicit allowlist.
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+			}
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+			w.Header().Set("Access-Control-Max-Age", "600")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

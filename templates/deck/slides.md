@@ -17,9 +17,10 @@ layout: center
 ## Second slide
 
 <!--
-Live questions: replace YOUR-EVENT-CODE with the room's event code.
-The QR points at this deck's backend. On GitHub Pages set VITE_LIVE_BASE_URL
-to the hosted backend at build time; the all-in-one container needs no base.
+Live questions: set VITE_ROOM_CODE (short code) or VITE_EVENT_CODE at build time,
+or pass room="ABC12" / event="my-event-code" directly. The QR points at this
+deck's backend. On GitHub Pages set VITE_LIVE_BASE_URL to the hosted backend;
+the all-in-one container needs no base.
 -->
 
 ---
@@ -28,10 +29,10 @@ layout: center
 
 # Ask me anything
 
-<LiveJoin event="YOUR-EVENT-CODE" />
+<LiveJoin />
 
 <div class="mt-8">
-  <LiveQuestion event="YOUR-EVENT-CODE" />
+  <LiveQuestion />
 </div>
 
 ---
@@ -40,4 +41,10 @@ layout: center
 
 # Top questions
 
-<LiveQa event="YOUR-EVENT-CODE" :limit="5" />
+<LiveQa :limit="5" />
+
+<!--
+Opt-in presenter panel: author questions (with photos/video) from the slides.
+Press "p" to toggle, or add `fab` for a small on-screen button.
+<PresenterPanel />
+-->

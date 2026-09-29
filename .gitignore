@@ -10,3 +10,10 @@ server/*.db
 server/*.db-shm
 server/*.db-wal
 server/media/
+
+# Playwright e2e artifacts
+test-results/
+playwright-report/
+blob-report/
+.playwright/
+e2e/.tmp/

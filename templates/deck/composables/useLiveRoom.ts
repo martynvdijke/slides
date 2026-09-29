@@ -1,20 +1,21 @@
-import { computed, isRef, ref, type Ref } from 'vue'
+import { computed, isRef, ref, watchEffect, type Ref } from 'vue'
 
 /**
  * useLiveRoom — a tiny shared client for the slides live-question server.
  *
- * Drop `<LiveJoin>`, `<LiveQuestion>` and `<LiveQa>` into any deck. They share
- * one WebSocket per (base, event) pair so a deck with several live components
- * never opens more than one connection.
+ * Drop `<LiveJoin>`, `<LiveQuestion>`, `<LiveQa>` or `<PresenterPanel>` into
+ * any deck. They share one WebSocket per (base, event) pair, so a deck with
+ * several live components never opens more than one connection.
  *
- * The server URL resolution:
- *   1. the `base` prop, if given;
- *   2. else `VITE_LIVE_BASE_URL` baked in at build time (used on GitHub Pages
- *      to point at the hosted backend);
- *   3. else same-origin (the all-in-one container build).
+ * Address resolution, most specific first:
+ *   event   – the stable public event code (e.g. "cloud-native-a1b2");
+ *   room    – the short room code (e.g. "AB2C3"), resolved to an event via
+ *             GET /api/join/{room};
+ *   env     – VITE_EVENT_CODE / VITE_ROOM_CODE baked in at build time;
+ *   base    – ...prop, else VITE_LIVE_BASE_URL, else same-origin.
  *
- * When `base` is empty the join link is relative, which is what you want when
- * the Go server serves the decks itself.
+ * With no event/room configured `configured` is false and components render a
+ * setup hint instead of a broken QR code.
  */
 
 export interface LiveResult {
@@ -57,12 +58,19 @@ interface QAItem {
   voted?: boolean
 }
 
-function envBase(): string {
+type Value<T> = T | Ref<T>
+
+function env(key: string): string {
   try {
-    return (import.meta as any).env?.VITE_LIVE_BASE_URL || ''
+    return (import.meta as any).env?.[key] || ''
   } catch {
     return ''
   }
+}
+
+function readValue<T>(value: Value<T> | undefined, fallback: T): T {
+  if (value === undefined) return fallback
+  return isRef(value) ? value.value : value
 }
 
 function trimSlash(s: string): string {
@@ -179,24 +187,83 @@ function roomClient(eventCode: string, base: string): RoomClient {
   return client
 }
 
-export function useLiveRoom(
-  eventCode: Ref<string> | string,
-  base?: Ref<string> | string,
-) {
-  const code = computed(() => (isRef(eventCode) ? eventCode.value : eventCode))
+/** Fetch the public event for a short room code (returns null when unknown). */
+export async function resolveRoom(base: string, room: string): Promise<LiveEvent | null> {
+  try {
+    const r = await fetch(trimSlash(base) + '/api/join/' + encodeURIComponent(room), { cache: 'no-store' })
+    if (!r.ok) return null
+    const j = await r.json()
+    if (!j || !j.code) return null
+    return j as LiveEvent
+  } catch {
+    return null
+  }
+}
+
+export function useLiveRoom(options: {
+  event?: Value<string>
+  room?: Value<string>
+  base?: Value<string>
+} = {}) {
   const baseUrl = computed(() => {
-    const explicit = isRef(base) ? base?.value : base
-    return explicit || envBase()
+    const explicit = readValue(options.base, '')
+    return explicit || env('VITE_LIVE_BASE_URL')
   })
-  const client = roomClient(code.value, baseUrl.value)
 
-  const event = computed<LiveEvent | null>(() => client.state.value?.event ?? null)
-  const active = computed<LiveQuestion | null>(() => client.state.value?.active_question ?? null)
-  const qa = computed<QAItem[]>(() => client.state.value?.qa ?? [])
-  const roomCode = computed(() => event.value?.room_code || '')
+  const explicitEvent = computed(() => readValue(options.event, '') || env('VITE_EVENT_CODE'))
+  const explicitRoom = computed(() => readValue(options.room, '') || env('VITE_ROOM_CODE'))
 
-  const joinUrl = computed(() => trimSlash(baseUrl.value) + '/e/' + encodeURIComponent(code.value))
-  const qrSrc = computed(() => trimSlash(baseUrl.value) + '/api/events/' + encodeURIComponent(code.value) + '/qr.png')
+  const resolvedCode = ref('')
+  const resolveError = ref(false)
+
+  watchEffect(() => {
+    if (explicitEvent.value) {
+      resolvedCode.value = explicitEvent.value
+      resolveError.value = false
+      return
+    }
+    const room = explicitRoom.value
+    if (!room) {
+      resolvedCode.value = ''
+      resolveError.value = false
+      return
+    }
+    // Resolve the short room code once; guard against stale async results.
+    let active = true
+    resolveError.value = false
+    resolveRoom(baseUrl.value, room).then((ev) => {
+      if (!active) return
+      if (ev) {
+        resolvedCode.value = ev.code
+      } else {
+        resolvedCode.value = ''
+        resolveError.value = true
+      }
+    })
+    return () => { active = false }
+  })
+
+  const client = ref<RoomClient | null>(null)
+  watchEffect(() => {
+    if (resolvedCode.value) {
+      client.value = roomClient(resolvedCode.value, baseUrl.value)
+    } else {
+      client.value = null
+    }
+  })
+
+  const state = computed(() => client.value?.state.value ?? null)
+  const connected = computed(() => client.value?.connected.value ?? false)
+
+  const configured = computed(() => !!resolvedCode.value)
+  const event = computed<LiveEvent | null>(() => state.value?.event ?? null)
+  const active = computed<LiveQuestion | null>(() => state.value?.active_question ?? null)
+  const qa = computed<QAItem[]>(() => state.value?.qa ?? [])
+  const roomCode = computed(() => event.value?.room_code || explicitRoom.value || '')
+
+  const code = computed(() => resolvedCode.value)
+  const joinUrl = computed(() => (code.value ? trimSlash(baseUrl.value) + '/e/' + encodeURIComponent(code.value) : ''))
+  const qrSrc = computed(() => (code.value ? trimSlash(baseUrl.value) + '/api/events/' + encodeURIComponent(code.value) + '/qr.png' : ''))
   const joinPageUrl = computed(() => trimSlash(baseUrl.value) + '/join')
 
   function mediaUrl(raw?: string): string {
@@ -206,12 +273,15 @@ export function useLiveRoom(
   }
 
   return {
-    state: client.state,
-    connected: client.connected,
+    state,
+    connected,
+    configured,
+    resolveError,
     event,
     active,
     qa,
     roomCode,
+    code,
     joinUrl,
     joinPageUrl,
     qrSrc,

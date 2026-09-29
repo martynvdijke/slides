@@ -426,12 +426,13 @@ layout: center
 
 # Ask me anything
 
-<!-- Replace YOUR-EVENT-CODE with the real event code from the /admin page.
+<!-- Live questions are wired from the environment: set VITE_ROOM_CODE (short
+     room code) or VITE_EVENT_CODE when building, or pass room="ABC12" here.
      Leave `base` off to use the same origin (all-in-one container) or the
      VITE_LIVE_BASE_URL baked in at build time (GitHub Pages). -->
-<LiveJoin event="YOUR-EVENT-CODE" />
+<LiveJoin />
 <div class="mt-8">
-  <LiveQuestion event="YOUR-EVENT-CODE" />
+  <LiveQuestion />
 </div>
 
 ---
