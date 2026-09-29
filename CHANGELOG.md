@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/martynvdijke/slides/compare/v1.8.0...v1.9.0) (2026-09-29)
+
+
+### Features
+
+* serve on 6270 by default, add compose stack and project logo ([38ffb8a](https://github.com/martynvdijke/slides/commit/38ffb8a444f90183309adfc9100618730d066ef5))
+
 # [1.8.0](https://github.com/martynvdijke/slides/compare/v1.7.0...v1.8.0) (2026-09-29)
 
 
