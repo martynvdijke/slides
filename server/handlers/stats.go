@@ -1,10 +1,7 @@
 package handlers
 
 import (
-	"encoding/json"
-	"log"
 	"net/http"
-	"time"
 
 	"slides/db"
 )
@@ -146,77 +143,4 @@ func AdminGetEventStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, dto)
-}
-
-// AdminStreamEventStats streams event statistics over SSE whenever the event changes.
-// @Summary  Stream event statistics
-// @Tags     admin
-// @Produce  text/event-stream
-// @Security CookieAuth
-// @Param    id path int true "Event ID"
-// @Success  200 {object} EventStatsDTO
-// @Failure  500 {object} map[string]string
-// @Router   /api/admin/events/{id}/stats/stream [get]
-func AdminStreamEventStats(w http.ResponseWriter, r *http.Request) {
-	ev, err := db.GetEventByID(pathID(r, "id"))
-	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-
-	ch, unsub := Broker.Subscribe(ev.Code)
-	defer unsub()
-
-	sendStats := func() {
-		dto, err := buildEventStats(ev)
-		if err != nil {
-			log.Printf("sse stats: %v", err)
-			return
-		}
-		data, err := json.Marshal(dto)
-		if err != nil {
-			log.Printf("sse stats marshal: %v", err)
-			return
-		}
-		_, _ = w.Write([]byte("event: stats\ndata: "))
-		_, _ = w.Write(data)
-		_, _ = w.Write([]byte("\n\n"))
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-	}
-
-	sendStats()
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				return
-			}
-			if fresh, err := db.GetEventByID(ev.ID); err == nil && fresh != nil {
-				ev = fresh
-			}
-			sendStats()
-		case <-ticker.C:
-			_, _ = w.Write([]byte(": heartbeat\n\n"))
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		case <-r.Context().Done():
-			return
-		}
-	}
 }

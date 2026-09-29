@@ -71,7 +71,7 @@ func main() {
 	// ── Public audience API (anonymous participant cookie) ──
 	mux.HandleFunc("GET /api/events/{code}", handlers.GetEvent)
 	mux.HandleFunc("GET /api/events/{code}/state", handlers.GetEventState)
-	mux.HandleFunc("GET /api/events/{code}/stream", handlers.EventStream)
+	mux.HandleFunc("GET /ws/events/{code}", handlers.EventWS)
 	mux.HandleFunc("POST /api/events/{code}/answers", handlers.SubmitAnswer)
 	mux.HandleFunc("GET /api/events/{code}/qa", handlers.ListPublicQA)
 	mux.HandleFunc("POST /api/events/{code}/qa", handlers.CreateQA)
@@ -106,7 +106,6 @@ func main() {
 	adminMux.HandleFunc("GET /api/admin/events/{id}/export.csv", handlers.AdminExportCSV)
 	adminMux.HandleFunc("GET /api/admin/stats", handlers.AdminGetStats)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/stats", handlers.AdminGetEventStats)
-	adminMux.HandleFunc("GET /api/admin/events/{id}/stats/stream", handlers.AdminStreamEventStats)
 	adminMux.HandleFunc("GET /api/admin/settings/analytics", handlers.AdminGetAnalyticsSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/analytics", handlers.AdminUpdateAnalyticsSettings)
 	adminMux.HandleFunc("GET /api/admin/settings/branding", handlers.AdminGetBranding)
@@ -117,6 +116,8 @@ func main() {
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 		mux.Handle(method+" /api/admin/", handlers.AdminAuth(adminMux))
 	}
+	// Admin live statistics WebSocket (session-protected).
+	mux.Handle("GET /ws/admin/events/{id}/stats", handlers.AdminAuth(http.HandlerFunc(handlers.AdminEventStatsWS)))
 
 	// ── Swagger UI (offline, assets embedded in the binary) ──
 	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
@@ -198,6 +199,19 @@ func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		// Allow slide decks hosted elsewhere (e.g. GitHub Pages) to read the
+		// public API. No credentials are allowed, so cookies are not exposed;
+		// admin and audience flows stay same-origin.
+		if origin := r.Header.Get("Origin"); origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type")
+		}
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
 		log.Printf("%s %s", r.Method, r.URL.Path)
 		next.ServeHTTP(w, r)
 	})

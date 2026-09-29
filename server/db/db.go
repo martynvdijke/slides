@@ -1,6 +1,7 @@
 package db
 
 import (
+	"crypto/rand"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -31,6 +32,7 @@ type Session struct {
 type Event struct {
 	ID             int64
 	Code           string
+	RoomCode       string
 	Name           string
 	Description    string
 	EventDate      string
@@ -176,6 +178,7 @@ func migrate() error {
 		CREATE TABLE IF NOT EXISTS events (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
 			code TEXT UNIQUE NOT NULL,
+			room_code TEXT NOT NULL DEFAULT '',
 			name TEXT NOT NULL,
 			description TEXT DEFAULT '',
 			event_date TEXT DEFAULT '',
@@ -268,6 +271,84 @@ func migrate() error {
 	} {
 		if err := ensureColumn("settings", col.name, col.ddl); err != nil {
 			return err
+		}
+	}
+	if err := ensureColumn("events", "room_code", "room_code TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	// Short, human-friendly join codes are unique when present but optional, so
+	// the constraint is a partial index rather than a UNIQUE column.
+	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_room_code ON events(room_code) WHERE room_code <> ''"); err != nil {
+		return err
+	}
+	if err := backfillRoomCodes(); err != nil {
+		return err
+	}
+	return nil
+}
+
+// roomAlphabet omits visually ambiguous characters (I, O, 0, 1) so codes can be
+// read aloud or typed from a slide.
+const roomAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+// roomCodeLen is the length of a generated room join code.
+const roomCodeLen = 5
+
+// GenRoomCode returns a random short, case-insensitive room code.
+func GenRoomCode() (string, error) {
+	b := make([]byte, roomCodeLen)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	for i := range b {
+		b[i] = roomAlphabet[int(b[i])%len(roomAlphabet)]
+	}
+	return string(b), nil
+}
+
+// NormalizeRoomCode upper-cases and trims a user-supplied room code so lookups
+// are case-insensitive.
+func NormalizeRoomCode(code string) string {
+	return strings.ToUpper(strings.TrimSpace(code))
+}
+
+// backfillRoomCodes assigns a room code to any event that predates the feature.
+func backfillRoomCodes() error {
+	rows, err := DB.Query("SELECT id FROM events WHERE room_code='' OR room_code IS NULL")
+	if err != nil {
+		return err
+	}
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			rows.Close()
+			return err
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	for _, id := range ids {
+		for attempt := 0; attempt < 20; attempt++ {
+			rc, err := GenRoomCode()
+			if err != nil {
+				return err
+			}
+			exists, err := RoomCodeExists(rc)
+			if err != nil {
+				return err
+			}
+			if exists {
+				continue
+			}
+			if _, err := DB.Exec("UPDATE events SET room_code=? WHERE id=?", rc, id); err != nil {
+				return err
+			}
+			break
 		}
 	}
 	return nil
@@ -414,7 +495,7 @@ func scanEventRow(row *sql.Row) (*Event, error) {
 	var e Event
 	var fo int
 	var ca string
-	err := row.Scan(&e.ID, &e.Code, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
+	err := row.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
 	if err != nil {
 		return nil, err
 	}
@@ -430,7 +511,7 @@ func scanEventRows(rows *sql.Rows) (*Event, error) {
 	var e Event
 	var fo int
 	var ca string
-	err := rows.Scan(&e.ID, &e.Code, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
+	err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +532,7 @@ func CreateEvent(name, code, description, eventDate string) (*Event, error) {
 }
 
 func ListEvents() ([]Event, error) {
-	rows, err := DB.Query("SELECT id, code, name, description, event_date, status, feedback_open, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
+	rows, err := DB.Query("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -461,7 +542,7 @@ func ListEvents() ([]Event, error) {
 		var e Event
 		var fo int
 		var ca string
-		if err := rows.Scan(&e.ID, &e.Code, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
+		if err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
 			return nil, err
 		}
 		e.FeedbackOpen = fo == 1
@@ -472,18 +553,44 @@ func ListEvents() ([]Event, error) {
 }
 
 func GetEventByID(id int64) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, name, description, event_date, status, feedback_open, created_at FROM events WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE id=?", id)
 	return scanEventRow(row)
 }
 
 func GetEventByCode(code string) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, name, description, event_date, status, feedback_open, created_at FROM events WHERE code=?", code)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE code=?", code)
 	e, err := scanEventRow(row)
 	if err != nil {
 		return nil, err
 	}
 	// populate question results not needed for events
 	return e, nil
+}
+
+// GetEventByRoomCode looks up an event by its short, case-insensitive join code.
+func GetEventByRoomCode(code string) (*Event, error) {
+	rc := NormalizeRoomCode(code)
+	if rc == "" {
+		return nil, sql.ErrNoRows
+	}
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE room_code=?", rc)
+	return scanEventRow(row)
+}
+
+// RoomCodeExists reports whether a room code is already taken.
+func RoomCodeExists(code string) (bool, error) {
+	if NormalizeRoomCode(code) == "" {
+		return false, nil
+	}
+	var n int
+	err := DB.QueryRow("SELECT COUNT(*) FROM events WHERE room_code=?", NormalizeRoomCode(code)).Scan(&n)
+	return n > 0, err
+}
+
+// SetEventRoomCode assigns or replaces an event's short join code.
+func SetEventRoomCode(id int64, code string) error {
+	_, err := DB.Exec("UPDATE events SET room_code=? WHERE id=?", NormalizeRoomCode(code), id)
+	return err
 }
 
 func UpdateEvent(id int64, fields map[string]any) (*Event, error) {

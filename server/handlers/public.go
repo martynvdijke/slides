@@ -1,18 +1,111 @@
 package handlers
 
 import (
-	"encoding/json"
-	"log"
+	"errors"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"slides/db"
 	"slides/qr"
 )
+
+// httpErr carries an HTTP status for a service-layer failure so the same logic
+// can back both the REST handlers and the WebSocket channel.
+type httpErr struct {
+	status int
+	msg    string
+}
+
+func (e *httpErr) Error() string { return e.msg }
+
+func badRequest(m string) *httpErr { return &httpErr{http.StatusBadRequest, m} }
+func notFound(m string) *httpErr   { return &httpErr{http.StatusNotFound, m} }
+func internal(m string) *httpErr   { return &httpErr{http.StatusInternalServerError, m} }
+
+func writeServiceErr(w http.ResponseWriter, err error) {
+	var he *httpErr
+	if errors.As(err, &he) {
+		jsonError(w, he.msg, he.status)
+		return
+	}
+	jsonError(w, err.Error(), http.StatusInternalServerError)
+}
+
+// submitAnswer validates and stores an answer, then notifies live subscribers.
+func submitAnswer(ev *db.Event, pid, questionID int64, raw string) error {
+	if questionID == 0 {
+		return badRequest("question_id is required")
+	}
+	q, err := db.GetQuestion(questionID)
+	if err != nil || q == nil {
+		return notFound("question not found")
+	}
+	if q.EventID != ev.ID {
+		return notFound("question not found")
+	}
+	if q.Status != "live" && !q.IsFeedback {
+		return badRequest("question is not live")
+	}
+	val, err := db.ValidateAnswer(q.Kind, q.Options, raw)
+	if err != nil {
+		return badRequest(err.Error())
+	}
+	if pid == 0 {
+		return badRequest("could not identify participant")
+	}
+	if err := db.UpsertAnswer(q.ID, pid, val); err != nil {
+		return internal("could not save answer")
+	}
+	BroadcastEvent(ev.ID)
+	return nil
+}
+
+// createQA trims and stores a moderated Q&A question.
+func createQA(ev *db.Event, body, author string) (*db.QAQuestion, error) {
+	body = strings.TrimSpace(body)
+	if body == "" {
+		return nil, badRequest("body is required")
+	}
+	if len([]rune(body)) > 500 {
+		body = string([]rune(body)[:500])
+	}
+	author = strings.TrimSpace(author)
+	if len([]rune(author)) > 80 {
+		author = string([]rune(author)[:80])
+	}
+	qa, err := db.CreateQA(ev.ID, body, author)
+	if err != nil {
+		return nil, internal("could not create question")
+	}
+	return qa, nil
+}
+
+// toggleVote toggles a participant's vote on a Q&A question and notifies
+// live subscribers.
+func toggleVote(ev *db.Event, pid, qaID int64) (int, bool, error) {
+	if qaID == 0 {
+		return 0, false, badRequest("invalid qa id")
+	}
+	qa, err := db.GetQA(qaID)
+	if err != nil || qa == nil {
+		return 0, false, notFound("question not found")
+	}
+	if qa.EventID != ev.ID {
+		return 0, false, notFound("question not found")
+	}
+	if pid == 0 {
+		return 0, false, badRequest("could not identify participant")
+	}
+	votes, voted, err := db.ToggleVote(qaID, pid)
+	if err != nil {
+		return 0, false, internal("could not vote")
+	}
+	BroadcastEvent(ev.ID)
+	return votes, voted, nil
+}
 
 // AnswerRequest is the body for SubmitAnswer.
 type AnswerRequest struct {
@@ -62,86 +155,6 @@ func GetEventState(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, BuildState(ev, pid))
 }
 
-// EventStream streams personalized state via SSE.
-// @Summary  Stream event state
-// @Tags     public
-// @Produce  text/event-stream
-// @Description Server-sent events stream of personalized state. Each message is `event: state` with JSON StateDTO.
-// @Param    code path string true "Event code"
-// @Success  200 {string} string "text/event-stream"
-// @Failure  404 {object} map[string]string
-// @Router   /api/events/{code}/stream [get]
-func EventStream(w http.ResponseWriter, r *http.Request) {
-	ev, err := eventByCode(r)
-	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
-		return
-	}
-	// Read-only participant lookup: Set-Cookie cannot be delivered after SSE
-	// headers flush, so creating a participant here would bind the stream to an
-	// unreachable identity. The client fetches /state first, which creates it.
-	var pid int64
-	if c, err := r.Cookie(participantCookie); err == nil && c.Value != "" {
-		if p, err := db.GetParticipantByToken(c.Value); err == nil && p.EventID == ev.ID {
-			pid = p.ID
-		}
-	}
-	code := ev.Code
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	if f, ok := w.(http.Flusher); ok {
-		f.Flush()
-	}
-
-	ch, unsub := Broker.Subscribe(code)
-	defer unsub()
-
-	sendState := func() {
-		state := BuildState(ev, pid)
-		data, err := json.Marshal(state)
-		if err != nil {
-			log.Printf("sse marshal: %v", err)
-			return
-		}
-		_, _ = w.Write([]byte("event: state\ndata: "))
-		_, _ = w.Write(data)
-		_, _ = w.Write([]byte("\n\n"))
-		if f, ok := w.(http.Flusher); ok {
-			f.Flush()
-		}
-	}
-
-	sendState()
-
-	ticker := time.NewTicker(25 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case _, ok := <-ch:
-			if !ok {
-				return
-			}
-			// Re-fetch event to ensure fresh data (e.g. status changed); keep same ID.
-			if fresh, err := db.GetEventByID(ev.ID); err == nil && fresh != nil {
-				ev = fresh
-			}
-			sendState()
-		case <-ticker.C:
-			_, _ = w.Write([]byte(": heartbeat\n\n"))
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-		case <-r.Context().Done():
-			return
-		}
-	}
-}
-
 // SubmitAnswer records an answer for a live or feedback question.
 // @Summary  Submit answer
 // @Tags     public
@@ -164,38 +177,11 @@ func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	if req.QuestionID == 0 {
-		jsonError(w, "question_id is required", http.StatusBadRequest)
-		return
-	}
-	q, err := db.GetQuestion(req.QuestionID)
-	if err != nil || q == nil {
-		jsonError(w, "question not found", http.StatusNotFound)
-		return
-	}
-	if q.EventID != ev.ID {
-		jsonError(w, "question not found", http.StatusNotFound)
-		return
-	}
-	if q.Status != "live" && !q.IsFeedback {
-		jsonError(w, "question is not live", http.StatusBadRequest)
-		return
-	}
-	val, err := db.ValidateAnswer(q.Kind, q.Options, req.Value)
-	if err != nil {
-		jsonError(w, err.Error(), http.StatusBadRequest)
-		return
-	}
 	pid := participantID(w, r, ev.ID)
-	if pid == 0 {
-		jsonError(w, "could not identify participant", http.StatusBadRequest)
+	if err := submitAnswer(ev, pid, req.QuestionID, req.Value); err != nil {
+		writeServiceErr(w, err)
 		return
 	}
-	if err := db.UpsertAnswer(q.ID, pid, val); err != nil {
-		jsonError(w, "could not save answer", http.StatusInternalServerError)
-		return
-	}
-	BroadcastEvent(ev.ID)
 	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
@@ -259,21 +245,9 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	body := strings.TrimSpace(req.Body)
-	if body == "" {
-		jsonError(w, "body is required", http.StatusBadRequest)
-		return
-	}
-	if len([]rune(body)) > 500 {
-		body = string([]rune(body)[:500])
-	}
-	author := strings.TrimSpace(req.Author)
-	if len([]rune(author)) > 80 {
-		author = string([]rune(author)[:80])
-	}
-	qa, err := db.CreateQA(ev.ID, body, author)
+	qa, err := createQA(ev, req.Body, req.Author)
 	if err != nil {
-		jsonError(w, "could not create question", http.StatusInternalServerError)
+		writeServiceErr(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"id": qa.ID, "status": "pending"})
@@ -295,31 +269,12 @@ func VoteQA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	qaID := pathID(r, "id")
-	if qaID == 0 {
-		jsonError(w, "invalid qa id", http.StatusBadRequest)
-		return
-	}
-	qa, err := db.GetQA(qaID)
-	if err != nil || qa == nil {
-		jsonError(w, "question not found", http.StatusNotFound)
-		return
-	}
-	if qa.EventID != ev.ID {
-		jsonError(w, "question not found", http.StatusNotFound)
-		return
-	}
 	pid := participantID(w, r, ev.ID)
-	if pid == 0 {
-		jsonError(w, "could not identify participant", http.StatusBadRequest)
-		return
-	}
-	votes, voted, err := db.ToggleVote(qaID, pid)
+	votes, voted, err := toggleVote(ev, pid, pathID(r, "id"))
 	if err != nil {
-		jsonError(w, "could not vote", http.StatusInternalServerError)
+		writeServiceErr(w, err)
 		return
 	}
-	BroadcastEvent(ev.ID)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "votes": votes, "voted": voted})
 }
 

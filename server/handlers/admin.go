@@ -49,6 +49,24 @@ func genCode(name string) string {
 	return base + "-" + randomBase36(4) + fmt.Sprintf("%d", time.Now().UnixNano()%1000)
 }
 
+// genRoomCode produces a unique short join code for an event.
+func genRoomCode() (string, error) {
+	for i := 0; i < 20; i++ {
+		rc, err := db.GenRoomCode()
+		if err != nil {
+			return "", err
+		}
+		exists, err := db.RoomCodeExists(rc)
+		if err != nil {
+			return "", err
+		}
+		if !exists {
+			return rc, nil
+		}
+	}
+	return db.GenRoomCode()
+}
+
 func randomBase36(n int) string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
 	b := make([]byte, n)
@@ -140,6 +158,11 @@ func AdminCreateEvent(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonError(w, "failed to create event", http.StatusInternalServerError)
 		return
+	}
+	if rc, err := genRoomCode(); err == nil {
+		if err := db.SetEventRoomCode(ev.ID, rc); err == nil {
+			ev.RoomCode = db.NormalizeRoomCode(rc)
+		}
 	}
 	brand := ensureBranding(ev)
 	writeJSON(w, http.StatusOK, eventDTO(ev, brand))

@@ -44,6 +44,7 @@ const userKey ctxKey = "user"
 type EventDTO struct {
 	ID             int64  `json:"id"`
 	Code           string `json:"code"`
+	RoomCode       string `json:"room_code"`
 	Name           string `json:"name"`
 	Description    string `json:"description"`
 	EventDate      string `json:"event_date"`
@@ -276,6 +277,7 @@ func eventDTO(ev *db.Event, brand string) EventDTO {
 	return EventDTO{
 		ID:             ev.ID,
 		Code:           ev.Code,
+		RoomCode:       ev.RoomCode,
 		Name:           ev.Name,
 		Description:    ev.Description,
 		EventDate:      ev.EventDate,
