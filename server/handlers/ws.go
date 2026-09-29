@@ -182,6 +182,7 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 			return wsEnvelope{Type: "error", For: "vote", Error: err.Error()}
 		}
 		env := okEnvelope("vote")
+		env.ID = m.ID
 		env.Votes = votes
 		env.Voted = voted
 		return env

@@ -356,13 +356,15 @@
       btn.addEventListener('click', function(){
         if(btn.disabled) return;
         btn.disabled=true;
-        fetch('/api/events/'+encodeURIComponent(code)+'/qa/'+q.id+'/vote',{method:'POST',credentials:'same-origin'}).then(function(r){
-          if(!r.ok) throw new Error('vote failed');
-          return r.json();
-        }).then(function(j){
-          q.votes=j.votes; q.voted=true; renderQA(sorted);
-          toast('Upvoted — thanks!');
-        }).catch(function(){ btn.disabled=false; toast('Could not vote','err'); });
+        if(isOpen()){
+          pendingVotes[q.id]={btn:btn, q:q, sorted:sorted};
+          if(!wsSend({type:'vote', id:q.id})){
+            delete pendingVotes[q.id];
+            doVoteFetch(q, sorted, btn);
+          }
+          return;
+        }
+        doVoteFetch(q, sorted, btn);
       });
       meta.appendChild(author); meta.appendChild(votes); meta.appendChild(btn);
       card.appendChild(body); card.appendChild(meta); root.appendChild(card);
@@ -517,35 +519,148 @@
     form.appendChild(submit); form.appendChild(hint);
     form.addEventListener('submit', function(e){
       e.preventDefault();
-      var tasks=[];
+      var items=[];
       qs.forEach(function(q){
         var ctl=states[q.id];
         if(!ctl) return;
         if(ctl.validate && !ctl.validate()) return;
         var val=(ctl.read()||'').trim();
         if(!val) return;
-        tasks.push(fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:q.id, value:val})}).then(function(r){
-          if(!r.ok) throw new Error('failed '+q.id);
-          ctl.clear();
+        items.push({q:q, ctl:ctl, val:val});
+      });
+      if(!items.length){ toast('Please fill at least one field','err'); return; }
+      if(isOpen()){
+        var waiting={}; var total=items.length;
+        items.forEach(function(it){ waiting[it.q.id]=true; });
+        pendingFeedback={waiting:waiting, total:total, done:0, states:states, submit:submit};
+        submit.disabled=true; submit.textContent='Sending\u2026';
+        var ok=true;
+        items.forEach(function(it){
+          if(!wsSend({type:'answer', question_id:it.q.id, value:it.val})){ ok=false; }
+        });
+        if(!ok){
+          pendingFeedback=null;
+          submit.disabled=false; submit.textContent='Submit feedback';
+          toast('Could not submit feedback','err');
+        }
+        return;
+      }
+      var tasks=[];
+      items.forEach(function(it){
+        tasks.push(fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:it.q.id, value:it.val})}).then(function(r){
+          if(!r.ok) throw new Error('failed '+it.q.id);
+          it.ctl.clear();
         }));
       });
-      if(!tasks.length){ toast('Please fill at least one field','err'); return; }
-      submit.disabled=true; submit.textContent='Sending…';
+      submit.disabled=true; submit.textContent='Sending\u2026';
       Promise.all(tasks).then(function(){ toast('Feedback sent — thank you!'); }).catch(function(){ toast('Some answers failed to send','err'); }).finally(function(){ submit.disabled=false; submit.textContent='Submit feedback'; });
     });
     card.appendChild(form);
   }
 
+  // WebSocket live channel
+  var ws=null; var wsBackoff=1000; var wsTimer=null;
+  var pendingAnswers={}; var pendingVotes={}; var pendingQA=null;
+  var pendingFeedback=null;
+  function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/events/'+encodeURIComponent(code); }
+  function isOpen(){ return ws && ws.readyState===1; }
+  function wsSend(obj){ try{ ws.send(JSON.stringify(obj)); return true; }catch(e){ return false; } }
+  function handleWsMessage(m){
+    if(!m || !m.type) return;
+    if(m.type==='state' && m.data){ applyState(m.data); return; }
+    if(m.type==='ping' && isOpen()){ wsSend({type:'pong'}); return; }
+    if(m.type==='pong') return;
+    if(m.type==='result'){
+      if(m.for==='vote'){
+        var pv=pendingVotes[m.id];
+        if(pv){ delete pendingVotes[m.id]; if(typeof m.votes==='number') pv.q.votes=m.votes; pv.q.voted=!!m.voted; renderQA(pv.sorted); toast('Upvoted — thanks!'); }
+        return;
+      }
+      if(m.for==='answer'){
+        // feedback bulk takes precedence if pendingFeedback exists
+        if(pendingFeedback && pendingFeedback.waiting[m.id||m.question_id]){
+          delete pendingFeedback.waiting[m.id||m.question_id];
+          var qidFb=m.id||m.question_id;
+          var ctl=pendingFeedback.states[qidFb];
+          if(ctl) ctl.clear();
+          pendingFeedback.done++;
+          if(pendingFeedback.done>=pendingFeedback.total){
+            toast('Feedback sent — thank you!');
+            pendingFeedback.submit.textContent='Submit feedback';
+            pendingFeedback.submit.disabled=false;
+            pendingFeedback=null;
+          }
+          // also handle single answer case keys
+          if(pendingAnswers[qidFb]) delete pendingAnswers[qidFb];
+          return;
+        }
+        var pa=pendingAnswers[m.id||m.question_id];
+        if(pa){ delete pendingAnswers[m.id||m.question_id]; toast('Answer sent!'); pa.btn.textContent='Sent \u2713'; }
+        return;
+      }
+      if(m.for==='qa'){
+        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; toast('Question submitted — awaiting approval'); btn.disabled=false; btn.textContent='Submit question'; }
+        return;
+      }
+    }
+    if(m.type==='error'){
+      if(m.for==='vote'){
+        var pv2=pendingVotes[m.id];
+        if(pv2){ delete pendingVotes[m.id]; pv2.btn.disabled=false; toast(m.error||'Could not vote','err'); }
+        else if(m.id && pendingVotes[m.id]){ /* noop */ }
+        return;
+      }
+      if(m.for==='answer'){
+        if(pendingFeedback && pendingFeedback.waiting[m.id||m.question_id]){
+          delete pendingFeedback.waiting[m.id||m.question_id];
+          pendingFeedback=null;
+          var fbBtn=document.querySelector('#feedback-card form button[type="submit"]');
+          if(fbBtn){ fbBtn.disabled=false; fbBtn.textContent='Submit feedback'; }
+          toast(m.error||'Some answers failed to send','err');
+          return;
+        }
+        var pa2=pendingAnswers[m.id||m.question_id];
+        if(pa2){ delete pendingAnswers[m.id||m.question_id]; pa2.btn.disabled=false; pa2.btn.textContent=pa2.orig; toast(m.error||'Could not submit answer','err'); }
+        else { toast(m.error||'Could not submit answer','err'); }
+        return;
+      }
+      if(m.for==='qa'){
+        if(pendingQA){ var b=pendingQA.btn; pendingQA=null; b.disabled=false; b.textContent='Submit question'; toast(m.error||'Could not submit question','err'); }
+        return;
+      }
+      toast(m.error||'Error','err');
+    }
+  }
+
   function submitAnswer(qid, value, btn){
-    var orig=btn.textContent; btn.disabled=true; btn.textContent='Sending…';
+    var orig=btn.textContent; btn.disabled=true; btn.textContent='Sending\u2026';
+    if(isOpen()){
+      pendingAnswers[qid]={btn:btn, orig:orig};
+      if(!wsSend({type:'answer', question_id:qid, value:value})){
+        delete pendingAnswers[qid];
+        doSubmitAnswerFetch(qid, value, btn, orig);
+      }
+      return;
+    }
+    doSubmitAnswerFetch(qid, value, btn, orig);
+  }
+  function doSubmitAnswerFetch(qid, value, btn, orig){
     fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:qid, value:value})}).then(function(r){
       if(!r.ok) throw new Error('answer failed');
       return r.json();
     }).then(function(){
       toast('Answer sent!');
-      // optimistic: keep disabled, will be updated via SSE
-      btn.textContent='Sent ✓';
+      btn.textContent='Sent \u2713';
     }).catch(function(){ btn.disabled=false; btn.textContent=orig; toast('Could not submit answer','err'); });
+  }
+  function doVoteFetch(q, sorted, btn){
+    fetch('/api/events/'+encodeURIComponent(code)+'/qa/'+q.id+'/vote',{method:'POST',credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('vote failed');
+      return r.json();
+    }).then(function(j){
+      q.votes=j.votes; q.voted=true; renderQA(sorted);
+      toast('Upvoted — thanks!');
+    }).catch(function(){ btn.disabled=false; toast('Could not vote','err'); });
   }
 
   // QA submit
@@ -557,14 +672,22 @@
       var author=document.getElementById('qa-author').value.trim();
       if(!body) return;
       var btn=qaForm.querySelector('button[type="submit"]');
-      btn.disabled=true; btn.textContent='Submitting…';
+      btn.disabled=true; btn.textContent='Submitting\u2026';
+      if(isOpen()){
+        pendingQA={btn:btn};
+        if(!wsSend({type:'qa', body:body, author:author})){
+          pendingQA=null;
+          btn.disabled=false; btn.textContent='Submit question';
+          toast('Could not submit question','err');
+        }
+        return;
+      }
       fetch('/api/events/'+encodeURIComponent(code)+'/qa',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:body, author:author})}).then(function(r){
         if(!r.ok) throw new Error('qa failed');
         return r.json();
       }).then(function(j){
         document.getElementById('qa-body').value=''; document.getElementById('qa-author').value='';
         toast(j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!');
-        // re-fetch qa list? will come via SSE
         fetchState();
       }).catch(function(){ toast('Could not submit question','err'); }).finally(function(){ btn.disabled=false; btn.textContent='Submit question'; });
     });
@@ -596,14 +719,19 @@
   }
 
   function connectStream(){
-    if(!code || !window.EventSource) return;
-    var es=new EventSource('/api/events/'+encodeURIComponent(code)+'/stream');
-    es.addEventListener('state', function(e){
-      try{ var data=JSON.parse(e.data); applyState(data); }catch(err){}
-    });
-    es.onerror=function(){
-      // EventSource auto-reconnects; show subtle offline?
+    if(!code || typeof WebSocket==='undefined') return;
+    if(wsTimer){ clearTimeout(wsTimer); wsTimer=null; }
+    try{ ws=new WebSocket(wsUrl()); }catch(e){ return; }
+    ws.onopen=function(){ wsBackoff=1000; };
+    ws.onmessage=function(ev){
+      try{ var m=JSON.parse(ev.data); handleWsMessage(m); }catch(err){}
     };
+    ws.onclose=function(){
+      ws=null;
+      if(!code) return;
+      wsTimer=setTimeout(function(){ wsBackoff=Math.min(wsBackoff*2, 10000); connectStream(); }, wsBackoff);
+    };
+    ws.onerror=function(){ try{ ws.close(); }catch(e){} };
   }
 
   if(!code){

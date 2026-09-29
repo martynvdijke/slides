@@ -200,14 +200,39 @@
     renderQATop(data.qa || []);
   }
 
+  var ws=null; var wsBackoff=1000; var wsTimer=null;
+  function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/events/'+encodeURIComponent(code); }
   function fetchState(){
     if(!code) return;
     fetch('/api/events/'+encodeURIComponent(code)+'/state',{credentials:'same-origin'}).then(function(r){return r.json()}).then(applyState).catch(function(){});
   }
+  var pollTimer=null;
+  function startPollFallback(){
+    if(pollTimer) return;
+    pollTimer=setInterval(fetchState, 5000);
+  }
+  function stopPollFallback(){
+    if(pollTimer){ clearInterval(pollTimer); pollTimer=null; }
+  }
   function connect(){
-    if(!code || !window.EventSource) return;
-    var es=new EventSource('/api/events/'+encodeURIComponent(code)+'/stream');
-    es.addEventListener('state', function(e){ try{ applyState(JSON.parse(e.data)); }catch(err){} });
+    if(!code) return;
+    if(typeof WebSocket==='undefined'){ startPollFallback(); return; }
+    if(wsTimer){ clearTimeout(wsTimer); wsTimer=null; }
+    try{ ws=new WebSocket(wsUrl()); }catch(e){ startPollFallback(); return; }
+    ws.onopen=function(){ wsBackoff=1000; stopPollFallback(); };
+    ws.onmessage=function(ev){
+      try{
+        var m=JSON.parse(ev.data);
+        if(m.type==='state' && m.data) applyState(m.data);
+        else if(m.type==='ping'){ try{ ws.send(JSON.stringify({type:'pong'})); }catch(e){} }
+      }catch(err){}
+    };
+    ws.onclose=function(){
+      ws=null;
+      if(!code) return;
+      wsTimer=setTimeout(function(){ wsBackoff=Math.min(wsBackoff*2, 10000); connect(); }, wsBackoff);
+    };
+    ws.onerror=function(){ try{ ws.close(); }catch(e){} };
   }
 
   if(!code){

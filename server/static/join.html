@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Join a room — Slides</title>
+<link rel="stylesheet" href="/tailwind.css">
+</head>
+<body class="antialiased">
+<header class="site-header" role="banner">
+  <div class="container flex items-center justify-between h-[58px] gap-4">
+    <a class="brand" href="/" aria-label="Home">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-[18px] h-[18px]"><path d="M12 3l7 4v8l-7 4-7-4V7z"/><path d="M12 11a3 3 0 100-6 3 3 0 000 6z"/><path d="M9 21c0-2 1.8-3.5 3-3.5S15 19 15 21"/></svg></span>
+      Join
+    </a>
+  </div>
+</header>
+
+<main id="main" class="container" role="main">
+  <div class="pt-8 pb-2 max-w-[520px] mx-auto w-full">
+    <div class="glass card-pad">
+      <h1 class="font-extrabold tracking-[-0.03em] text-[1.35rem] leading-[1.15] m-0">Join the room</h1>
+      <p class="section-sub mt-1">Enter the code shown on the slide, or scan the QR code.</p>
+
+      <form id="join-form" class="mt-4 grid gap-3" novalidate>
+        <div class="field">
+          <label for="room-code">Room code</label>
+          <input id="room-code" class="input room-code-input" placeholder="AB2C3" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="5" aria-describedby="join-error">
+        </div>
+        <button class="btn btn-primary" type="submit">Join room</button>
+        <p id="join-error" class="text-[#ff8f8f] text-[0.84rem]" role="alert" hidden></p>
+      </form>
+    </div>
+  </div>
+</main>
+
+<style>
+  .room-code-input {
+    text-transform: uppercase;
+    letter-spacing: 0.35em;
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.7rem 1rem;
+  }
+</style>
+<script src="/join.js"></script>
+</body>
+</html>

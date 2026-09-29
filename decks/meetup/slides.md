@@ -1,6 +1,9 @@
 ---
 theme: default
 title: "Dutch Kubernetes/Cloud Native Meetup"
+info: Cloud Native Amsterdam meetup deck with live audience Q&A and polls.
+date: 2026-09-28
+tags: [kubernetes, cloud-native, cncf, live-questions]
 routerMode: hash
 transition: slide-left
 mdc: true
@@ -423,8 +426,13 @@ layout: center
 
 # Ask me anything
 
-<!-- Replace YOUR-EVENT-CODE with the real event code (e.g. from the meetup app /admin page) -->
-<LiveQr event="YOUR-EVENT-CODE" base="http://localhost:6280" />
+<!-- Replace YOUR-EVENT-CODE with the real event code from the /admin page.
+     Leave `base` off to use the same origin (all-in-one container) or the
+     VITE_LIVE_BASE_URL baked in at build time (GitHub Pages). -->
+<LiveJoin event="YOUR-EVENT-CODE" />
+<div class="mt-8">
+  <LiveQuestion event="YOUR-EVENT-CODE" />
+</div>
 
 ---
 layout: default

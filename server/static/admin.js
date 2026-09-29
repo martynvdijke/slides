@@ -175,7 +175,7 @@
       var left=document.createElement('div');
       var h=document.createElement('h3'); h.textContent=ev.name; left.appendChild(h);
       var meta=document.createElement('div'); meta.style.color='var(--muted)'; meta.style.fontSize='.84rem';
-      meta.textContent = (ev.code||'') + (ev.event_date?' · '+ev.event_date:'') + ' · '+ev.status + (ev.feedback_open?' · feedback open':'') + ' · '+ (ev.question_count||0)+' questions' + (ev.pending_qa_count?' · '+ev.pending_qa_count+' pending':'');
+      meta.textContent = (ev.code||'') + (ev.room_code?' · room '+ev.room_code:'') + (ev.event_date?' · '+ev.event_date:'') + ' · '+ev.status + (ev.feedback_open?' · feedback open':'') + ' · '+ (ev.question_count||0)+' questions' + (ev.pending_qa_count?' · '+ev.pending_qa_count+' pending':'');
       left.appendChild(meta);
       var badge=document.createElement('span'); badge.className='badge '+(ev.status==='open'?'open':'closed'); badge.textContent=ev.status;
       top.appendChild(left); top.appendChild(badge);
@@ -184,7 +184,8 @@
       btnSel.addEventListener('click', function(){ selectEvent(ev.id); setView('questions'); });
       var aLive=document.createElement('a'); aLive.className='btn btn-ghost btn-small'; aLive.href='/live/'+encodeURIComponent(ev.code); aLive.target='_blank'; aLive.textContent='Live';
       var aAud=document.createElement('a'); aAud.className='btn btn-ghost btn-small'; aAud.href='/e/'+encodeURIComponent(ev.code); aAud.target='_blank'; aAud.textContent='Audience';
-      actions.appendChild(btnSel); actions.appendChild(aLive); actions.appendChild(aAud);
+      var aJoin=document.createElement('a'); aJoin.className='btn btn-ghost btn-small'; aJoin.href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):''); aJoin.target='_blank'; aJoin.textContent='Join';
+      actions.appendChild(btnSel); actions.appendChild(aLive); actions.appendChild(aAud); actions.appendChild(aJoin);
       card.appendChild(top); card.appendChild(actions); root.appendChild(card);
     });
   }
@@ -209,9 +210,10 @@
     if(!ev){ els.selectedBar.classList.add('hidden'); return; }
     els.selectedBar.classList.remove('hidden');
     els.selName.textContent=ev.name;
-    els.selMeta.textContent=ev.code+' · '+ev.status+' · '+(ev.event_date||'no date');
+    els.selMeta.textContent=ev.code+(ev.room_code?' · room '+ev.room_code:'')+' · '+ev.status+' · '+(ev.event_date||'no date');
     document.getElementById('sel-live').href='/live/'+encodeURIComponent(ev.code);
     document.getElementById('sel-aud').href='/e/'+encodeURIComponent(ev.code);
+    document.getElementById('sel-join').href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):'');
     document.getElementById('link-live').href='/live/'+encodeURIComponent(ev.code);
     document.getElementById('link-audience').href='/e/'+encodeURIComponent(ev.code);
   }
@@ -552,9 +554,15 @@
   }
 
   // stats
-  var statsSource=null;
+  var statsSource=null; var statsBackoff=1000; var statsTimer=null; var statsCurrentId=null;
   function setStatsLive(on){ var el=document.getElementById('stats-live'); if(el) el.textContent='Live updates: '+(on?'on':'off'); }
-  function closeStatsStream(){ if(statsSource){ statsSource.close(); statsSource=null; } setStatsLive(false); }
+  function adminWsUrl(id){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/admin/events/'+encodeURIComponent(id)+'/stats'; }
+  function closeStatsStream(){
+    statsCurrentId=null;
+    if(statsTimer){ clearTimeout(statsTimer); statsTimer=null; }
+    if(statsSource){ try{ statsSource.close(); }catch(e){} statsSource=null; }
+    setStatsLive(false);
+  }
 
   function statCard(label, value, sub){
     var card=document.createElement('div'); card.className='stat-card';
@@ -705,11 +713,28 @@
   }
   function connectStatsStream(id){
     closeStatsStream();
-    if(!id || typeof EventSource==='undefined') return;
-    statsSource=new EventSource('/api/admin/events/'+id+'/stats/stream');
-    statsSource.addEventListener('stats', function(e){ try{ renderStatsEvent(JSON.parse(e.data)); }catch(err){} });
-    statsSource.onopen=function(){ setStatsLive(true); };
-    statsSource.onerror=function(){ setStatsLive(false); };
+    if(!id || typeof WebSocket==='undefined') return;
+    statsCurrentId=id; statsBackoff=1000;
+    doConnectStats(id);
+  }
+  function doConnectStats(id){
+    if(statsCurrentId!==id) return;
+    if(statsTimer){ clearTimeout(statsTimer); statsTimer=null; }
+    try{ statsSource=new WebSocket(adminWsUrl(id)); }catch(e){ return; }
+    statsSource.onopen=function(){ statsBackoff=1000; setStatsLive(true); };
+    statsSource.onmessage=function(ev){
+      try{
+        var m=JSON.parse(ev.data);
+        if(m.type==='stats' && m.data) renderStatsEvent(m.data);
+        else if(m.type==='ping'){ try{ statsSource.send(JSON.stringify({type:'pong'})); }catch(e){} }
+      }catch(err){}
+    };
+    statsSource.onclose=function(){
+      if(statsCurrentId!==id) return;
+      statsSource=null; setStatsLive(false);
+      statsTimer=setTimeout(function(){ statsBackoff=Math.min(statsBackoff*2, 10000); doConnectStats(id); }, statsBackoff);
+    };
+    statsSource.onerror=function(){ try{ statsSource.close(); }catch(e){} };
   }
   document.getElementById('btn-refresh-stats').addEventListener('click', function(){
     loadStats();

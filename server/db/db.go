@@ -871,12 +871,14 @@ func UpdateQuestion(id int64, fields map[string]any) (*Question, error) {
 		if err != nil {
 			return nil, err
 		}
+		InvalidateQuestionStats(id)
 	}
 	return GetQuestion(id)
 }
 
 func DeleteQuestion(id int64) error {
 	_, err := DB.Exec("DELETE FROM questions WHERE id=?", id)
+	InvalidateQuestionStats(id)
 	return err
 }
 
@@ -1045,7 +1047,9 @@ func containsString(list []string, s string) bool {
 // GetQuestionStats aggregates the answers for a single question.
 // Results are ordered by option order for choice kinds, by Borda score for
 // ranking, by score value for nps and by count for open/wordcloud.
-func GetQuestionStats(questionID int64) (*QuestionStats, error) {
+// computeQuestionStats aggregates answers for one question. GetQuestionStats
+// wraps it with the in-process result cache.
+func computeQuestionStats(questionID int64) (*QuestionStats, error) {
 	var optsStr, kind string
 	err := DB.QueryRow("SELECT options, kind FROM questions WHERE id=?", questionID).Scan(&optsStr, &kind)
 	if err != nil {
@@ -1284,11 +1288,6 @@ func orderedResults(opts []string, counts map[string]int) []Result {
 }
 
 // answers
-
-func UpsertAnswer(questionID, participantID int64, value string) error {
-	_, err := DB.Exec("INSERT INTO answers (question_id, participant_id, value) VALUES (?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET value=excluded.value, created_at=CURRENT_TIMESTAMP", questionID, participantID, value)
-	return err
-}
 
 func GetAnswer(questionID, participantID int64) (*Answer, error) {
 	var a Answer

@@ -394,7 +394,7 @@ func EventQR(w http.ResponseWriter, r *http.Request) {
 	}
 	base := os.Getenv("PUBLIC_BASE_URL")
 	if base == "" {
-		base = "http://localhost:6280"
+		base = "http://localhost:8080"
 	}
 	base = strings.TrimRight(base, "/")
 	payload := base + "/e/" + ev.Code
@@ -407,6 +407,28 @@ func EventQR(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "public, max-age=300")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(png)
+}
+
+// ResolveRoom maps a short, case-insensitive room code to the event's stable
+// event code so /join can redirect typed codes.
+// @Summary  Resolve room code
+// @Tags     public
+// @Produce  json
+// @Param    room path string true "Room code"
+// @Success  200 {object} map[string]any
+// @Failure  404 {object} map[string]string
+// @Router   /api/join/{room} [get]
+func ResolveRoom(w http.ResponseWriter, r *http.Request) {
+	ev, err := db.GetEventByRoomCode(r.PathValue("room"))
+	if err != nil || ev == nil {
+		jsonError(w, "room not found", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"code":      ev.Code,
+		"name":      ev.Name,
+		"room_code": ev.RoomCode,
+	})
 }
 
 // PublicGetAnalyticsSettings returns public analytics settings.

@@ -264,7 +264,7 @@ func oidcRedirectURL() string {
 	if v := strings.TrimSpace(os.Getenv("OIDC_REDIRECT_URL")); v != "" {
 		return v
 	}
-	return "http://localhost:6280/api/auth/oidc/callback"
+	return "http://localhost:8080/api/auth/oidc/callback"
 }
 
 type oidcCache struct {

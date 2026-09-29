@@ -79,6 +79,7 @@ func main() {
 	mux.HandleFunc("GET /api/events/{code}/presentations", handlers.ListPublicPresentations)
 	mux.HandleFunc("GET /api/events/{code}/presentations/{id}/download", handlers.DownloadPresentation)
 	mux.HandleFunc("GET /api/events/{code}/qr.png", handlers.EventQR)
+	mux.HandleFunc("GET /api/join/{room}", handlers.ResolveRoom)
 	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 
 	// ── Uploaded question media (public inline, UUID file names) ──
