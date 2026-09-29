@@ -1,3 +1,13 @@
+# [1.7.0](https://github.com/martynvdijke/slides/compare/v1.6.1...v1.7.0) (2026-09-29)
+
+
+### Features
+
+* room join codes, reusable live deck components, landing dates/tags and analytics ([eb200b7](https://github.com/martynvdijke/slides/commit/eb200b7042c90edf8101c86de94fabbc523dc2cb))
+* **server:** replace SSE with WebSocket live channel and short room codes ([72e3783](https://github.com/martynvdijke/slides/commit/72e37832b3272170427bdc92212d3a63ede1ce25))
+* **server:** serve built slide decks and add multi-stage Docker/CI for Go backend ([22af418](https://github.com/martynvdijke/slides/commit/22af4188d0d47028d066613f231ddcf51ebb6564))
+* **server:** vendor meetup Go backend as slides server module ([26bc57c](https://github.com/martynvdijke/slides/commit/26bc57cddd0c3bf6116f5bf13fdf0e5c3f6753b2))
+
 ## [1.6.1](https://github.com/martynvdijke/slides/compare/v1.6.0...v1.6.1) (2026-09-28)
 
 # [1.6.0](https://github.com/martynvdijke/slides/compare/v1.5.3...v1.6.0) (2026-09-28)
