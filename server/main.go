@@ -39,9 +39,10 @@ var staticFiles embed.FS
 var Version = "1.1.0"
 
 func main() {
-	port := getEnv("PORT", "6280")
-	dbPath := getEnv("DB_PATH", "./meetup.db")
+	port := getEnv("PORT", "8080")
+	dbPath := getEnv("DB_PATH", "./slides.db")
 	handlers.MediaDir = getEnv("MEDIA_DIR", "./media")
+	decksDir := getEnv("DECKS_DIR", "./dist")
 
 	if err := os.MkdirAll(handlers.MediaDir, 0o755); err != nil {
 		log.Fatalf("create media dir: %v", err)
@@ -120,7 +121,7 @@ func main() {
 	// ── Swagger UI (offline, assets embedded in the binary) ──
 	mux.Handle("GET /swagger/", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.json")))
 
-	// ── Embedded SPA ──
+	// ── Embedded SPA (admin console, audience page, projector view) ──
 	staticSub, err := fs.Sub(staticFiles, "static")
 	if err != nil {
 		log.Fatalf("static files: %v", err)
@@ -135,7 +136,24 @@ func main() {
 	mux.HandleFunc("GET /e/{code}", page("audience.html"))
 	mux.HandleFunc("GET /live/{code}", page("live.html"))
 	mux.HandleFunc("GET /admin", page("admin.html"))
-	mux.Handle("GET /", staticHandler)
+	mux.HandleFunc("GET /join", page("join.html"))
+	// SPA assets live at the site root, next to the built decks.
+	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "tailwind.css"} {
+		mux.HandleFunc("GET /"+asset, page(asset))
+	}
+
+	// ── Built Slidev decks + overview landing page ──
+	// The deck build (npm run build) writes dist/<deck>/ plus dist/index.html.
+	// In the container DECKS_DIR points at that output; locally it defaults to
+	// ./dist. When absent we fall back to the embedded SPA so `go run` still
+	// serves a usable admin/audience app.
+	if info, statErr := os.Stat(decksDir); statErr == nil && info.IsDir() {
+		log.Printf("serving slide decks from %s", decksDir)
+		mux.Handle("GET /", http.FileServer(http.Dir(decksDir)))
+	} else {
+		log.Printf("decks dir %q not found; serving embedded app only", decksDir)
+		mux.Handle("GET /", staticHandler)
+	}
 
 	// OpenTelemetry: opt-in via OTEL_* env vars, no-op otherwise. The handler
 	// is always wrapped so spans/metrics appear as soon as an endpoint is set.
@@ -160,14 +178,14 @@ func main() {
 
 	srv := &http.Server{Addr: ":" + port, Handler: handler}
 	go func() {
-		log.Printf("meetup starting on :%s", port)
+		log.Printf("slides server starting on :%s", port)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Fatalf("server failed: %v", err)
 		}
 	}()
 
 	<-ctx.Done()
-	log.Printf("meetup shutting down")
+	log.Printf("slides server shutting down")
 	handlers.Broker.Close()
 	shutCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
