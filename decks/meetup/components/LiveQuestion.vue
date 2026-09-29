@@ -8,15 +8,22 @@ import { useLiveRoom } from '../composables/useLiveRoom'
  * phones via the join QR.
  */
 const props = withDefaults(defineProps<{
-  event: string
+  event?: string
+  room?: string
   base?: string
   showResults?: boolean
 }>(), {
+  event: '',
+  room: '',
   base: '',
   showResults: true,
 })
 
-const { active, connected, mediaUrl } = useLiveRoom(props.event, props.base)
+const { active, connected, configured, mediaUrl } = useLiveRoom({
+  event: props.event,
+  room: props.room,
+  base: props.base,
+})
 
 const isImage = computed(() => (active.value?.media_type || '').startsWith('image/'))
 const isVideo = computed(() => (active.value?.media_type || '').startsWith('video/'))
@@ -39,7 +46,11 @@ function isRanking(kind?: string): boolean {
 
 <template>
   <div class="live-q">
-    <div v-if="!active" class="live-q-waiting">
+    <div v-if="!configured" class="live-q-waiting">
+      Set a room code to show live questions.
+    </div>
+
+    <div v-else-if="!active" class="live-q-waiting">
       <template v-if="connected">Waiting for a live question…</template>
       <template v-else>Waiting for a live question…<span class="live-q-offline"> (offline)</span></template>
     </div>
@@ -90,7 +101,7 @@ function isRanking(kind?: string): boolean {
   text-align: left;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 16px 18px;
 }
 .live-q-waiting {

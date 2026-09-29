@@ -76,10 +76,20 @@ Every deck copied from the template already has:
 
 | Component | What it shows |
 | --- | --- |
-| `<LiveJoin event="CODE" />` | QR code + short room code + join URL |
-| `<LiveQuestion event="CODE" />` | The active question, rich media prompt (image/video) and live results |
-| `<LiveQa event="CODE" :limit="5" />` | Top upvoted approved audience questions |
-| `<LiveQr event="CODE" />` | Back-compat card combining join + question |
+| `<LiveJoin />` | QR code + short room code + join URL |
+| `<LiveQuestion />` | The active question, rich media prompt (image/video) and live results |
+| `<LiveQa :limit="5" />` | Top upvoted approved audience questions |
+| `<LiveQr />` | Back-compat card combining join + question |
+| `<PresenterPanel />` | Presenter overlay: sign in, write a question, attach a photo/video, ask or close it live |
+
+Point them at a room with a prop (`room="AB2C3"` or `event="my-event-code"`),
+or leave them empty and set the build-time variables:
+
+```bash
+VITE_ROOM_CODE=AB2C3 npm run build -w meetup    # resolve a short room code
+VITE_EVENT_CODE=my-event-code npm run build -w meetup
+VITE_LIVE_BASE_URL=https://meetup.example.com   # hosted backend (GitHub Pages)
+```
 
 Drop them into any slide:
 
@@ -90,22 +100,38 @@ layout: center
 
 # Ask me anything
 
-<LiveJoin event="YOUR-EVENT-CODE" />
+<LiveJoin />
 
 <div class="mt-8">
-  <LiveQuestion event="YOUR-EVENT-CODE" />
+  <LiveQuestion />
 </div>
 ```
 
-How the server URL is resolved:
+Resolution order: the `room`/`event` prop, then `VITE_ROOM_CODE`/`VITE_EVENT_CODE`,
+then a visible "not configured" hint. The server URL is the `base` prop, then
+`VITE_LIVE_BASE_URL`, then same-origin (the all-in-one container). A short room
+code is resolved to the event at runtime via `GET /api/join/{room}`.
 
-1. the `base` prop, if you pass one;
-2. otherwise `VITE_LIVE_BASE_URL` (baked in at build time — used on GitHub Pages);
-3. otherwise same-origin (the all-in-one container).
+The components share one WebSocket per room and reconnect automatically. If the
+backend is unreachable they render the join card and wait, so the deck still
+works as a static presentation.
 
-The components share one WebSocket per deck/event and reconnect automatically.
-If the backend is unreachable they render the join card and wait, so the deck
-still works as a static presentation.
+### Presenter panel
+
+`<PresenterPanel />` lets you drive the room from inside the slides: press `p`
+to toggle it (or add the `fab` prop for a corner button, or embed
+`<PresenterPanel :open="true" />` on a presenter-only slide). It signs in to the
+backend, writes a prompt, picks or uploads an **image/video**, and asks or closes
+the question live.
+
+```md
+<PresenterPanel room="AB2C3" fab />
+```
+
+In the all-in-one container this is same-origin and uses the admin session
+cookie. On GitHub Pages the deck is cross-origin, so the backend must allowlist
+the Pages origin — set `CORS_ORIGINS` (and `COOKIE_SAMESITE=none` with
+`COOKIE_SECURE=true` over HTTPS).
 
 ## Run the backend
 
@@ -149,6 +175,9 @@ The audience app is at `/e/{code}`, the projector view at `/live/{code}`.
 | `OIDC_REDIRECT_URL` | `http://localhost:8080/api/auth/oidc/callback` | Callback URL |
 | `OIDC_SCOPES` | `openid email profile groups` | Requested scopes |
 | `OIDC_ADMIN_EMAILS` | — | Emails granted admin |
+| `CORS_ORIGINS` | — | Comma-separated origins allowed credentialed cross-origin admin calls (e.g. your GitHub Pages origin). `*` reflects any origin read-only |
+| `COOKIE_SAMESITE` | `lax` | Session cookie `SameSite` (`lax`, `strict` or `none`); use `none` for cross-site |
+| `COOKIE_SECURE` | `false` | Force `Secure` cookies (implied by `COOKIE_SAMESITE=none`) |
 | `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_*` | — | OpenTelemetry (env overrides admin settings) |
 
 Umami and OTel can also be configured in the admin panel; environment
@@ -160,6 +189,31 @@ SQLite runs in **WAL mode** with a busy timeout. Answers go through a single
 serialized writer that batches writes in one transaction, and question results
 are cached in-process for a few seconds, so bursts of concurrent answers don't
 fight over the write lock. No external memcached/Redis is required.
+
+## Tests
+
+**Go** (unit + HTTP/WebSocket integration):
+
+```bash
+cd server
+go test ./...
+```
+
+Covers the room-code lifecycle, credentialed CORS, admin auth, question media
+upload and the full setup → login → create media question → activate →
+audience answer → live result flow over `httptest` + a real WebSocket.
+
+**End-to-end** (Playwright, boots the built Go server against a temp database):
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+The suite drives a browser through admin setup/login, creating an event, joining
+with a room code, answering a poll and rendering an image question, plus the
+built deck and QR endpoint. `e2e/start-server.mjs` builds the Go binary and
+serves `dist/` on `127.0.0.1:4173` (override with `E2E_PORT`).
 
 ## GitHub Pages
 
@@ -200,7 +254,7 @@ and `/join` to join a room. The database and uploads live in `/data`.
 
 | Workflow | Purpose |
 | --- | --- |
-| [`ci.yaml`](./.github/workflows/ci.yaml) | `npm ci`, test/build the Go server, build all decks, validate the Dockerfile |
+| [`ci.yaml`](./.github/workflows/ci.yaml) | `npm ci`, test/build the Go server, build all decks, run Playwright e2e, validate the Dockerfile |
 | [`release.yaml`](./.github/workflows/release.yaml) | semantic-release + build/push Docker images + Gotify notify |
 | [`deploy-gh-pages.yml`](./.github/workflows/deploy-gh-pages.yml) | Build and deploy to GitHub Pages |
 | [`renovate.yml`](./.github/workflows/renovate.yml) | Self-hosted Renovate using `renovate.json` |

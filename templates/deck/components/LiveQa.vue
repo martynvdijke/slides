@@ -6,17 +6,24 @@ import { useLiveRoom } from '../composables/useLiveRoom'
  * Read-only board of the most upvoted approved audience questions.
  */
 const props = withDefaults(defineProps<{
-  event: string
+  event?: string
+  room?: string
   base?: string
   limit?: number
   title?: string
 }>(), {
+  event: '',
+  room: '',
   base: '',
   limit: 5,
   title: 'Top questions',
 })
 
-const { qa, connected } = useLiveRoom(props.event, props.base)
+const { qa, connected, configured } = useLiveRoom({
+  event: props.event,
+  room: props.room,
+  base: props.base,
+})
 
 const top = computed(() =>
   (qa.value || [])
@@ -29,7 +36,8 @@ const top = computed(() =>
 <template>
   <div class="live-qa">
     <div class="live-qa-title">{{ title }}</div>
-    <div v-if="!top.length" class="live-qa-empty">
+    <div v-if="!configured" class="live-qa-empty">Set a room code to show audience questions.</div>
+    <div v-else-if="!top.length" class="live-qa-empty">
       <template v-if="connected">No questions yet — ask one from your phone.</template>
       <template v-else>No questions yet.</template>
     </div>
@@ -50,7 +58,7 @@ const top = computed(() =>
   max-width: 620px;
   background: rgba(15, 23, 42, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 14px;
+  border-radius: 16px;
   padding: 16px 18px;
 }
 .live-qa-title {

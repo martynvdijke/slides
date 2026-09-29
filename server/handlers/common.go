@@ -11,7 +11,9 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -191,6 +193,29 @@ func sessionUser(r *http.Request) *db.User {
 	return u
 }
 
+// cookieSameSite reads COOKIE_SAMESITE (lax|strict|none) and defaults to Lax.
+// Use "none" when the admin/presenter UI runs on a different origin (e.g. a
+// GitHub Pages deck) than the API; browsers require SameSite=None + Secure.
+func cookieSameSite() http.SameSite {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("COOKIE_SAMESITE"))) {
+	case "none":
+		return http.SameSiteNoneMode
+	case "strict":
+		return http.SameSiteStrictMode
+	default:
+		return http.SameSiteLaxMode
+	}
+}
+
+// cookieSecure reports whether cookies should carry the Secure attribute.
+// SameSite=None mandates Secure, so enabling it implies Secure.
+func cookieSecure() bool {
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("COOKIE_SECURE")), "true") {
+		return true
+	}
+	return cookieSameSite() == http.SameSiteNoneMode
+}
+
 func setSessionCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookie,
@@ -198,7 +223,8 @@ func setSessionCookie(w http.ResponseWriter, token string) {
 		Path:     "/",
 		MaxAge:   int(sessionTTL.Seconds()),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(),
+		SameSite: cookieSameSite(),
 	})
 }
 
@@ -209,7 +235,8 @@ func clearSessionCookie(w http.ResponseWriter) {
 		Path:     "/",
 		MaxAge:   -1,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(),
+		SameSite: cookieSameSite(),
 	})
 }
 
@@ -252,7 +279,8 @@ func participantID(w http.ResponseWriter, r *http.Request, eventID int64) int64 
 		Path:     "/",
 		MaxAge:   int(participantTTL.Seconds()),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(),
+		SameSite: cookieSameSite(),
 	})
 	id, err := db.GetOrCreateParticipant(token, eventID)
 	if err != nil {

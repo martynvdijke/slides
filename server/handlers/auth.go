@@ -361,7 +361,8 @@ func OIDCLogin(w http.ResponseWriter, r *http.Request) {
 		Value:    state,
 		Path:     "/",
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		Secure:   cookieSecure(),
+		SameSite: cookieSameSite(),
 		MaxAge:   600,
 	})
 	http.Redirect(w, r, cached.oauth.AuthCodeURL(state), http.StatusFound)
@@ -391,7 +392,7 @@ func OIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Clear state cookie
-	http.SetCookie(w, &http.Cookie{Name: "meetup_oidc_state", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "meetup_oidc_state", Value: "", Path: "/", HttpOnly: true, Secure: cookieSecure(), SameSite: cookieSameSite(), MaxAge: -1})
 
 	code := r.URL.Query().Get("code")
 	if code == "" {
@@ -471,6 +472,6 @@ func OIDCLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	clearSessionCookie(w)
 	// Also clear OIDC state cookie
-	http.SetCookie(w, &http.Cookie{Name: "meetup_oidc_state", Value: "", Path: "/", HttpOnly: true, SameSite: http.SameSiteLaxMode, MaxAge: -1})
+	http.SetCookie(w, &http.Cookie{Name: "meetup_oidc_state", Value: "", Path: "/", HttpOnly: true, Secure: cookieSecure(), SameSite: cookieSameSite(), MaxAge: -1})
 	http.Redirect(w, r, "/admin", http.StatusFound)
 }

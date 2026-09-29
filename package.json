@@ -7,9 +7,11 @@
     "decks/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present && node scripts/build-index.mjs"
+    "build": "npm run build --workspaces --if-present && node scripts/build-index.mjs",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "@slidev/cli": "^53.0.0",
     "@slidev/theme-default": "^0.25.0",
     "@slidev/theme-seriph": "^0.25.0"
