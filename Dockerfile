@@ -3,7 +3,8 @@
 #
 # Usage:
 #   docker build -t slides .
-#   docker run --rm -p 8080:8080 -v slides-data:/data slides
+#   docker run --rm -p 6270:6270 -v slides-data:/data slides
+#   docker compose up -d      # see compose.yaml for umami + otel profiles
 #
 # The container serves the public decks at / and the admin console, audience
 # page, projector view, API and WebSocket under /admin, /e/{code}, /live/{code},
@@ -19,6 +20,7 @@ COPY package.json package-lock.json ./
 COPY decks ./decks
 COPY templates ./templates
 COPY scripts ./scripts
+COPY assets ./assets
 
 RUN npm ci --no-audit --no-fund
 RUN npm run build
@@ -43,7 +45,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 
 WORKDIR /app
 
-ENV PORT=8080 \
+ENV PORT=6270 \
 	DB_PATH=/data/slides.db \
 	MEDIA_DIR=/data/media \
 	DECKS_DIR=/app/dist
@@ -52,7 +54,7 @@ COPY --from=server /out/slides /usr/local/bin/slides
 COPY --from=decks /app/dist /app/dist
 
 USER slides
-EXPOSE 8080
+EXPOSE 6270
 VOLUME ["/data"]
 
 ENTRYPOINT ["slides"]

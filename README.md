@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="assets/logo-dark.svg">
+    <img src="assets/logo.svg" alt="Slides" width="260">
+  </picture>
+</p>
+
 # Slides
 
 A monorepo for hosting multiple [Slidev](https://sli.dev) decks, plus the Go
@@ -139,7 +146,7 @@ The server is a Go module in `server/`:
 
 ```bash
 cd server
-go run .            # http://localhost:8080
+go run .            # http://localhost:6270
 ```
 
 Open `/admin` to create the first admin user, then create an event. Every
@@ -159,20 +166,21 @@ The audience app is at `/e/{code}`, the projector view at `/live/{code}`.
   upload, **Word clouds**, **CSV export**.
 - **OIDC login** (Authelia-compatible) alongside local accounts.
 - **Umami analytics** and **OpenTelemetry** tracing/metrics/logs.
+- **Health probe** at `GET /healthz` (used by the compose healthcheck).
 
 ### Configuration
 
 | Env var | Default | Purpose |
 | --- | --- | --- |
-| `PORT` | `8080` | HTTP listen port |
+| `PORT` | `6270` | HTTP listen port |
 | `DB_PATH` | `./slides.db` | SQLite database file |
 | `MEDIA_DIR` | `./media` | Uploaded question media |
 | `DECKS_DIR` | `./dist` | Built decks to serve at `/` (falls back to the embedded SPA) |
-| `PUBLIC_BASE_URL` | `http://localhost:8080` | Absolute base used in QR codes |
+| `PUBLIC_BASE_URL` | `http://localhost:6270` | Absolute base used in QR codes |
 | `OIDC_ENABLED` | `false` | Enable OIDC login |
 | `OIDC_ISSUER_URL` | — | OIDC issuer |
 | `OIDC_CLIENT_ID` / `OIDC_CLIENT_SECRET` | — | OIDC client credentials |
-| `OIDC_REDIRECT_URL` | `http://localhost:8080/api/auth/oidc/callback` | Callback URL |
+| `OIDC_REDIRECT_URL` | `http://localhost:6270/api/auth/oidc/callback` | Callback URL |
 | `OIDC_SCOPES` | `openid email profile groups` | Requested scopes |
 | `OIDC_ADMIN_EMAILS` | — | Emails granted admin |
 | `CORS_ORIGINS` | — | Comma-separated origins allowed credentialed cross-origin admin calls (e.g. your GitHub Pages origin). `*` reflects any origin read-only |
@@ -239,11 +247,33 @@ One image contains the Go server, the admin/audience app and all built decks:
 
 ```bash
 docker build -t slides .
-docker run --rm -p 8080:8080 -v slides-data:/data slides
+docker run --rm -p 6270:6270 -v slides-data:/data slides
 ```
 
-Open <http://localhost:8080> for the deck index, `/admin` for the admin panel
-and `/join` to join a room. The database and uploads live in `/data`.
+Open <http://localhost:6270> for the deck index, `/admin` for the admin panel
+and `/join` to join a room. The database and uploads live in `/data`. The
+container exposes `GET /healthz` for probes.
+
+### Docker Compose
+
+[`compose.yaml`](./compose.yaml) runs the same image together with optional
+Umami analytics and an OpenTelemetry collector, configured from
+[`.env.example`](./.env.example) (copy it to `.env`):
+
+```bash
+docker compose up -d                          # slides on http://localhost:6270
+docker compose --profile analytics up -d      # + Umami on http://localhost:6271
+docker compose --profile observability up -d  # + OTLP collector on 4317/4318
+```
+
+- **Analytics** — after the first start, open <http://localhost:6271>, sign in
+  with `admin` / `umami`, create a website and paste its script URL and website
+  id into *Admin → Analytics* in the Slides UI.
+- **Observability** — set
+  `OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318` in `.env`, restart
+  the `slides` service, and traces/metrics/logs show up in the collector logs.
+  [`otel-collector.yaml`](./otel-collector.yaml) is a ready-to-edit debug
+  pipeline.
 
 ## Deploy
 
@@ -254,7 +284,7 @@ and `/join` to join a room. The database and uploads live in `/data`.
 
 | Workflow | Purpose |
 | --- | --- |
-| [`ci.yaml`](./.github/workflows/ci.yaml) | `npm ci`, test/build the Go server, build all decks, run Playwright e2e, validate the Dockerfile |
+| [`ci.yaml`](./.github/workflows/ci.yaml) | `npm ci`, test/build the Go server, build all decks, run Playwright e2e, validate the Dockerfile and `compose.yaml` |
 | [`release.yaml`](./.github/workflows/release.yaml) | semantic-release + build/push Docker images + Gotify notify |
 | [`deploy-gh-pages.yml`](./.github/workflows/deploy-gh-pages.yml) | Build and deploy to GitHub Pages |
 | [`renovate.yml`](./.github/workflows/renovate.yml) | Self-hosted Renovate using `renovate.json` |

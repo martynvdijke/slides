@@ -394,7 +394,7 @@ func EventQR(w http.ResponseWriter, r *http.Request) {
 	}
 	base := os.Getenv("PUBLIC_BASE_URL")
 	if base == "" {
-		base = "http://localhost:8080"
+		base = "http://localhost:6270"
 	}
 	base = strings.TrimRight(base, "/")
 	payload := base + "/e/" + ev.Code

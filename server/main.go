@@ -40,7 +40,7 @@ var staticFiles embed.FS
 var Version = "1.1.0"
 
 func main() {
-	port := getEnv("PORT", "8080")
+	port := getEnv("PORT", "6270")
 	dbPath := getEnv("DB_PATH", "./slides.db")
 	handlers.MediaDir = getEnv("MEDIA_DIR", "./media")
 	decksDir := getEnv("DECKS_DIR", "./dist")
@@ -69,6 +69,9 @@ func main() {
 	mux.HandleFunc("GET /api/auth/oidc/login", handlers.OIDCLogin)
 	mux.HandleFunc("GET /api/auth/oidc/callback", handlers.OIDCCallback)
 	mux.HandleFunc("GET /api/auth/oidc/logout", handlers.OIDCLogout)
+
+	// ── Health probe (used by the container healthcheck) ──
+	mux.HandleFunc("GET /healthz", handlers.Health)
 
 	// ── Public audience API (anonymous participant cookie) ──
 	mux.HandleFunc("GET /api/events/{code}", handlers.GetEvent)
@@ -142,7 +145,7 @@ func main() {
 	mux.HandleFunc("GET /admin", page("admin.html"))
 	mux.HandleFunc("GET /join", page("join.html"))
 	// SPA assets live at the site root, next to the built decks.
-	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "tailwind.css"} {
+	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "tailwind.css", "logo.svg"} {
 		mux.HandleFunc("GET /"+asset, page(asset))
 	}
 

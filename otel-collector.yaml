@@ -1,0 +1,40 @@
+# OpenTelemetry collector for the `observability` compose profile.
+#
+# Receives OTLP from the slides server (gRPC on 4317, HTTP on 4318) and prints
+# every batch to the container logs with the debug exporter. To ship telemetry
+# to a backend, replace the `debug` exporter with e.g. `otlphttp`, or add a
+# second exporter and list both.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+
+exporters:
+  debug:
+    verbosity: basic
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+
+service:
+  extensions: [health_check]
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

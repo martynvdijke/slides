@@ -1,0 +1,98 @@
+# Slides — one-command self-hosting example.
+#
+#   docker compose up -d                              # slides at http://localhost:6270
+#   docker compose --profile analytics up -d          # + Umami analytics at http://localhost:6271
+#   docker compose --profile observability up -d      # + OpenTelemetry collector (OTLP 4317/4318)
+#
+# Copy .env.example to .env to override the values below. The slides image is
+# pulled from ghcr.io when available and built from this checkout otherwise
+# (`docker compose build` forces a local build).
+
+name: slides
+
+services:
+  slides:
+    build: .
+    image: ghcr.io/martynvdijke/slides:latest
+    container_name: slides
+    ports:
+      - "6270:6270"
+    environment:
+      PORT: "6270"
+      DB_PATH: /data/slides.db
+      MEDIA_DIR: /data/media
+      DECKS_DIR: /app/dist
+      # Absolute base used in QR codes — set this to the URL people reach you on.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:6270}
+      # Empty disables OpenTelemetry. Point it at the collector (observability
+      # profile) to start exporting: http://otel-collector:4318
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-slides}
+    volumes:
+      - slides-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:6270/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── Analytics profile ─────────────────────────────────────────────────────
+  # Umami web analytics for the landing page and decks. After the first start:
+  #   1. open http://localhost:6271 and sign in with admin / umami
+  #   2. change the password and add a website
+  #   3. paste its script URL (http://localhost:6271/script.js) and website id
+  #      into Slides → Admin → Analytics
+  umami:
+    image: ghcr.io/umami-software/umami:postgresql-latest
+    container_name: umami
+    profiles: [analytics]
+    ports:
+      - "6271:3000"
+    environment:
+      DATABASE_TYPE: postgresql
+      DATABASE_URL: postgresql://umami:${UMAMI_DB_PASSWORD:-umami}@umami-db:5432/umami
+      APP_SECRET: ${UMAMI_APP_SECRET:-change-me}
+    depends_on:
+      umami-db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  umami-db:
+    image: postgres:18-alpine
+    container_name: umami-db
+    profiles: [analytics]
+    environment:
+      POSTGRES_DB: umami
+      POSTGRES_USER: umami
+      POSTGRES_PASSWORD: ${UMAMI_DB_PASSWORD:-umami}
+    volumes:
+      - umami-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U umami -d umami"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # ── Observability profile ─────────────────────────────────────────────────
+  # Minimal OTLP collector (see otel-collector.yaml). Set
+  # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 in .env, restart the
+  # slides service, and telemetry shows up in the collector logs.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.161.0
+    container_name: otel-collector
+    profiles: [observability]
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ./otel-collector.yaml:/etc/otelcol-contrib/config.yaml:ro
+    ports:
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "13133:13133" # health check
+    restart: unless-stopped
+
+volumes:
+  slides-data:
+  umami-db-data:

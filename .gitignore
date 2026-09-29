@@ -2,6 +2,9 @@ node_modules
 dist
 .slidev
 *.local
+
+# Local environment for docker compose (ship .env.example instead)
+.env
 .DS_Store
 
 # Go server runtime artifacts

@@ -1,13 +1,21 @@
 // Generates dist/index.html listing every built deck with its date and tags.
 // Deck metadata comes from each deck's slides.md frontmatter:
 //   title, date (YYYY-MM-DD), tags (comma list), info, author.
-import { readdirSync, existsSync, readFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 
 const dist = 'dist'
 if (!existsSync(dist)) {
   console.error('No dist/ found. Run `npm run build` first.')
   process.exit(1)
+}
+
+// Ship the logo mark with the built site (favicon + landing page header).
+const markSrc = join('assets', 'logo-mark.svg')
+if (existsSync(markSrc)) {
+  copyFileSync(markSrc, join(dist, 'logo.svg'))
+} else {
+  console.warn('assets/logo-mark.svg not found; landing page will miss its logo')
 }
 
 function readFrontmatter(deck) {
@@ -110,13 +118,17 @@ writeFileSync(
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="icon" type="image/svg+xml" href="./logo.svg" />
   <title>Slides</title>
 ${umami}  <style>
     :root { color-scheme: dark; }
     body { margin: 0; min-height: 100vh; font-family: ui-sans-serif, system-ui, sans-serif;
            background: #0d1117; color: #e6edf3; display: grid; place-items: center; }
     main { width: min(900px, 90vw); padding: 4rem 0; }
-    h1 { font-size: 2.5rem; margin: 0 0 2rem; }
+    .hero { display: flex; align-items: center; gap: 1.1rem; margin-bottom: 2.25rem; }
+    .hero h1 { font-size: 2.1rem; margin: 0; letter-spacing: -.02em; }
+    .mark { display: block; border-radius: 14px; box-shadow: 0 8px 24px #7c6bff59; }
+    .tagline { margin: .3rem 0 0; color: #8b949e; font-size: .95rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
     .card { display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem;
             padding: 1.5rem; border: 1px solid #30363d; border-radius: 12px; text-decoration: none;
@@ -130,14 +142,23 @@ ${umami}  <style>
     .card-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
                  font-size: .8rem; color: #8b949e; }
     .open { color: #58a6ff; }
+    footer { margin-top: 3rem; color: #8b949e; font-size: .8rem; }
+    footer a { color: #58a6ff; }
   </style>
 </head>
 <body>
   <main>
-    <h1>Slide decks</h1>
+    <header class="hero">
+      <img class="mark" src="./logo.svg" alt="" width="56" height="56" />
+      <div>
+        <h1>Slides</h1>
+        <p class="tagline">Slidev decks with live questions, polls and Q&amp;A.</p>
+      </div>
+    </header>
     <div class="grid">
 ${cards}
     </div>
+    <footer>Built with <a href="https://sli.dev">Slidev</a>.</footer>
   </main>
 </body>
 </html>
