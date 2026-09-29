@@ -36,7 +36,7 @@ COPY server ./
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/slides .
 
 # ---- runtime stage ----
-FROM alpine:3.21
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates tzdata \
 	&& adduser -D -u 10001 slides \
