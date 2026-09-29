@@ -34,6 +34,13 @@ jobs:
         run: npm run build
         env:
           BASE_PATH: /${{ github.event.repository.name }}/
+          # Public backend that hosts the live questions (GitHub Pages can't run it).
+          # Set these as repository Variables; leave empty to keep slides static-only.
+          VITE_LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL }}
+          VITE_UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
+          VITE_UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
+          UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
+          UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6

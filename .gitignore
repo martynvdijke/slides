@@ -3,3 +3,10 @@ dist
 .slidev
 *.local
 .DS_Store
+
+# Go server runtime artifacts
+server/slides
+server/*.db
+server/*.db-shm
+server/*.db-wal
+server/media/
