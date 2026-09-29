@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/martynvdijke/slides/compare/v1.7.0...v1.8.0) (2026-09-29)
+
+
+### Features
+
+* in-slide presenter panel, env-wired rooms and credentialed CORS ([55c17b0](https://github.com/martynvdijke/slides/commit/55c17b0a3c2c6231789dc35c4ee31a478fb7d304))
+
 # [1.7.0](https://github.com/martynvdijke/slides/compare/v1.6.1...v1.7.0) (2026-09-29)
 
 
