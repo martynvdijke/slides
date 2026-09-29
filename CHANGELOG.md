@@ -1,3 +1,10 @@
+## [1.9.1](https://github.com/martynvdijke/slides/compare/v1.9.0...v1.9.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#8](https://github.com/martynvdijke/slides/issues/8)) ([9bb1052](https://github.com/martynvdijke/slides/commit/9bb10523df513104d4c7370b641d1466c48d24fa))
+
 # [1.9.0](https://github.com/martynvdijke/slides/compare/v1.8.0...v1.9.0) (2026-09-29)
 
 
