@@ -61,7 +61,7 @@ test.describe('entry page', () => {
     if (await page.locator('#form-login').isVisible()) {
       await page.fill('#login-user', ADMIN.username)
       await page.fill('#login-pass', ADMIN.password)
-      await page.locator('#form-login button[type="submit"]').click()
+      await page.locator('#form-login button.btn-primary[type="submit"]').click()
     }
     await expect(page.locator('#events-list')).toBeVisible({ timeout: 15000 })
 
