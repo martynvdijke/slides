@@ -386,20 +386,62 @@ func validateQuestionMedia(mediaURL, mediaType string) error {
 // @Param    body body map[string]any true "question payload"
 // @Success  200 {object} QuestionDTO
 // @Router   /api/admin/events/{id}/questions [post]
+// flexBool accepts either a JSON boolean or a JSON number (0/1) for a bool field.
+type flexBool bool
+
+func (b *flexBool) UnmarshalJSON(data []byte) error {
+	s := strings.TrimSpace(string(data))
+	if s == "null" {
+		return nil
+	}
+	var v bool
+	if err := json.Unmarshal(data, &v); err == nil {
+		*b = flexBool(v)
+		return nil
+	}
+	var n int
+	if err := json.Unmarshal(data, &n); err == nil {
+		*b = flexBool(n != 0)
+		return nil
+	}
+	return fmt.Errorf("invalid boolean value %q", s)
+}
+
+// boolValue dereferences the pointer, returning false when nil.
+func (b *flexBool) boolValue() bool {
+	if b == nil {
+		return false
+	}
+	return bool(*b)
+}
+
+func validateDurationSec(v int) error {
+	if v == 0 {
+		return nil
+	}
+	if v < 5 || v > 180 {
+		return fmt.Errorf("duration_sec must be 0 or between 5 and 180")
+	}
+	return nil
+}
+
 func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	eid := pathID(r, "id")
 	var body struct {
-		Kind         string   `json:"kind"`
-		Mode         string   `json:"mode"`
-		Prompt       string   `json:"prompt"`
-		Options      []string `json:"options"`
-		Position     int      `json:"position"`
-		ShowResults  *bool    `json:"show_results"`
-		IsFeedback   *bool    `json:"is_feedback"`
-		MediaURL     string   `json:"media_url"`
-		MediaType    string   `json:"media_type"`
-		CorrectIndex *int     `json:"correct_index"`
-		PointsBase   *int     `json:"points_base"`
+		Kind         string    `json:"kind"`
+		Mode         string    `json:"mode"`
+		Prompt       string    `json:"prompt"`
+		Options      []string  `json:"options"`
+		Position     int       `json:"position"`
+		ShowResults  *bool     `json:"show_results"`
+		IsFeedback   *bool     `json:"is_feedback"`
+		MediaURL     string    `json:"media_url"`
+		MediaType    string    `json:"media_type"`
+		CorrectIndex *int      `json:"correct_index"`
+		PointsBase   *int      `json:"points_base"`
+		DurationSec  *int      `json:"duration_sec"`
+		AutoClose    *flexBool `json:"auto_close"`
+		AutoReveal   *flexBool `json:"auto_reveal"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		jsonError(w, "invalid json", http.StatusBadRequest)
@@ -452,6 +494,23 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonError(w, "failed to create question", http.StatusInternalServerError)
 		return
+	}
+	if body.DurationSec != nil {
+		if err := validateDurationSec(*body.DurationSec); err != nil {
+			_ = db.DeleteQuestion(q.ID)
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"duration_sec": *body.DurationSec})
+		q, _ = db.GetQuestion(q.ID)
+	}
+	if body.AutoClose != nil {
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"auto_close": body.AutoClose.boolValue()})
+		q, _ = db.GetQuestion(q.ID)
+	}
+	if body.AutoReveal != nil {
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"auto_reveal": body.AutoReveal.boolValue()})
+		q, _ = db.GetQuestion(q.ID)
 	}
 	if body.CorrectIndex != nil {
 		_, _ = db.UpdateQuestion(q.ID, map[string]any{"correct_index": *body.CorrectIndex})
@@ -573,6 +632,32 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 			var n int
 			_ = json.Unmarshal(v, &n)
 			fields["points_base"] = n
+		case "duration_sec":
+			var n int
+			_ = json.Unmarshal(v, &n)
+			if err := validateDurationSec(n); err != nil {
+				jsonError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			fields["duration_sec"] = n
+		case "auto_close":
+			var b bool
+			if err := json.Unmarshal(v, &b); err == nil {
+				fields["auto_close"] = b
+			} else {
+				var n int
+				_ = json.Unmarshal(v, &n)
+				fields["auto_close"] = n != 0
+			}
+		case "auto_reveal":
+			var b bool
+			if err := json.Unmarshal(v, &b); err == nil {
+				fields["auto_reveal"] = b
+			} else {
+				var n int
+				_ = json.Unmarshal(v, &n)
+				fields["auto_reveal"] = n != 0
+			}
 		}
 	}
 	effKind := q.Kind
@@ -763,7 +848,30 @@ func AdminDeleteQuestion(w http.ResponseWriter, r *http.Request) {
 func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 	eid := pathID(r, "id")
 	qid := pathID(r, "qid")
-	if err := db.ActivateQuestion(eid, qid); err != nil {
+	var body struct {
+		DurationSec *int `json:"duration_sec"`
+	}
+	if r.ContentLength != 0 {
+		_ = decodeJSON(r, &body)
+	}
+	var override *int
+	if body.DurationSec != nil {
+		if err := validateDurationSec(*body.DurationSec); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if *body.DurationSec != 0 {
+			override = body.DurationSec
+		} else {
+			// 0 means no override; keep existing
+			override = nil
+		}
+		// if value is valid 5..180, pass override
+		if *body.DurationSec >= 5 && *body.DurationSec <= 180 {
+			override = body.DurationSec
+		}
+	}
+	if err := db.ActivateQuestion(eid, qid, override); err != nil {
 		jsonError(w, "failed to activate", http.StatusBadRequest)
 		return
 	}
@@ -773,6 +881,57 @@ func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
 	}
+	writeJSON(w, http.StatusOK, questionDTO(*q, true))
+}
+
+func AdminReorderQuestions(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
+	var body struct {
+		Order []int64 `json:"order"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		jsonError(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if body.Order == nil {
+		jsonError(w, "order is required", http.StatusBadRequest)
+		return
+	}
+	if err := db.ReorderQuestions(eid, body.Order); err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	BroadcastEvent(eid)
+	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+}
+
+func AdminNextQuestion(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
+	var body struct {
+		Skip *bool `json:"skip"`
+	}
+	if r.ContentLength != 0 {
+		_ = decodeJSON(r, &body)
+	}
+	if body.Skip != nil && *body.Skip {
+		if err := db.SkipLiveQuestion(eid); err != nil {
+			jsonError(w, "failed to skip", http.StatusInternalServerError)
+			return
+		}
+		BroadcastEvent(eid)
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "skipped": true})
+		return
+	}
+	q, err := db.NextQueuedQuestion(eid)
+	if err != nil {
+		jsonError(w, "failed to advance", http.StatusInternalServerError)
+		return
+	}
+	if q == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "empty": true})
+		return
+	}
+	BroadcastEvent(eid)
 	writeJSON(w, http.StatusOK, questionDTO(*q, true))
 }
 

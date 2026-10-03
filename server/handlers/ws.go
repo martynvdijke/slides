@@ -90,6 +90,7 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pid := participantID(w, r, ev.ID)
+	isPresenter := sessionUser(r) != nil
 	ctx := r.Context()
 
 	c, err := acceptWS(w, r)
@@ -146,13 +147,14 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 
+	var lastSlideMs int64
 	for {
 		select {
 		case fr, open := <-ch:
 			if !open {
 				return
 			}
-			if fr.Kind == live.KindReactions {
+			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide {
 				if err := writeRaw(ctx, c, fr.Data); err != nil {
 					return
 				}
@@ -168,6 +170,38 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		case raw, open := <-inbound:
 			if !open {
 				return
+			}
+			// intercept slide before dispatch
+			var slidePeek struct {
+				Type  string `json:"type"`
+				Index *int   `json:"index"`
+				Total *int   `json:"total"`
+				Title string `json:"title"`
+			}
+			_ = json.Unmarshal(raw, &slidePeek)
+			if slidePeek.Type == "slide" {
+				if !isPresenter {
+					_ = writeWS(ctx, c, wsEnvelope{Type: "error", For: "slide", Error: "unauthorized"})
+					continue
+				}
+				now := time.Now().UnixMilli()
+				if now-lastSlideMs < 200 {
+					continue
+				}
+				lastSlideMs = now
+				idx := 0
+				if slidePeek.Index != nil {
+					idx = *slidePeek.Index
+				}
+				tot := 0
+				if slidePeek.Total != nil {
+					tot = *slidePeek.Total
+				}
+				s := live.Slide{Index: idx, Total: tot, Title: slidePeek.Title}
+				Broker.SetSlide(ev.Code, s)
+				Broker.BroadcastSlide(ev.Code, s)
+				_ = writeWS(ctx, c, okEnvelope("slide"))
+				continue
 			}
 			// quick peek for reaction to handle rate limit without waiting for full dispatch
 			var peek wsInbound
@@ -267,6 +301,8 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 		return env
 	case "ping":
 		return wsEnvelope{Type: "pong"}
+	case "slide":
+		return okEnvelope("slide")
 	case "reaction":
 		// handled in EventWS loop; ignore here
 		return wsEnvelope{Type: "error", Error: "unknown message type"}
@@ -320,7 +356,11 @@ func AdminEventStatsWS(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			if fr.Kind == live.KindReactions {
+			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide {
+				// forward slide frames? admin stats ignores but forward is fine; ignore like reactions for stats
+				if fr.Kind == live.KindSlide {
+					// optionally forward raw; we just ignore for stats but don't block
+				}
 				continue
 			}
 			if fresh, err := db.GetEventByID(ev.ID); err == nil && fresh != nil {

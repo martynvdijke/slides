@@ -29,6 +29,134 @@
   var code=getCode();
   var stateCache=null;
 
+  // --- slide sync indicator ---
+  function renderSlideIndicator(slide){
+    var el=document.getElementById('slide-indicator');
+    if(!el) return;
+    if(!slide || slide.index===null || slide.index===undefined || slide.total===null || slide.total===undefined){
+      el.classList.add('hidden');
+      el.style.display='none';
+      el.textContent='';
+      return;
+    }
+    var txt='Slide '+slide.index+' / '+slide.total;
+    if(slide.title) txt+=' \u00b7 '+slide.title;
+    el.textContent=txt;
+    el.classList.remove('hidden');
+    el.style.display='';
+  }
+
+  // --- countdown (audience) ---
+  var countdownTimer=null;
+  var countdownRemaining=0;
+  var countdownDuration=0;
+  var countdownActiveId=null;
+  function formatCountdown(sec){
+    sec=Math.max(0, Math.floor(sec));
+    var m=Math.floor(sec/60);
+    var s=sec%60;
+    return m+':'+(s<10?'0':'')+s;
+  }
+  function clearCountdown(){
+    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+    countdownRemaining=0; countdownDuration=0; countdownActiveId=null;
+    var el=document.getElementById('audience-countdown');
+    if(el){ el.classList.add('hidden'); el.style.display='none'; }
+  }
+  function updateCountdownUI(){
+    var wrap=document.getElementById('audience-countdown');
+    var valEl=document.getElementById('countdown-value');
+    var fillEl=document.getElementById('countdown-fill');
+    var labelEl=document.getElementById('countdown-label');
+    if(!wrap || !valEl) return;
+    if(countdownRemaining<=0){
+      valEl.textContent="Time's up";
+      if(labelEl) labelEl.textContent="Time's up";
+      if(fillEl) fillEl.style.width='0%';
+      wrap.style.opacity='0.95';
+      return;
+    }
+    wrap.style.display='flex';
+    wrap.classList.remove('hidden');
+    wrap.style.opacity='1';
+    valEl.textContent=formatCountdown(countdownRemaining);
+    if(labelEl) labelEl.textContent='Time left';
+    if(fillEl && countdownDuration>0){
+      var pct=Math.max(0, Math.min(100, Math.round(countdownRemaining/countdownDuration*100)));
+      fillEl.style.width=pct+'%';
+      // turn amber then red when low
+      if(pct<=25) fillEl.style.background='linear-gradient(135deg,#F43F5E,#F59E0B)';
+      else if(pct<=50) fillEl.style.background='linear-gradient(135deg,#F59E0B,#FACC15)';
+      else fillEl.style.background='var(--grad, linear-gradient(135deg,#6366F1,#A855F7 45%,#EC4899 75%,#22D3EE))';
+    } else if(fillEl){
+      fillEl.style.width='100%';
+    }
+  }
+  function applyCountdownExpired(){
+    var card=document.getElementById('live-card');
+    if(!card) return;
+    var wrap=document.getElementById('audience-countdown');
+    if(wrap){
+      var valEl=document.getElementById('countdown-value');
+      var labelEl=document.getElementById('countdown-label');
+      var fillEl=document.getElementById('countdown-fill');
+      if(valEl) valEl.textContent="Time's up";
+      if(labelEl) labelEl.textContent="Time's up";
+      if(fillEl) fillEl.style.width='0%';
+      wrap.style.opacity='0.95';
+    }
+    // disable answer controls
+    var ctrls=card.querySelectorAll('button.option-btn, button.star, button.btn, input, textarea');
+    ctrls.forEach(function(c){ c.disabled=true; c.style.opacity='0.52'; c.style.pointerEvents='none'; });
+    if(!document.getElementById('countdown-expired-note')){
+      var note=document.createElement('div'); note.id='countdown-expired-note'; note.className='pill';
+      note.style.marginTop='12px'; note.style.background='rgba(244,63,94,.14)'; note.style.color='#FECDD3'; note.style.borderColor='rgba(244,63,94,.28)';
+      note.textContent="Time's up \u2014 waiting for results";
+      card.appendChild(note);
+    }
+  }
+  function tickCountdown(){
+    if(countdownRemaining<=0){
+      applyCountdownExpired();
+      if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+      return;
+    }
+    countdownRemaining-=1;
+    if(countdownRemaining<=0){
+      countdownRemaining=0;
+      updateCountdownUI();
+      applyCountdownExpired();
+      if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+    } else {
+      updateCountdownUI();
+    }
+  }
+  function syncCountdown(active){
+    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+    var hasTimer = active && typeof active.remaining_sec==='number' && active.remaining_sec!==null && active.remaining_sec!==undefined;
+    if(!hasTimer){
+      clearCountdown();
+      return;
+    }
+    countdownRemaining=Math.max(0, Math.floor(active.remaining_sec));
+    countdownDuration = (typeof active.duration_sec==='number' && active.duration_sec>0) ? active.duration_sec : (countdownRemaining>0? countdownRemaining : 0);
+    // also infer duration from expires_at if available
+    if(!countdownDuration && active.expires_at){
+      // approximate: remaining + elapsed unknown, keep remaining
+      countdownDuration=countdownRemaining;
+    }
+    countdownActiveId=active.id;
+    updateCountdownUI();
+    if(countdownRemaining<=0){
+      applyCountdownExpired();
+      return;
+    }
+    // disable note if previously expired but now new question
+    var oldNote=document.getElementById('countdown-expired-note');
+    if(oldNote && oldNote.parentNode) oldNote.parentNode.removeChild(oldNote);
+    countdownTimer=setInterval(tickCountdown, 1000);
+  }
+
   // --- helpers ---
   function vibrate(pat){ try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
   function genUUID(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'qt-'+Date.now()+'-'+Math.random().toString(36).slice(2,9); }
@@ -316,6 +444,20 @@
       meta.appendChild(pb);
     }
     card.appendChild(meta);
+
+    // --- countdown UI (near prompt/controls) ---
+    var cdWrap=document.createElement('div'); cdWrap.id='audience-countdown'; cdWrap.className='hidden';
+    cdWrap.style.cssText='display:none;align-items:center;gap:10px;margin-top:14px;padding:10px 12px;border:1px solid var(--border);border-radius:12px;background:rgba(255,255,255,.06)';
+    var cdIcon=document.createElement('span'); cdIcon.setAttribute('aria-hidden','true');
+    cdIcon.innerHTML='<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg>';
+    cdIcon.style.color='var(--muted)'; cdIcon.style.display='grid'; cdIcon.style.placeItems='center';
+    var cdLabel=document.createElement('span'); cdLabel.id='countdown-label'; cdLabel.style.fontSize='.82rem'; cdLabel.style.color='var(--muted)'; cdLabel.style.fontWeight='600'; cdLabel.textContent='Time left';
+    var cdVal=document.createElement('span'); cdVal.id='countdown-value'; cdVal.style.fontVariantNumeric='tabular-nums'; cdVal.style.fontWeight='800'; cdVal.style.letterSpacing='-.02em'; cdVal.textContent='--:--';
+    var cdTrack=document.createElement('div'); cdTrack.style.flex='1'; cdTrack.style.height='6px'; cdTrack.style.borderRadius='999px'; cdTrack.style.background='rgba(255,255,255,.08)'; cdTrack.style.overflow='hidden'; cdTrack.style.marginLeft='4px';
+    var cdFill=document.createElement('div'); cdFill.id='countdown-fill'; cdFill.style.height='100%'; cdFill.style.borderRadius='999px'; cdFill.style.background='var(--grad, linear-gradient(135deg,#6366F1,#A855F7 45%,#EC4899 75%,#22D3EE))'; cdFill.style.transition='width .35s linear'; cdFill.style.width='100%';
+    cdTrack.appendChild(cdFill);
+    cdWrap.appendChild(cdIcon); cdWrap.appendChild(cdLabel); cdWrap.appendChild(cdVal); cdWrap.appendChild(cdTrack);
+    card.appendChild(cdWrap);
 
     if(active.answered){
       var th=document.createElement('div'); th.className='thanks'; th.style.marginTop='12px';
@@ -848,6 +990,12 @@
   function wsSend(obj){ try{ ws.send(JSON.stringify(obj)); return true; }catch(e){ return false; } }
   function handleWsMessage(m){
     if(!m || !m.type) return;
+    if(m.type==='slide'){
+      var sd=m.data || m;
+      var slide={index: sd.index, total: sd.total, title: sd.title||''};
+      if(typeof slide.index==='number' && typeof slide.total==='number') renderSlideIndicator(slide);
+      return;
+    }
     if(m.type==='state' && m.data){ applyState(m.data); return; }
     if(m.type==='reactions'){
       if(window._qtUpdateReactions) window._qtUpdateReactions(m.data);
@@ -1024,6 +1172,10 @@
     renderLeaderboard(data.leaderboard || []);
     if(data.me) applyMe(data.me);
     pruneQueue(data);
+    // countdown + slide sync resync on every state
+    syncCountdown(data.active_question || null);
+    var slide = data.current_slide || data.currentSlide || null;
+    renderSlideIndicator(slide);
   }
 
   function fetchState(){

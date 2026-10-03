@@ -82,6 +82,10 @@ type QuestionDTO struct {
 	PointsBase   int         `json:"points_base"`
 	MyCorrect    *bool       `json:"my_correct,omitempty"`
 	MyPoints     int         `json:"my_points"`
+	DurationSec  int         `json:"duration_sec"`
+	AutoReveal   bool        `json:"auto_reveal"`
+	ExpiresAt    *int64      `json:"expires_at,omitempty"`
+	RemainingSec *int        `json:"remaining_sec,omitempty"`
 }
 
 // MediaDTO describes an uploaded question media file.
@@ -130,6 +134,7 @@ type StateDTO struct {
 	Feedback       FeedbackDTO           `json:"feedback"`
 	Leaderboard    []db.LeaderboardEntry `json:"leaderboard"`
 	Me             MeDTO                 `json:"me"`
+	CurrentSlide   *live.Slide           `json:"current_slide,omitempty"`
 }
 
 type AnalyticsDTO struct {
@@ -346,6 +351,17 @@ func questionDTO(q db.Question, withResults bool) QuestionDTO {
 		MediaType:   q.MediaType,
 		CreatedAt:   q.CreatedAt.Format(time.RFC3339),
 		PointsBase:  q.PointsBase,
+		DurationSec: q.DurationSec,
+		AutoReveal:  q.AutoReveal,
+	}
+	if q.DurationSec > 0 && q.ActivatedAt != nil {
+		exp := *q.ActivatedAt + int64(q.DurationSec)*1000
+		dto.ExpiresAt = &exp
+		rem := int((exp - time.Now().UnixMilli()) / 1000)
+		if rem < 0 {
+			rem = 0
+		}
+		dto.RemainingSec = &rem
 	}
 	if dto.PointsBase == 0 {
 		dto.PointsBase = 100
@@ -472,6 +488,10 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 				state.Me.Color = p.Color
 			}
 		}
+	}
+	if s, ok := Broker.GetSlide(ev.Code); ok {
+		cp := s
+		state.CurrentSlide = &cp
 	}
 
 	return state

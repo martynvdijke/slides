@@ -43,6 +43,10 @@ export interface LiveQuestion {
   points_base?: number
   my_correct?: boolean | null
   my_points?: number
+  duration_sec?: number
+  auto_reveal?: boolean
+  expires_at?: number
+  remaining_sec?: number | null
 }
 
 export interface LiveEvent {
@@ -87,6 +91,12 @@ export interface AnswerResult {
   total_points: number
 }
 
+export interface SlideInfo {
+  index: number
+  total: number
+  title?: string
+}
+
 type Value<T> = T | Ref<T>
 
 function env(key: string): string {
@@ -111,10 +121,16 @@ class RoomClient {
   connected = ref(false)
   reactions = ref<ReactionCount[]>([])
   answerResult = ref<AnswerResult | null>(null)
+  currentSlide = ref<SlideInfo | null>(null)
+  remainingSec = ref<number | null>(null)
   private ws: WebSocket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private backoff = 1000
   private stopped = false
+  private remainingTimer: ReturnType<typeof setInterval> | null = null
+  private slideThrottle: ReturnType<typeof setTimeout> | null = null
+  private pendingSlide: SlideInfo | null = null
+  private lastSlideSent = 0
 
   constructor(private eventCode: string, private base: string) {
     this.connect()
@@ -140,6 +156,46 @@ class RoomClient {
     return this.origin + '/api/events/' + encodeURIComponent(this.eventCode) + '/state'
   }
 
+  private syncCurrentSlide(data: any) {
+    if (data && typeof data === 'object' && data.current_slide && typeof data.current_slide.index === 'number' && typeof data.current_slide.total === 'number') {
+      this.currentSlide.value = { index: data.current_slide.index, total: data.current_slide.total, title: data.current_slide.title || '' }
+    } else if (data && data.current_slide === null) {
+      this.currentSlide.value = null
+    } else if (!data?.current_slide) {
+      // absent -> null (no slide yet); keep null to hide indicator
+      // if already set, don't clear on every state if missing — keep previous; but spec says null when absent
+      // we keep previous only if we had a slide frame; state without slide keeps existing
+      // To match "null when absent" and late-join: if state has no current_slide, show null only if we never got a slide
+      if (!this.currentSlide.value) this.currentSlide.value = null
+    }
+  }
+
+  private syncRemainingSec(data: any) {
+    // clear existing tick
+    if (this.remainingTimer) {
+      clearInterval(this.remainingTimer)
+      this.remainingTimer = null
+    }
+    const aq = data?.active_question
+    if (aq && typeof aq.remaining_sec === 'number') {
+      const v = Math.max(0, Math.floor(aq.remaining_sec))
+      this.remainingSec.value = v
+      if (v > 0) {
+        this.remainingTimer = setInterval(() => {
+          if (this.remainingSec.value !== null && this.remainingSec.value > 0) {
+            this.remainingSec.value = this.remainingSec.value - 1
+            if (this.remainingSec.value <= 0) {
+              this.remainingSec.value = 0
+              if (this.remainingTimer) { clearInterval(this.remainingTimer); this.remainingTimer = null }
+            }
+          }
+        }, 1000)
+      }
+    } else {
+      this.remainingSec.value = null
+    }
+  }
+
   private connect() {
     if (this.stopped) return
     if (typeof WebSocket === 'undefined') {
@@ -159,6 +215,8 @@ class RoomClient {
           if (!m || typeof m.type !== 'string') return
           if (m.type === 'state' && m.data) {
             this.state.value = m.data
+            this.syncCurrentSlide(m.data)
+            this.syncRemainingSec(m.data)
             // also update answer-result fields from state if present
             const aq = m.data?.active_question
             if (aq && typeof aq.my_correct !== 'undefined') {
@@ -170,6 +228,12 @@ class RoomClient {
                   total_points: m.data?.me_total_points ?? this.answerResult.value?.total_points ?? 0,
                 }
               }
+            }
+          } else if (m.type === 'slide') {
+            // slide frame: {type:"slide", data:{index,total,title}} or {type:"slide", index,total,title}
+            const d = (m.data && typeof m.data.index === 'number') ? m.data : m
+            if (typeof d.index === 'number' && typeof d.total === 'number') {
+              this.currentSlide.value = { index: d.index, total: d.total, title: d.title || '' }
             }
           } else if (m.type === 'reactions' && Array.isArray(m.data)) {
             this.reactions.value = m.data as ReactionCount[]
@@ -219,7 +283,10 @@ class RoomClient {
     try {
       const r = await fetch(this.stateUrl(), { cache: 'no-store' })
       if (r.ok) {
-        this.state.value = await r.json()
+        const data = await r.json()
+        this.state.value = data
+        this.syncCurrentSlide(data)
+        this.syncRemainingSec(data)
         this.connected.value = true
       }
     } catch {
@@ -234,10 +301,44 @@ class RoomClient {
     } catch {}
   }
 
+  sendSlide(index: number, total: number, title?: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    const payload: SlideInfo = { index, total, title: title || '' }
+    const now = Date.now()
+    const doSend = (p: SlideInfo) => {
+      try {
+        this.ws!.send(JSON.stringify({ type: 'slide', index: p.index, total: p.total, title: p.title || '' }))
+        this.lastSlideSent = Date.now()
+        // optimistically update local slide
+        this.currentSlide.value = { index: p.index, total: p.total, title: p.title || '' }
+      } catch {}
+    }
+    // throttle / coalesce ~200ms
+    if (this.slideThrottle) {
+      this.pendingSlide = payload
+      return
+    }
+    if (now - this.lastSlideSent < 200) {
+      this.pendingSlide = payload
+      this.slideThrottle = setTimeout(() => {
+        this.slideThrottle = null
+        const p = this.pendingSlide
+        this.pendingSlide = null
+        if (p) doSend(p)
+      }, 200 - (now - this.lastSlideSent))
+      return
+    }
+    doSend(payload)
+  }
+
   dispose() {
     this.stopped = true
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer)
     this.reconnectTimer = null
+    if (this.remainingTimer) clearInterval(this.remainingTimer)
+    this.remainingTimer = null
+    if (this.slideThrottle) clearTimeout(this.slideThrottle)
+    this.slideThrottle = null
     try { this.ws?.close() } catch {}
     this.ws = null
   }
@@ -340,6 +441,8 @@ export function useLiveRoom(options: {
   const leaderboard = computed<LeaderboardEntry[]>(() => state.value?.leaderboard ?? [])
   const me = computed<Me | null>(() => state.value?.me ?? null)
   const answerResult = computed<AnswerResult | null>(() => client.value?.answerResult.value ?? null)
+  const remainingSec = computed<number | null>(() => client.value?.remainingSec.value ?? null)
+  const currentSlide = computed<SlideInfo | null>(() => client.value?.currentSlide.value ?? null)
 
   function mediaUrl(raw?: string): string {
     if (!raw) return ''
@@ -349,6 +452,10 @@ export function useLiveRoom(options: {
 
   function sendIdentity(name: string, emoji: string, color: string) {
     client.value?.sendIdentity(name, emoji, color)
+  }
+
+  function sendSlide(index: number, total: number, title?: string) {
+    client.value?.sendSlide(index, total, title)
   }
 
   return {
@@ -370,6 +477,9 @@ export function useLiveRoom(options: {
     leaderboard,
     me,
     answerResult,
+    remainingSec,
+    currentSlide,
     sendIdentity,
+    sendSlide,
   }
 }

@@ -151,12 +151,24 @@
             <div class="field"><label for="aq-correct">Correct answer</label><select id="aq-correct" class="select"><option value="">— Not scored —</option></select></div>
             <div class="field"><label for="aq-points">Base points</label><input id="aq-points" class="input" type="number" min="10" max="10000" step="10" value="100" placeholder="100"></div>
           </div>
+          <div id="aq-timing-wrap" class="form-row cols2">
+            <div class="field"><label for="aq-duration">Timer</label><select id="aq-duration" class="select"><option value="0">Untimed</option><option value="5">5s</option><option value="10">10s</option><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option><option value="120">120s</option><option value="180">180s</option></select></div>
+            <label class="inline gap-2 cursor-pointer" style="align-self:end;padding-bottom:8px"><input type="checkbox" id="aq-auto-reveal"> <span class="text-[0.88rem]">Auto-reveal results</span></label>
+          </div>
           <div class="form-row cols2">
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-feedback"> <span class="text-[0.88rem]">Is feedback</span></label>
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-show" checked> <span class="text-[0.88rem]">Show results</span></label>
           </div>
           <button class="btn btn-primary" type="submit">Add question</button>
         </form>
+      </div>
+      <div id="queue-strip" class="glass card-pad mb-4">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+          <h3 class="section-title text-[1rem]" style="margin:0">Queue <span class="pill" id="queue-count">0 queued</span></h3>
+          <button class="btn btn-primary btn-small" type="button" id="btn-next-question">Next →</button>
+        </div>
+        <div id="queue-list" class="stack mt-3" style="min-height:32px"></div>
+        <div id="queue-empty" class="text-[#9AA0B8] text-[0.85rem] mt-2" style="display:none">No queued questions — add a question or set status to draft.</div>
       </div>
       <div id="questions-list" class="stack"></div>
     </section>

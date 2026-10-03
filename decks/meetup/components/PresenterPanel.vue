@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
   fab: false,
 })
 
-const { event: liveEvent, active, configured, leaderboard, roomCode, code, staticMode } = useLiveRoom({
+const { event: liveEvent, active, configured, leaderboard, roomCode, code, staticMode, sendSlide } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -79,8 +79,12 @@ onMounted(() => {
   if (staticMode.value) return
   window.addEventListener('keydown', onKeydown)
   void checkAuth()
+  startSlideWatcher()
 })
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  stopSlideWatcher()
+})
 
 // ── auth ──
 const checkingAuth = ref(true)
@@ -97,6 +101,7 @@ async function checkAuth() {
     authed.value = false
   } finally {
     checkingAuth.value = false
+    if (authed.value) void fetchQueue()
   }
 }
 
@@ -110,6 +115,7 @@ async function login() {
     })
     authed.value = true
     password.value = ''
+    void fetchQueue()
   } catch (e: any) {
     error.value = e?.message || 'Sign in failed'
   } finally {
@@ -147,6 +153,22 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
+
+// duration + auto-reveal
+const durationSec = ref(0)
+const autoReveal = ref(false)
+const durationOptions = [
+  { value: 0, label: 'Untimed' },
+  { value: 5, label: '5s' },
+  { value: 10, label: '10s' },
+  { value: 15, label: '15s' },
+  { value: 30, label: '30s' },
+  { value: 45, label: '45s' },
+  { value: 60, label: '60s' },
+  { value: 90, label: '90s' },
+  { value: 120, label: '120s' },
+  { value: 180, label: '180s' },
+]
 
 // ── scoring (poll / yesno) ──
 const correctIndex = ref<number | null>(null)
@@ -247,14 +269,20 @@ async function submit(activate: boolean) {
         show_results: showResults.value,
         media_url: media.url,
         media_type: media.media_type,
+        duration_sec: durationSec.value,
+        auto_close: durationSec.value > 0 ? 1 : 0,
+        auto_reveal: autoReveal.value ? 1 : 0,
       }),
     })
     if (activate && q && q.id) {
-      await api('/api/admin/events/' + eventId.value + '/questions/' + q.id + '/activate', { method: 'POST' })
+      const body: any = {}
+      if (durationSec.value > 0) body.duration_sec = durationSec.value
+      await api('/api/admin/events/' + eventId.value + '/questions/' + q.id + '/activate', { method: 'POST', body: Object.keys(body).length ? JSON.stringify(body) : undefined })
       message.value = 'Question is live.'
     } else {
       message.value = 'Question created (draft).'
     }
+    void fetchQueue()
     prompt.value = ''
     optionsText.value = ''
     clearMedia()
@@ -273,12 +301,124 @@ async function closeActive() {
   try {
     await api('/api/admin/events/' + eventId.value + '/questions/' + id + '/close', { method: 'POST' })
     message.value = 'Question closed.'
+    void fetchQueue()
   } catch (e: any) {
     error.value = e?.message || 'Failed to close question'
   } finally {
     busy.value = false
   }
 }
+
+// ── queue ──
+const queueLength = ref(0)
+const nextBusy = ref(false)
+
+async function fetchQueue() {
+  if (!authed.value || !eventId.value) { queueLength.value = 0; return }
+  try {
+    const data = await api('/api/admin/events/' + eventId.value + '/questions')
+    const list = Array.isArray(data) ? data : (Array.isArray(data?.questions) ? data.questions : [])
+    // count drafts
+    const drafts = list.filter((q: any) => q.status === 'draft' || q.status === undefined)
+    queueLength.value = drafts.length
+  } catch {
+    // degrade silently
+  }
+}
+
+watch([eventId, authed], () => { void fetchQueue() })
+
+async function nextQuestion() {
+  if (!eventId.value || nextBusy.value) return
+  nextBusy.value = true
+  error.value = ''
+  try {
+    await api('/api/admin/events/' + eventId.value + '/questions/next', { method: 'POST', body: JSON.stringify({}) })
+    message.value = 'Next question is live.'
+    void fetchQueue()
+  } catch (e: any) {
+    error.value = e?.message || 'Failed to advance queue'
+  } finally {
+    nextBusy.value = false
+  }
+}
+
+// ── slide sync ──
+let slidePoll: ReturnType<typeof setInterval> | null = null
+let lastSlideIndex = -1
+let slidevNav: any = null
+
+function getSlideSnapshot(): { index: number; total: number; title: string } | null {
+  try {
+    const g: any = typeof window !== 'undefined' ? (window as any) : (globalThis as any)
+    const nav = slidevNav ?? g.$slidev?.nav ?? g.__slidev_nav__ ?? null
+    if (nav && typeof nav.currentPage === 'number') {
+      const total = nav.total ?? nav.slides?.length ?? (nav.slides?.value?.length) ?? 0
+      const title = nav.currentSlideRoute?.meta?.slide?.title ?? nav.currentSlide?.title ?? nav.currentSlideRoute?.value?.meta?.slide?.title ?? ''
+      return { index: nav.currentPage, total: total || 1, title: String(title || '') }
+    }
+    if (typeof location !== 'undefined') {
+      const hash = location.hash || ''
+      const m = hash.match(/#\/?(\d+)/)
+      if (m) {
+        const idx = parseInt(m[1], 10)
+        if (!isNaN(idx)) return { index: idx, total: 1, title: '' }
+      }
+      // try path like /5
+      const path = location.pathname || ''
+      const pm = path.match(/\/(\d+)(?:\/|$)/)
+      if (pm) {
+        const idx = parseInt(pm[1], 10)
+        if (!isNaN(idx) && idx > 0 && idx < 500) return { index: idx, total: 1, title: document.title || '' }
+      }
+    }
+  } catch {}
+  return null
+}
+
+function maybeSendSlide() {
+  if (!authed.value || staticMode.value || !configured.value) return
+  const snap = getSlideSnapshot()
+  if (!snap) return
+  if (snap.index === lastSlideIndex) return
+  lastSlideIndex = snap.index
+  // sendSlide is already throttled ~200ms internally
+  try { sendSlide(snap.index, snap.total, snap.title) } catch {}
+}
+
+function startSlideWatcher() {
+  if (staticMode.value) return
+  // try to capture slidev nav early
+  try {
+    const g: any = typeof window !== 'undefined' ? (window as any) : (globalThis as any)
+    slidevNav = g.$slidev?.nav ?? null
+    if (!slidevNav) {
+      import('@slidev/client' as any).then((m: any) => {
+        try {
+          const n = m.useNav?.()
+          if (n) slidevNav = n
+          else if (m.nav) slidevNav = m.nav
+        } catch {}
+      }).catch(() => {})
+    }
+    // watch slidev nav currentPage reactively if available
+    if (slidevNav) {
+      watch(() => slidevNav.currentPage, () => { maybeSendSlide() })
+    }
+  } catch {}
+  // polling fallback + hash change listener
+  try { window.addEventListener('hashchange', maybeSendSlide) } catch {}
+  slidePoll = setInterval(maybeSendSlide, 800)
+}
+
+function stopSlideWatcher() {
+  if (slidePoll) clearInterval(slidePoll)
+  slidePoll = null
+  try { window.removeEventListener('hashchange', maybeSendSlide) } catch {}
+}
+
+watch(authed, (v) => { if (v) maybeSendSlide() })
+watch(open, (v) => { if (v && authed.value) maybeSendSlide() })
 </script>
 
 <template>
@@ -313,6 +453,14 @@ async function closeActive() {
           <label class="pp-check"><input v-model="isFeedback" type="checkbox" /> feedback</label>
         </div>
 
+        <div class="pp-row">
+          <label class="pp-score-label" style="min-width:70px">Timer</label>
+          <select v-model.number="durationSec" class="pp-input pp-input-sm" style="max-width:130px">
+            <option v-for="o in durationOptions" :key="o.value" :value="o.value">{{ o.label }}</option>
+          </select>
+          <label class="pp-check"><input v-model="autoReveal" type="checkbox" /> auto-reveal</label>
+        </div>
+
         <textarea v-model="prompt" class="pp-input pp-textarea" rows="2" placeholder="Ask the room…" />
 
         <input v-if="needsOptions" v-model="optionsText" class="pp-input" placeholder="Options, comma-separated" />
@@ -329,7 +477,11 @@ async function closeActive() {
           <button class="pp-btn primary" type="button" :disabled="busy" @click="submit(true)">Ask now</button>
           <button class="pp-btn" type="button" :disabled="busy" @click="submit(false)">Save draft</button>
           <button v-if="active" class="pp-btn danger" type="button" :disabled="busy" @click="closeActive">Close current</button>
+          <button class="pp-btn next-btn" type="button" :disabled="nextBusy || !queueLength" :title="queueLength ? queueLength + ' in queue' : 'Queue empty'" @click="nextQuestion">
+            Next <span v-if="queueLength" class="pp-badge">{{ queueLength }}</span>
+          </button>
         </div>
+        <div v-if="!queueLength" class="pp-hint">Queue empty — save a draft first.</div>
         <div class="pp-active" v-if="active">
           <span class="pp-live-dot"></span> live: {{ active.prompt }} · {{ active.total }} {{ active.total === 1 ? 'answer' : 'answers' }}
         </div>
@@ -440,7 +592,7 @@ async function closeActive() {
 .pp-media { display: flex; flex-direction: column; gap: 8px; }
 .pp-media input[type='file'] { font-size: 12px; color: #94a3b8; }
 .pp-preview { max-height: 150px; max-width: 100%; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14); }
-.pp-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.pp-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .pp-btn {
   border: 1px solid rgba(255, 255, 255, 0.18);
   background: rgba(255, 255, 255, 0.08);
@@ -499,4 +651,19 @@ async function closeActive() {
 .pp-lb-pts { font-family: 'JetBrains Mono', monospace; color: #38bdf8; font-weight: 700; }
 .pp-lb-empty { font-size: 12px; color: #64748b; font-style: italic; }
 .pp-fab:hover { opacity: 1; }
+.next-btn { position: relative; }
+.pp-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #38bdf8;
+  color: #0b1220;
+  font-size: 11px;
+  font-weight: 800;
+  margin-left: 6px;
+}
 </style>

@@ -15,7 +15,14 @@ type Frame struct {
 const (
 	KindRefresh   = "refresh"
 	KindReactions = "reactions"
+	KindSlide     = "slide"
 )
+
+type Slide struct {
+	Index int    `json:"index"`
+	Total int    `json:"total"`
+	Title string `json:"title"`
+}
 
 type Broker struct {
 	mu      sync.Mutex
@@ -26,6 +33,9 @@ type Broker struct {
 	rMu       sync.Mutex
 	reactions map[string]map[string]int
 	timers    map[string]*time.Timer
+
+	sMu    sync.Mutex
+	slides map[string]Slide
 }
 
 func New() *Broker {
@@ -33,6 +43,7 @@ func New() *Broker {
 		subs:      make(map[string]map[chan Frame]struct{}),
 		reactions: make(map[string]map[string]int),
 		timers:    make(map[string]*time.Timer),
+		slides:    make(map[string]Slide),
 	}
 }
 
@@ -151,6 +162,29 @@ func (b *Broker) Subscribers(event string) int {
 
 func (b *Broker) DroppedTotal() uint64 { return b.dropped.Load() }
 
+func (b *Broker) SetSlide(event string, s Slide) {
+	b.sMu.Lock()
+	defer b.sMu.Unlock()
+	if b.slides == nil {
+		b.slides = make(map[string]Slide)
+	}
+	b.slides[event] = s
+}
+
+func (b *Broker) GetSlide(event string) (Slide, bool) {
+	b.sMu.Lock()
+	defer b.sMu.Unlock()
+	s, ok := b.slides[event]
+	return s, ok
+}
+
+func (b *Broker) BroadcastSlide(event string, s Slide) {
+	inner, _ := json.Marshal(s)
+	env := map[string]any{"type": "slide", "data": json.RawMessage(inner)}
+	data, _ := json.Marshal(env)
+	b.broadcastFrame(event, Frame{Kind: KindSlide, Data: data})
+}
+
 func (b *Broker) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -171,4 +205,7 @@ func (b *Broker) Close() {
 	b.timers = make(map[string]*time.Timer)
 	b.reactions = make(map[string]map[string]int)
 	b.rMu.Unlock()
+	b.sMu.Lock()
+	b.slides = make(map[string]Slide)
+	b.sMu.Unlock()
 }

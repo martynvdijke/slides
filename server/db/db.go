@@ -87,6 +87,12 @@ type QuestionStats struct {
 	NPS         *int // set for kind "nps"
 }
 
+type SlideState struct {
+	Index int    `json:"index"`
+	Total int    `json:"total"`
+	Title string `json:"title"`
+}
+
 type Question struct {
 	ID           int64
 	EventID      int64
@@ -108,6 +114,9 @@ type Question struct {
 	CorrectIndex *int
 	PointsBase   int
 	ActivatedAt  *int64
+	DurationSec  int
+	AutoClose    bool
+	AutoReveal   bool
 }
 
 type QAQuestion struct {
@@ -345,6 +354,15 @@ func migrate() error {
 		{"correct_index", "correct_index INTEGER"},
 		{"points_base", "points_base INTEGER NOT NULL DEFAULT 100"},
 		{"activated_at", "activated_at INTEGER"},
+	} {
+		if err := ensureColumn("questions", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"duration_sec", "duration_sec INTEGER NOT NULL DEFAULT 0"},
+		{"auto_close", "auto_close INTEGER NOT NULL DEFAULT 1"},
+		{"auto_reveal", "auto_reveal INTEGER NOT NULL DEFAULT 0"},
 	} {
 		if err := ensureColumn("questions", col.name, col.ddl); err != nil {
 			return err
@@ -824,7 +842,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	var sr, fb int
 	var ci, aa sql.NullInt64
 	var pb sql.NullInt64
-	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa)
+	var dur sql.NullInt64
+	var ac, ar sql.NullInt64
+	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar)
 	if err != nil {
 		return nil, err
 	}
@@ -847,6 +867,17 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	if aa.Valid {
 		v := aa.Int64
 		q.ActivatedAt = &v
+	}
+	if dur.Valid {
+		q.DurationSec = int(dur.Int64)
+	}
+	if ac.Valid {
+		q.AutoClose = ac.Int64 != 0
+	} else {
+		q.AutoClose = true
+	}
+	if ar.Valid {
+		q.AutoReveal = ar.Int64 != 0
 	}
 	return &q, nil
 }
@@ -869,7 +900,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	var sr, fb int
 	var ci, aa sql.NullInt64
 	var pb sql.NullInt64
-	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa)
+	var dur sql.NullInt64
+	var ac, ar sql.NullInt64
+	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar)
 	if err != nil {
 		return nil, err
 	}
@@ -893,6 +926,17 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 		v := aa.Int64
 		q.ActivatedAt = &v
 	}
+	if dur.Valid {
+		q.DurationSec = int(dur.Int64)
+	}
+	if ac.Valid {
+		q.AutoClose = ac.Int64 != 0
+	} else {
+		q.AutoClose = true
+	}
+	if ar.Valid {
+		q.AutoReveal = ar.Int64 != 0
+	}
 	fillQuestionStats(&q)
 	return &q, nil
 }
@@ -914,7 +958,7 @@ func CreateQuestion(eventID int64, kind, mode, prompt string, options []string, 
 }
 
 func ListQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -937,7 +981,7 @@ func ListQuestions(eventID int64) ([]Question, error) {
 }
 
 func ListFeedbackQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -960,7 +1004,7 @@ func ListFeedbackQuestions(eventID int64) ([]Question, error) {
 }
 
 func GetQuestion(id int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE id=?", id)
 	return scanQuestionRow(row)
 }
 
@@ -979,6 +1023,9 @@ func UpdateQuestion(id int64, fields map[string]any) (*Question, error) {
 		"correct_index": "correct_index",
 		"points_base":   "points_base",
 		"activated_at":  "activated_at",
+		"duration_sec":  "duration_sec",
+		"auto_close":    "auto_close",
+		"auto_reveal":   "auto_reveal",
 	}
 	var sets []string
 	var args []any
@@ -1037,7 +1084,7 @@ func DeleteQuestion(id int64) error {
 	return err
 }
 
-func ActivateQuestion(eventID, questionID int64) error {
+func ActivateQuestion(eventID, questionID int64, durationOverride *int) error {
 	tx, err := DB.Begin()
 	if err != nil {
 		return err
@@ -1056,11 +1103,103 @@ func ActivateQuestion(eventID, questionID int64) error {
 		return err
 	}
 	nowMs := time.Now().UnixMilli()
-	_, err = tx.Exec("UPDATE questions SET status='live', activated_at=? WHERE id=? AND event_id=?", nowMs, questionID, eventID)
+	if durationOverride != nil && *durationOverride > 0 {
+		// Timed activation (override): results stay hidden until the timer expires
+		// and the reaper auto-reveals them.
+		_, err = tx.Exec("UPDATE questions SET status='live', activated_at=?, duration_sec=?, show_results=0 WHERE id=? AND event_id=?", nowMs, *durationOverride, questionID, eventID)
+	} else {
+		// No override: preserve the question's own timing. Only timed questions
+		// hide results until auto-reveal; untimed questions keep their existing
+		// show_results value (historical behavior: results visible after answering).
+		_, err = tx.Exec("UPDATE questions SET status='live', activated_at=?, show_results=CASE WHEN duration_sec>0 THEN 0 ELSE show_results END WHERE id=? AND event_id=?", nowMs, questionID, eventID)
+	}
 	if err != nil {
 		return err
 	}
 	return tx.Commit()
+}
+
+func SetQuestionShowResults(qid int64, show bool) error {
+	_, err := DB.Exec("UPDATE questions SET show_results=? WHERE id=?", btoi(show), qid)
+	return err
+}
+
+func ListDueQuestions(nowMs int64) ([]Question, error) {
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Question
+	for rows.Next() {
+		q, err := scanQuestionRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *q)
+	}
+	return out, rows.Err()
+}
+
+func ReorderQuestions(eventID int64, orderedIDs []int64) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// validate all ids belong to event
+	for _, id := range orderedIDs {
+		var cnt int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM questions WHERE id=? AND event_id=?", id, eventID).Scan(&cnt); err != nil {
+			return err
+		}
+		if cnt == 0 {
+			return fmt.Errorf("question %d not found for event", id)
+		}
+	}
+	for idx, id := range orderedIDs {
+		if _, err := tx.Exec("UPDATE questions SET position=? WHERE id=? AND event_id=?", idx, id, eventID); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func NextQueuedQuestion(eventID int64) (*Question, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+	var qid int64
+	err = tx.QueryRow("SELECT id FROM questions WHERE event_id=? AND status='draft' ORDER BY position ASC, id ASC LIMIT 1", eventID).Scan(&qid)
+	if err == sql.ErrNoRows {
+		_ = tx.Rollback()
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	_, err = tx.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='live'", eventID)
+	if err != nil {
+		return nil, err
+	}
+	nowMs := time.Now().UnixMilli()
+	// Only timed questions hide results until auto-reveal; untimed questions
+	// preserve their existing show_results (historical behavior).
+	_, err = tx.Exec("UPDATE questions SET status='live', activated_at=?, show_results=CASE WHEN duration_sec>0 THEN 0 ELSE show_results END WHERE id=? AND event_id=?", nowMs, qid, eventID)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, err
+	}
+	return GetQuestion(qid)
+}
+
+func SkipLiveQuestion(eventID int64) error {
+	_, err := DB.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='live'", eventID)
+	return err
 }
 
 func CloseQuestion(eventID, questionID int64) error {
@@ -1076,7 +1215,7 @@ func CloseQuestion(eventID, questionID int64) error {
 }
 
 func GetActiveQuestion(eventID int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND status='live' LIMIT 1", eventID)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND status='live' LIMIT 1", eventID)
 	q, err := scanQuestionRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil

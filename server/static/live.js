@@ -15,6 +15,81 @@
   }
   initUmamiTracking();
 
+  // --- slide indicator ---
+  function renderSlideIndicator(slide){
+    var el=document.getElementById('slide-indicator');
+    if(!el) return;
+    if(!slide || slide.index===null || slide.index===undefined || slide.total===null || slide.total===undefined){
+      el.classList.add('hidden'); el.style.display='none'; el.textContent='';
+      return;
+    }
+    var txt='Slide '+slide.index+' / '+slide.total;
+    if(slide.title) txt+=' \u00b7 '+slide.title;
+    el.textContent=txt; el.classList.remove('hidden'); el.style.display='';
+  }
+  // --- countdown ring (projector) ---
+  var countdownTimer=null; var countdownRemaining=0; var countdownDuration=0; var countdownActiveId=null;
+  function formatCountdown(sec){
+    sec=Math.max(0, Math.floor(sec));
+    var m=Math.floor(sec/60); var s=sec%60;
+    return m+':'+(s<10?'0':'')+s;
+  }
+  function clearCountdown(){
+    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+    countdownRemaining=0; countdownDuration=0; countdownActiveId=null;
+    var el=document.getElementById('projector-countdown'); if(el){ el.classList.add('hidden'); el.style.display='none'; }
+  }
+  function updateCountdownUI(){
+    var wrap=document.getElementById('projector-countdown');
+    var valEl=document.getElementById('projector-countdown-value');
+    var ring=document.getElementById('countdown-ring');
+    if(!wrap || !valEl) return;
+    if(countdownRemaining<=0){
+      valEl.textContent="Time's up";
+      wrap.style.opacity='0.9';
+      if(ring){ ring.style.strokeDashoffset='0'; ring.style.opacity='0.35'; }
+      return;
+    }
+    wrap.style.display='flex'; wrap.classList.remove('hidden'); wrap.style.opacity='1';
+    valEl.textContent=formatCountdown(countdownRemaining);
+    if(ring && countdownDuration>0){
+      var pct=Math.max(0, Math.min(1, countdownRemaining/countdownDuration));
+      var circ=2*Math.PI*26; // r=26
+      ring.style.strokeDasharray=circ+'';
+      ring.style.strokeDashoffset=String(circ*(1-pct));
+      if(pct<=0.25) ring.style.stroke='#F43F5E';
+      else if(pct<=0.5) ring.style.stroke='#F59E0B';
+      else ring.style.stroke='#7C6BFF';
+    }
+  }
+  function applyCountdownExpired(){
+    var wrap=document.getElementById('projector-countdown');
+    if(wrap){
+      var valEl=document.getElementById('projector-countdown-value');
+      if(valEl) valEl.textContent="Time's up";
+      wrap.style.opacity='0.9';
+      var ring=document.getElementById('countdown-ring');
+      if(ring){ ring.style.strokeDashoffset='0'; ring.style.opacity='0.35'; }
+    }
+  }
+  function tickCountdown(){
+    if(countdownRemaining<=0){ applyCountdownExpired(); if(countdownTimer){clearInterval(countdownTimer); countdownTimer=null;} return; }
+    countdownRemaining-=1;
+    if(countdownRemaining<=0){ countdownRemaining=0; updateCountdownUI(); applyCountdownExpired(); if(countdownTimer){clearInterval(countdownTimer); countdownTimer=null;} }
+    else { updateCountdownUI(); }
+  }
+  function syncCountdown(active){
+    if(countdownTimer){ clearInterval(countdownTimer); countdownTimer=null; }
+    var hasTimer = active && typeof active.remaining_sec==='number' && active.remaining_sec!==null && active.remaining_sec!==undefined;
+    if(!hasTimer){ clearCountdown(); return; }
+    countdownRemaining=Math.max(0, Math.floor(active.remaining_sec));
+    countdownDuration = (typeof active.duration_sec==='number' && active.duration_sec>0) ? active.duration_sec : countdownRemaining;
+    countdownActiveId=active.id;
+    updateCountdownUI();
+    if(countdownRemaining<=0){ applyCountdownExpired(); return; }
+    countdownTimer=setInterval(tickCountdown, 1000);
+  }
+
   var prevFeedbackOpen=false;
   function confettiBurst(){
     var root=document.getElementById('confetti');
@@ -68,6 +143,19 @@
     var pill=document.createElement('span'); pill.className='pill live'; pill.textContent=active.kind;
     var tot=document.createElement('span'); tot.className='counter'; tot.textContent=active.show_results ? (active.total+' responses') : 'Results hidden';
     meta.appendChild(pill); meta.appendChild(tot); area.appendChild(meta);
+    // countdown ring/indicator near prompt
+    var cdWrap=document.createElement('div'); cdWrap.id='projector-countdown'; cdWrap.className='hidden';
+    cdWrap.style.cssText='display:none;align-items:center;gap:14px;margin-top:16px;padding:12px 14px;border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.06)';
+    var ringSvg=document.createElementNS('http://www.w3.org/2000/svg','svg'); ringSvg.setAttribute('width','58'); ringSvg.setAttribute('height','58'); ringSvg.setAttribute('viewBox','0 0 60 60'); ringSvg.style.flexShrink='0'; ringSvg.style.transform='rotate(-90deg)';
+    var bgCircle=document.createElementNS('http://www.w3.org/2000/svg','circle'); bgCircle.setAttribute('cx','30'); bgCircle.setAttribute('cy','30'); bgCircle.setAttribute('r','26'); bgCircle.setAttribute('fill','none'); bgCircle.setAttribute('stroke','rgba(255,255,255,.12)'); bgCircle.setAttribute('stroke-width','5');
+    var fgCircle=document.createElementNS('http://www.w3.org/2000/svg','circle'); fgCircle.id='countdown-ring'; fgCircle.setAttribute('cx','30'); fgCircle.setAttribute('cy','30'); fgCircle.setAttribute('r','26'); fgCircle.setAttribute('fill','none'); fgCircle.setAttribute('stroke','#7C6BFF'); fgCircle.setAttribute('stroke-width','5'); fgCircle.setAttribute('stroke-linecap','round'); fgCircle.style.transition='stroke-dashoffset .9s linear, stroke .3s'; fgCircle.style.transformOrigin='center';
+    ringSvg.appendChild(bgCircle); ringSvg.appendChild(fgCircle);
+    var cdInfo=document.createElement('div'); cdInfo.style.display='grid'; cdInfo.style.gap='2px';
+    var cdLabel=document.createElement('div'); cdLabel.style.fontSize='.78rem'; cdLabel.style.color='var(--muted)'; cdLabel.style.fontWeight='600'; cdLabel.style.letterSpacing='.04em'; cdLabel.style.textTransform='uppercase'; cdLabel.textContent='Time left';
+    var cdVal=document.createElement('div'); cdVal.id='projector-countdown-value'; cdVal.style.fontSize='1.35rem'; cdVal.style.fontWeight='800'; cdVal.style.letterSpacing='-.03em'; cdVal.style.fontVariantNumeric='tabular-nums'; cdVal.textContent='--:--';
+    cdInfo.appendChild(cdLabel); cdInfo.appendChild(cdVal);
+    cdWrap.appendChild(ringSvg); cdWrap.appendChild(cdInfo);
+    area.appendChild(cdWrap);
     if(counter) counter.textContent = active.show_results ? (active.total+' responses') : 'Live';
 
     if(active.kind==='wordcloud'){
@@ -198,6 +286,9 @@
     }
     renderPrompt(data.active_question || null);
     renderQATop(data.qa || []);
+    syncCountdown(data.active_question || null);
+    var slide=data.current_slide || data.currentSlide || null;
+    renderSlideIndicator(slide);
   }
 
   var ws=null; var wsBackoff=1000; var wsTimer=null;
@@ -223,6 +314,12 @@
     ws.onmessage=function(ev){
       try{
         var m=JSON.parse(ev.data);
+        if(m.type==='slide'){
+          var sd=m.data || m;
+          var slide={index:sd.index, total:sd.total, title:sd.title||''};
+          if(typeof slide.index==='number' && typeof slide.total==='number') renderSlideIndicator(slide);
+          return;
+        }
         if(m.type==='state' && m.data) applyState(m.data);
         else if(m.type==='ping'){ try{ ws.send(JSON.stringify({type:'pong'})); }catch(e){} }
       }catch(err){}

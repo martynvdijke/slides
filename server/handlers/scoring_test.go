@@ -367,7 +367,7 @@ func TestAnswerViaWSReturnsScoring(t *testing.T) {
 	if _, err := db.UpdateQuestion(q.ID, map[string]any{"correct_index": 0, "points_base": 100}); err != nil {
 		t.Fatalf("UpdateQuestion: %v", err)
 	}
-	if err := db.ActivateQuestion(ev.ID, q.ID); err != nil {
+	if err := db.ActivateQuestion(ev.ID, q.ID, nil); err != nil {
 		t.Fatalf("ActivateQuestion: %v", err)
 	}
 

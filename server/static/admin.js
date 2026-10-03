@@ -252,6 +252,9 @@
   var aqCorrect=document.getElementById('aq-correct');
   var aqPoints=document.getElementById('aq-points');
   var aqScoringWrap=document.getElementById('aq-scoring-wrap');
+  var aqDuration=document.getElementById('aq-duration');
+  var aqAutoReveal=document.getElementById('aq-auto-reveal');
+  var aqTimingWrap=document.getElementById('aq-timing-wrap');
   function syncScoringControls(){
     var kind=qKind.value;
     var scorable=kind==='poll'||kind==='yesno';
@@ -272,11 +275,24 @@
     }
     if(prev!==null) aqCorrect.value=prev;
   }
-  function syncQuestionKind(){ qOptsWrap.style.display = qOptionKinds.indexOf(qKind.value)>=0 ? '' : 'none'; syncScoringControls(); }
+  function syncTimingWrap(){
+    if(!aqTimingWrap) return;
+    var modeEl=document.getElementById('aq-mode');
+    var fbEl=document.getElementById('aq-feedback');
+    var isLive = !modeEl || modeEl.value==='live';
+    var isFeedback = fbEl && fbEl.checked;
+    aqTimingWrap.style.display = (isLive && !isFeedback) ? '' : 'none';
+  }
+  function syncQuestionKind(){ qOptsWrap.style.display = qOptionKinds.indexOf(qKind.value)>=0 ? '' : 'none'; syncScoringControls(); syncTimingWrap(); }
   qKind.addEventListener('change', syncQuestionKind);
   var aqOptsInput=document.getElementById('aq-options');
   if(aqOptsInput) aqOptsInput.addEventListener('input', syncScoringControls);
+  var aqModeEl=document.getElementById('aq-mode');
+  if(aqModeEl) aqModeEl.addEventListener('change', syncTimingWrap);
+  var aqFbEl=document.getElementById('aq-feedback');
+  if(aqFbEl) aqFbEl.addEventListener('change', syncTimingWrap);
   syncQuestionKind();
+  syncTimingWrap();
 
   // question media (upload or external url)
   var qMedia={url:'',type:''};
@@ -327,18 +343,111 @@
     if(!prompt) return;
     if(qOptionKinds.indexOf(kind)>=0 && opts.length<2) return toast('Add at least 2 options','err');
     var payload={ kind:kind, mode:mode, prompt:prompt, options:opts, is_feedback: document.getElementById('aq-feedback').checked, show_results: document.getElementById('aq-show').checked, position: 0, media_url: qMedia.url, media_type: qMedia.type };
+    var durVal = aqDuration ? parseInt(aqDuration.value,10) : 0;
+    if(isNaN(durVal)) durVal=0;
+    var isLiveMode = mode==='live' && !payload.is_feedback;
+    if(isLiveMode){
+      payload.duration_sec = durVal;
+      payload.auto_close = durVal>0 ? 1 : 0;
+      payload.auto_reveal = aqAutoReveal && aqAutoReveal.checked ? 1 : 0;
+    } else {
+      payload.duration_sec = 0;
+      payload.auto_close = 0;
+      payload.auto_reveal = 0;
+    }
     if(kind==='poll'||kind==='yesno'){
       var cv=aqCorrect.value;
       if(cv==='') payload.correct_index=null; else payload.correct_index=parseInt(cv,10);
       var pb=parseInt(aqPoints.value,10); if(!isNaN(pb)&&pb>0) payload.points_base=pb; else payload.points_base=100;
     }
-    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; aqPoints.value='100'; resetQuestionMedia(); syncScoringControls(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
+    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; aqPoints.value='100'; if(aqDuration) aqDuration.value='0'; if(aqAutoReveal) aqAutoReveal.checked=false; resetQuestionMedia(); syncScoringControls(); syncTimingWrap(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
   });
+
+  // --- queue helpers ---
+  function reorderQuestions(orderedIds){
+    if(!state.selectedId) return Promise.reject(new Error('no event'));
+    return api('/api/admin/events/'+state.selectedId+'/questions/reorder',{method:'POST', body:JSON.stringify({order:orderedIds})});
+  }
+  function handleNextQuestion(){
+    if(!state.selectedId) return toast('Select an event first','err');
+    var btn=document.getElementById('btn-next-question');
+    if(btn) btn.disabled=true;
+    api('/api/admin/events/'+state.selectedId+'/questions/next',{method:'POST', body:JSON.stringify({})}).then(function(j){
+      if(j && j.empty){ toast('Queue empty — no draft questions'); }
+      else if(j && j.skipped){ toast('Skipped live question'); }
+      else if(j && j.ok && j.empty){ toast('Queue empty'); }
+      else { toast('Next question activated'); }
+      loadQuestions(state.selectedId);
+    }).catch(function(err){
+      var msg=(err.j && err.j.error) || err.message || 'Next failed';
+      if(err.j && err.j.empty) msg='Queue empty';
+      toast(msg,'err');
+    }).then(function(){ if(btn) btn.disabled=false; });
+  }
+  var _queueDragId=null;
+  function renderQueue(list){
+    var strip=document.getElementById('queue-strip');
+    var qList=document.getElementById('queue-list');
+    var qCount=document.getElementById('queue-count');
+    var qEmpty=document.getElementById('queue-empty');
+    if(!qList || !qCount) return;
+    var drafts=(Array.isArray(list)?list:[]).filter(function(q){return q.status==='draft'}).sort(function(a,b){return (a.position||0)-(b.position||0)});
+    qCount.textContent=drafts.length+' queued';
+    qList.textContent='';
+    if(strip) strip.style.display='';
+    if(!drafts.length){
+      if(qEmpty) qEmpty.style.display='';
+      return;
+    }
+    if(qEmpty) qEmpty.style.display='none';
+    drafts.forEach(function(q, idx){
+      var item=document.createElement('div'); item.className='glass card-pad'; item.style.display='flex'; item.style.alignItems='center'; item.style.gap='10px'; item.style.padding='10px 12px'; item.draggable=true; item.dataset.qid=String(q.id);
+      item.addEventListener('dragstart', function(e){ _queueDragId=q.id; e.dataTransfer.effectAllowed='move'; e.dataTransfer.setData('text/plain', String(q.id)); item.style.opacity='0.5'; });
+      item.addEventListener('dragend', function(){ item.style.opacity=''; _queueDragId=null; });
+      item.addEventListener('dragover', function(e){ e.preventDefault(); e.dataTransfer.dropEffect='move'; item.style.outline='1px dashed rgba(124,107,255,.6)'; });
+      item.addEventListener('dragleave', function(){ item.style.outline=''; });
+      item.addEventListener('drop', function(e){
+        e.preventDefault(); item.style.outline='';
+        var draggedId=_queueDragId ? _queueDragId : parseInt(e.dataTransfer.getData('text/plain'),10);
+        if(!draggedId || draggedId===q.id) return;
+        var ordered=drafts.map(function(d){return d.id});
+        var fromIdx=ordered.indexOf(draggedId);
+        var toIdx=ordered.indexOf(q.id);
+        if(fromIdx<0 || toIdx<0) return;
+        ordered.splice(fromIdx,1);
+        ordered.splice(toIdx,0,draggedId);
+        // build full order: drafts reordered + non-drafts appended in existing order
+        var nonDrafts=(Array.isArray(list)?list:[]).filter(function(x){return x.status!=='draft'}).map(function(x){return x.id});
+        // we need to send order for all questions in the desired final position order.
+        // Simplest: send reorder for drafts only in their new order interleaved by position? But endpoint expects all ids. We'll map to full list order: place reordered drafts at top sorted positions then rest.
+        // Build full ordered list following original list sorted by position, but with drafts reordered.
+        var fullSorted=(Array.isArray(list)?list:[]).slice().sort(function(a,b){return (a.position||0)-(b.position||0)});
+        var draftSet={}; drafts.forEach(function(d){draftSet[d.id]=true});
+        var remainingFull=fullSorted.filter(function(x){return !draftSet[x.id]}).map(function(x){return x.id});
+        // drafts new order + remaining
+        var newOrder=ordered.concat(remainingFull);
+        reorderQuestions(newOrder).then(function(){ toast('Queue reordered'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Reorder failed','err'); });
+      });
+      var handle=document.createElement('span'); handle.textContent='≡'; handle.title='Drag to reorder'; handle.style.cursor='grab'; handle.style.color='var(--muted)'; handle.style.fontSize='1.1rem'; handle.style.padding='0 4px';
+      var num=document.createElement('span'); num.className='pill'; num.textContent='#'+(idx+1); num.style.minWidth='36px'; num.style.textAlign='center';
+      var promptEl=document.createElement('span'); promptEl.style.flex='1'; promptEl.style.fontWeight='600'; promptEl.style.whiteSpace='nowrap'; promptEl.style.overflow='hidden'; promptEl.style.textOverflow='ellipsis'; promptEl.textContent=q.prompt;
+      var kindEl=document.createElement('span'); kindEl.style.color='var(--muted)'; kindEl.style.fontSize='.78rem'; kindEl.textContent=q.kind;
+      var timerChip=null;
+      if(q.duration_sec && q.duration_sec>0){
+        timerChip=document.createElement('span'); timerChip.className='pill'; timerChip.style.fontSize='.78rem';
+        timerChip.textContent='⏱ '+q.duration_sec+'s'+(q.auto_reveal?' · auto':'');
+      }
+      item.appendChild(handle); item.appendChild(num); item.appendChild(promptEl); item.appendChild(kindEl); if(timerChip) item.appendChild(timerChip);
+      qList.appendChild(item);
+    });
+  }
 
   function loadQuestions(id){
     api('/api/admin/events/'+id+'/questions').then(function(list){
-      renderQuestions(Array.isArray(list)?list:[]);
-      document.getElementById('q-count').textContent=(Array.isArray(list)?list.length:0)+' total';
+      var arr=Array.isArray(list)?list:[];
+      renderQuestions(arr);
+      renderQueue(arr);
+      document.getElementById('q-count').textContent=arr.length+' total';
     }).catch(function(){ document.getElementById('questions-list').textContent='Could not load questions.'; });
   }
   function renderQuestions(list){
@@ -365,12 +474,40 @@
         var npill=document.createElement('span'); npill.className='pill'; npill.style.marginTop='6px'; npill.style.display='inline-block'; npill.style.opacity='.7'; npill.textContent='Not scored · '+(q.points_base||100)+' pts';
         left.appendChild(npill);
       }
+      // timer chip
+      if(q.duration_sec && q.duration_sec>0 && !q.is_feedback){
+        var tChip=document.createElement('span'); tChip.className='pill'; tChip.style.marginTop='6px'; tChip.style.display='inline-flex'; tChip.style.alignItems='center'; tChip.style.gap='4px'; tChip.style.marginLeft='6px';
+        var tLabel=document.createElement('span'); tLabel.textContent='⏱ '+q.duration_sec+'s';
+        tChip.appendChild(tLabel);
+        if(q.auto_reveal){ var ar=document.createElement('span'); ar.style.color='#22C55E'; ar.textContent=' · auto-reveal'; tChip.appendChild(ar); }
+        else { var ar2=document.createElement('span'); ar2.style.opacity='.6'; ar2.textContent=' · manual'; tChip.appendChild(ar2); }
+        left.appendChild(tChip);
+      } else if(q.duration_sec===0 && !q.is_feedback){
+        var tChip0=document.createElement('span'); tChip0.className='pill'; tChip0.style.marginTop='6px'; tChip0.style.display='inline-block'; tChip0.style.opacity='.55'; tChip0.style.marginLeft='6px'; tChip0.textContent='⏱ untimed';
+        left.appendChild(tChip0);
+      }
       var badge=document.createElement('span'); badge.className='badge '+(q.status==='live'?'open':''); badge.textContent=q.status;
       top.appendChild(left); top.appendChild(badge);
       var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
       if(q.status!=='live'){
         var bAct=document.createElement('button'); bAct.className='btn btn-primary btn-small'; bAct.type='button'; bAct.textContent='Activate';
-        bAct.addEventListener('click', function(){ api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/activate',{method:'POST'}).then(function(){ toast('Activated'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Activate failed','err'); }); });
+        bAct.addEventListener('click', function(){
+          var overrideBody=null;
+          // allow optional duration override via prompt (simple, keeps UI uncluttered)
+          if(!q.is_feedback){
+            var defVal = (q.duration_sec!=null? q.duration_sec:0);
+            var raw = window.prompt('Duration in seconds — 0=untimed, 5–180 (leave as '+defVal+' to keep saved value)', String(defVal));
+            if(raw===null) return;
+            var pv=parseInt(raw,10);
+            if(!isNaN(pv) && pv!==defVal){
+              if(pv!==0 && (pv<5 || pv>180)){ toast('Duration must be 0 or 5–180','err'); return; }
+              overrideBody=JSON.stringify({duration_sec: pv});
+            }
+          }
+          var opts={method:'POST'};
+          if(overrideBody) opts.body=overrideBody;
+          api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/activate',opts).then(function(){ toast('Activated'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Activate failed','err'); });
+        });
         actions.appendChild(bAct);
       }
       if(q.status==='live'){
@@ -416,7 +553,26 @@
           api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify(payload)}).then(function(){ toast('Scoring saved'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); });
         });
         scoreWrap.appendChild(sel); scoreWrap.appendChild(ptInput); scoreWrap.appendChild(ptLabel); scoreWrap.appendChild(bScore);
-        editWrap.insertAdjacentElement('afterend', scoreWrap);
+        row._scoreWrap=scoreWrap;
+      }
+      // timing edit for live non-feedback questions
+      if(!q.is_feedback){
+        var timingEdit=document.createElement('div'); timingEdit.style.display='flex'; timingEdit.style.gap='8px'; timingEdit.style.marginTop='8px'; timingEdit.style.flexWrap='wrap'; timingEdit.style.alignItems='center';
+        var durSel=document.createElement('select'); durSel.className='select'; durSel.style.minWidth='140px'; durSel.setAttribute('aria-label','Duration');
+        [['0','Untimed'],['5','5s'],['10','10s'],['15','15s'],['30','30s'],['45','45s'],['60','60s'],['90','90s'],['120','120s'],['180','180s']].forEach(function(p){ var o=document.createElement('option'); o.value=p[0]; o.textContent=p[1]; durSel.appendChild(o); });
+        durSel.value=String(q.duration_sec||0);
+        var arCheck=document.createElement('label'); arCheck.style.display='inline-flex'; arCheck.style.alignItems='center'; arCheck.style.gap='6px'; arCheck.style.fontSize='.84rem'; arCheck.style.cursor='pointer';
+        var arBox=document.createElement('input'); arBox.type='checkbox'; arBox.checked=!!q.auto_reveal; arBox.setAttribute('aria-label','Auto reveal');
+        var arText=document.createElement('span'); arText.textContent='Auto-reveal';
+        arCheck.appendChild(arBox); arCheck.appendChild(arText);
+        var bTiming=document.createElement('button'); bTiming.className='btn btn-ghost btn-small'; bTiming.type='button'; bTiming.textContent='Save timing';
+        bTiming.addEventListener('click', function(){
+          var dv=parseInt(durSel.value,10); if(isNaN(dv)) dv=0;
+          var payload={duration_sec: dv, auto_reveal: arBox.checked?1:0, auto_close: dv>0?1:0};
+          api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify(payload)}).then(function(){ toast('Timing saved'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); });
+        });
+        timingEdit.appendChild(durSel); timingEdit.appendChild(arCheck); timingEdit.appendChild(bTiming);
+        row._timingEdit=timingEdit;
       }
 
       // results mini bars
@@ -458,27 +614,34 @@
       }
 
       row.appendChild(top); row.appendChild(actions); row.appendChild(editWrap);
-      var scoreEl = row.querySelector('div:nth-of-type(3)');
-      // scoreWrap already inserted after editWrap
+      if(row._scoreWrap) row.appendChild(row._scoreWrap);
+      if(row._timingEdit) row.appendChild(row._timingEdit);
       if(barWrap.childNodes.length) row.appendChild(barWrap);
       root.appendChild(row);
     });
   }
   function moveQuestion(q, dir, list){
-    // find index
-    var idx=list.indexOf(q);
+    var sorted=list.slice().sort(function(a,b){return (a.position||0)-(b.position||0)});
+    var idx=sorted.indexOf(q);
+    if(idx<0) idx=list.indexOf(q);
     var newIdx=idx+dir;
-    if(newIdx<0 || newIdx>=list.length) return;
-    var other=list[newIdx];
-    // swap positions via PATCH; assume position field
-    var p1=q.position, p2=other.position;
-    // if equal, use idx
-    if(p1===p2){ p1=idx; p2=newIdx; }
-    Promise.all([
-      api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify({position:p2})}),
-      api('/api/admin/events/'+state.selectedId+'/questions/'+other.id,{method:'PATCH', body:JSON.stringify({position:p1})})
-    ]).then(function(){ loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Move failed','err'); });
+    if(newIdx<0 || newIdx>=sorted.length) return;
+    var ordered=sorted.map(function(x){return x.id});
+    var tmp=ordered[idx]; ordered[idx]=ordered[newIdx]; ordered[newIdx]=tmp;
+    reorderQuestions(ordered).then(function(){ loadQuestions(state.selectedId); }).catch(function(err){
+      // fallback to legacy two-patch if reorder not available
+      var other=sorted[newIdx];
+      var p1=q.position, p2=other.position;
+      if(p1===p2){ p1=idx; p2=newIdx; }
+      return Promise.all([
+        api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify({position:p2})}),
+        api('/api/admin/events/'+state.selectedId+'/questions/'+other.id,{method:'PATCH', body:JSON.stringify({position:p1})})
+      ]).then(function(){ loadQuestions(state.selectedId); });
+    }).catch(function(err){ toast(err.message||'Move failed','err'); });
   }
+
+  var btnNextQ=document.getElementById('btn-next-question');
+  if(btnNextQ) btnNextQ.addEventListener('click', handleNextQuestion);
 
   // QA
   document.getElementById('btn-refresh-qa').addEventListener('click', function(){ if(state.selectedId) loadQA(state.selectedId); });

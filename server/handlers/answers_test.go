@@ -54,7 +54,7 @@ func TestSubmitAnswerValidation(t *testing.T) {
 			if err != nil {
 				t.Fatalf("CreateQuestion: %v", err)
 			}
-			if err := db.ActivateQuestion(ev.ID, q.ID); err != nil {
+			if err := db.ActivateQuestion(ev.ID, q.ID, nil); err != nil {
 				t.Fatalf("ActivateQuestion: %v", err)
 			}
 			body, _ := json.Marshal(AnswerRequest{QuestionID: q.ID, Value: tc.value})

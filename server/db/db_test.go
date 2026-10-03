@@ -168,7 +168,7 @@ func TestQuestionsActivateAndResults(t *testing.T) {
 	}
 	q2, _ := CreateQuestion(ev.ID, "poll", "live", "Pick2?", []string{"X", "Y"}, false, true, 2, "", "")
 	// activate q1
-	if err := ActivateQuestion(ev.ID, q1.ID); err != nil {
+	if err := ActivateQuestion(ev.ID, q1.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	active, _ := GetActiveQuestion(ev.ID)
@@ -176,7 +176,7 @@ func TestQuestionsActivateAndResults(t *testing.T) {
 		t.Fatalf("active should be q1 got %+v", active)
 	}
 	// activate q2 closes q1
-	if err := ActivateQuestion(ev.ID, q2.ID); err != nil {
+	if err := ActivateQuestion(ev.ID, q2.ID, nil); err != nil {
 		t.Fatal(err)
 	}
 	active, _ = GetActiveQuestion(ev.ID)
@@ -189,7 +189,7 @@ func TestQuestionsActivateAndResults(t *testing.T) {
 	}
 	// wrong event should error
 	ev2, _ := CreateEvent("E2", "C2", "", "")
-	if err := ActivateQuestion(ev2.ID, q1.ID); err == nil {
+	if err := ActivateQuestion(ev2.ID, q1.ID, nil); err == nil {
 		t.Fatal("should error mismatched event")
 	}
 	// GetQuestionStats zero-count in option order

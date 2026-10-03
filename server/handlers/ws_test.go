@@ -32,7 +32,7 @@ func TestEventWebSocketFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CreateQuestion: %v", err)
 	}
-	if err := db.ActivateQuestion(ev.ID, q.ID); err != nil {
+	if err := db.ActivateQuestion(ev.ID, q.ID, nil); err != nil {
 		t.Fatalf("ActivateQuestion: %v", err)
 	}
 

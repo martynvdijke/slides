@@ -106,6 +106,8 @@ func main() {
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/questions/{qid}", handlers.AdminDeleteQuestion)
 	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/{qid}/activate", handlers.AdminActivateQuestion)
 	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/{qid}/close", handlers.AdminCloseQuestion)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/reorder", handlers.AdminReorderQuestions)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/next", handlers.AdminNextQuestion)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/qa", handlers.AdminListQA)
 	adminMux.HandleFunc("PATCH /api/admin/events/{id}/qa/{qid}", handlers.AdminUpdateQA)
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/qa/{qid}", handlers.AdminDeleteQA)
@@ -194,6 +196,7 @@ func main() {
 	// Drain in-flight requests and flush telemetry on SIGINT/SIGTERM.
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	handlers.StartReaper(ctx, time.Second)
 
 	srv := &http.Server{Addr: ":" + port, Handler: handler}
 	go func() {

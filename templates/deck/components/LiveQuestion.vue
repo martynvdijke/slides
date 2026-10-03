@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   showResults: true,
 })
 
-const { active, connected, configured, staticMode, mediaUrl, answerResult } = useLiveRoom({
+const { active, connected, configured, staticMode, mediaUrl, answerResult, remainingSec } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -43,6 +43,21 @@ const isCorrect = computed(() => {
   return answerResult.value?.is_correct ?? null
 })
 const myPoints = computed(() => (active.value as any)?.my_points ?? answerResult.value?.points_awarded ?? null)
+
+const hasCountdown = computed(() => remainingSec.value !== null && remainingSec.value !== undefined)
+const expired = computed(() => hasCountdown.value && remainingSec.value === 0)
+const countdownLabel = computed(() => {
+  if (remainingSec.value === null || remainingSec.value === undefined) return ''
+  const s = Math.max(0, remainingSec.value)
+  const m = Math.floor(s / 60)
+  const sec = s % 60
+  return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `${sec}s`
+})
+const countdownPct = computed(() => {
+  const total = (active.value as any)?.duration_sec
+  if (!total || remainingSec.value === null || remainingSec.value === undefined) return 0
+  return Math.max(0, Math.min(100, (remainingSec.value / total) * 100))
+})
 
 const maxCount = computed(() => {
   const results = active.value?.results || []
@@ -67,7 +82,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 </script>
 
 <template>
-  <div v-if="!staticMode || configured" class="live-q">
+  <div v-if="!staticMode || configured" class="live-q" :class="{ expired }">
     <div v-if="!configured" class="live-q-waiting">
       Set a room code to show live questions.
     </div>
@@ -78,7 +93,14 @@ function isCorrectRow(label: string, idx: number): boolean {
     </div>
 
     <template v-else>
-      <div class="live-q-prompt">{{ active.prompt }}</div>
+      <div class="live-q-top">
+        <div class="live-q-prompt">{{ active.prompt }}</div>
+        <div v-if="hasCountdown" class="live-q-countdown" :class="{ 'is-expired': expired }" :title="expired ? 'Time is up' : 'Time remaining'">
+          <div class="live-q-ring" :style="{ '--pct': countdownPct + '%' } as any">
+            <span class="live-q-timer">{{ expired ? '0s' : countdownLabel }}</span>
+          </div>
+        </div>
+      </div>
 
       <img
         v-if="isImage"
@@ -95,7 +117,9 @@ function isCorrectRow(label: string, idx: number): boolean {
         playsinline
       ></video>
 
-      <div v-if="showBars" class="live-q-bars">
+      <div v-if="expired" class="live-q-expired-note">Time's up — answers closing…</div>
+
+      <div v-if="showBars" class="live-q-bars" :class="{ dimmed: expired }">
         <div v-for="(r, idx) in active.results" :key="r.label" class="live-q-row" :class="{ correct: isCorrectRow(r.label, idx) }">
           <div class="live-q-label">
             {{ r.label }}
@@ -119,7 +143,7 @@ function isCorrectRow(label: string, idx: number): boolean {
           </template>
         </div>
       </div>
-      <div v-else-if="showResults" class="live-q-hidden">Results hidden</div>
+      <div v-else-if="showResults" class="live-q-hidden" :class="{ dimmed: expired }">Results hidden</div>
     </template>
   </div>
 </template>
@@ -134,6 +158,7 @@ function isCorrectRow(label: string, idx: number): boolean {
   border-radius: 16px;
   padding: 16px 18px;
 }
+.live-q.expired { opacity: 0.85; }
 .live-q-waiting {
   font-size: 14px;
   color: #94a3b8;
@@ -143,12 +168,51 @@ function isCorrectRow(label: string, idx: number): boolean {
   color: #f59e0b;
   font-style: normal;
 }
+.live-q-top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .live-q-prompt {
   font-size: 16px;
   font-weight: 700;
   color: #f1f5f9;
   line-height: 1.35;
   margin-bottom: 12px;
+  flex: 1;
+}
+.live-q-countdown { flex-shrink: 0; }
+.live-q-ring {
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  background: conic-gradient(#38bdf8 var(--pct, 0%), rgba(255,255,255,0.12) 0);
+  padding: 3px;
+}
+.live-q-ring::before {
+  content: '';
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  background: #0f172a;
+  grid-area: 1 / 1;
+}
+.live-q-timer {
+  grid-area: 1 / 1;
+  z-index: 1;
+  font-size: 12px;
+  font-weight: 800;
+  color: #e0f2fe;
+  font-variant-numeric: tabular-nums;
+}
+.live-q-countdown.is-expired .live-q-ring { background: conic-gradient(#ef4444 100%, rgba(255,255,255,0.12) 0); }
+.live-q-countdown.is-expired .live-q-timer { color: #fecaca; }
+.live-q-expired-note {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  color: #fca5a5;
+  background: rgba(239,68,68,0.12);
+  border: 1px solid rgba(239,68,68,0.3);
+  border-radius: 8px;
+  padding: 6px 8px;
+  margin-bottom: 10px;
 }
 .live-q-media {
   max-width: 100%;
@@ -164,6 +228,7 @@ function isCorrectRow(label: string, idx: number): boolean {
   flex-direction: column;
   gap: 8px;
 }
+.live-q-bars.dimmed, .live-q-hidden.dimmed { opacity: 0.55; filter: grayscale(0.2); pointer-events: none; }
 .live-q-row {
   display: grid;
   grid-template-columns: 1fr auto;
