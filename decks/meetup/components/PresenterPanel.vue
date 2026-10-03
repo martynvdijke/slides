@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
   fab: false,
 })
 
-const { event: liveEvent, active, configured, leaderboard, roomCode, code } = useLiveRoom({
+const { event: liveEvent, active, configured, leaderboard, roomCode, code, staticMode } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -76,6 +76,7 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 onMounted(() => {
+  if (staticMode.value) return
   window.addEventListener('keydown', onKeydown)
   void checkAuth()
 })
@@ -281,7 +282,7 @@ async function closeActive() {
 </script>
 
 <template>
-  <div v-if="open" class="pp-overlay" role="dialog" aria-label="Presenter panel">
+  <div v-if="!staticMode && open" class="pp-overlay" role="dialog" aria-label="Presenter panel">
     <div class="pp-panel">
       <div class="pp-head">
         <div class="pp-title">Presenter panel</div>
@@ -374,7 +375,7 @@ async function closeActive() {
     </div>
   </div>
 
-  <button v-if="!open && fab" class="pp-fab" type="button" @click="open = true" title="Presenter panel">▶</button>
+  <button v-if="!staticMode && !open && fab" class="pp-fab" type="button" @click="open = true" title="Presenter panel">▶</button>
 </template>
 
 <style scoped>

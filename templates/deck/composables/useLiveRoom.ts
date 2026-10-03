@@ -323,6 +323,7 @@ export function useLiveRoom(options: {
   const state = computed(() => client.value?.state.value ?? null)
   const connected = computed(() => client.value?.connected.value ?? false)
 
+  const staticMode = computed(() => !!env('VITE_STATIC_EXPORT'))
   const configured = computed(() => !!resolvedCode.value)
   const event = computed<LiveEvent | null>(() => state.value?.event ?? null)
   const active = computed<LiveQuestion | null>(() => state.value?.active_question ?? null)
@@ -353,6 +354,7 @@ export function useLiveRoom(options: {
   return {
     state,
     connected,
+    staticMode,
     configured,
     resolveError,
     event,

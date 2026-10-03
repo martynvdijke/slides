@@ -16,7 +16,7 @@ const props = withDefaults(defineProps<{
   title: 'Leaderboard',
 })
 
-const { leaderboard, connected, configured } = useLiveRoom({
+const { leaderboard, connected, configured, staticMode } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -26,7 +26,7 @@ const entries = computed(() => (leaderboard.value || []).slice(0, props.limit))
 </script>
 
 <template>
-  <div class="lb">
+  <div v-if="!staticMode || configured" class="lb">
     <div class="lb-title">{{ title }}</div>
     <div v-if="!configured" class="lb-empty">Set a room code to show standings.</div>
     <div v-else-if="!entries.length" class="lb-empty">

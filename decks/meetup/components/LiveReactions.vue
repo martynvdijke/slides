@@ -12,7 +12,7 @@ const props = withDefaults(defineProps<{
   base: '',
 })
 
-const { reactions } = useLiveRoom({
+const { reactions, staticMode } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -80,7 +80,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="live-reactions" aria-hidden="true">
+  <div v-if="!staticMode" class="live-reactions" aria-hidden="true">
     <span
       v-for="n in nodes.filter(x => x.active)"
       :key="n.id"

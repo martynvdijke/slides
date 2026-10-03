@@ -24,7 +24,7 @@ const props = withDefaults(defineProps<{
   hint: true,
 })
 
-const { qrSrc, joinUrl, joinPageUrl, roomCode, configured } = useLiveRoom({
+const { qrSrc, joinUrl, joinPageUrl, roomCode, configured, staticMode } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -35,7 +35,7 @@ const shortUrl = computed(() => joinUrl.value.replace(/^https?:\/\//, ''))
 </script>
 
 <template>
-  <div class="live-join">
+  <div v-if="!staticMode || configured" class="live-join">
     <template v-if="!configured">
       <div class="live-join-setup">
         <div class="live-join-setup-title">Live questions not configured</div>

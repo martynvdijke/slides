@@ -36,6 +36,7 @@ jobs:
           BASE_PATH: /${{ github.event.repository.name }}/
           # Public backend that hosts the live questions (GitHub Pages can't run it).
           # Set these as repository Variables; leave empty to keep slides static-only.
+          VITE_STATIC_EXPORT: ${{ vars.LIVE_BASE_URL == '' && '1' || '' }}
           VITE_LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL }}
           VITE_UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
           VITE_UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}

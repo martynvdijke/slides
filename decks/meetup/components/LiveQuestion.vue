@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   showResults: true,
 })
 
-const { active, connected, configured, mediaUrl, answerResult } = useLiveRoom({
+const { active, connected, configured, staticMode, mediaUrl, answerResult } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -67,7 +67,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 </script>
 
 <template>
-  <div class="live-q">
+  <div v-if="!staticMode || configured" class="live-q">
     <div v-if="!configured" class="live-q-waiting">
       Set a room code to show live questions.
     </div>
