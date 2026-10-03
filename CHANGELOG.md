@@ -1,3 +1,17 @@
+# [1.11.0](https://github.com/martynvdijke/slides/compare/v1.10.0...v1.11.0) (2026-10-03)
+
+
+### Bug Fixes
+
+* **auth:** sign the first admin in on setup ([b98cf25](https://github.com/martynvdijke/slides/commit/b98cf25615b516e8f77b6293ccc6a4317f0f2e8f))
+
+
+### Features
+
+* **auth:** add email password reset and admin SMTP settings ([aca3e69](https://github.com/martynvdijke/slides/commit/aca3e69d7e5e6de0794a58c5bbcea06f933815a2))
+* clean static export mode for GitHub Pages ([a2d4cbe](https://github.com/martynvdijke/slides/commit/a2d4cbe97c2e5da47c90cbd9e44e674326695476)), closes [deploy-#pages](https://github.com/deploy-/issues/pages)
+* question countdown, question queue and live slide sync ([229e65e](https://github.com/martynvdijke/slides/commit/229e65e0b67899e6dfad33cde38b2eb52afc58d4))
+
 # [1.10.0](https://github.com/martynvdijke/slides/compare/v1.9.3...v1.10.0) (2026-10-03)
 
 
