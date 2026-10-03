@@ -1,3 +1,10 @@
+# [1.12.0](https://github.com/martynvdijke/slides/compare/v1.11.0...v1.12.0) (2026-10-03)
+
+
+### Features
+
+* event clone, outbound webhooks and results report ([6aac4e5](https://github.com/martynvdijke/slides/commit/6aac4e59f031b6514275cbf85dc4712597d2b349))
+
 # [1.11.0](https://github.com/martynvdijke/slides/compare/v1.10.0...v1.11.0) (2026-10-03)
 
 
