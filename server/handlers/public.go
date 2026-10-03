@@ -10,6 +10,7 @@ import (
 
 	"slides/db"
 	"slides/qr"
+	"slides/webhook"
 )
 
 // httpErr carries an HTTP status for a service-layer failure so the same logic
@@ -259,6 +260,11 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 		writeServiceErr(w, err)
 		return
 	}
+	body := qa.Body
+	if len([]rune(body)) > 200 {
+		body = string([]rune(body)[:200])
+	}
+	webhook.Notify(ev.Code, "qa.created", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "qa_id": qa.ID, "body": body})
 	writeJSON(w, http.StatusOK, map[string]any{"id": qa.ID, "status": "pending"})
 }
 

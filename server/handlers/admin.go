@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"math/big"
 	"mime/multipart"
 	"net/http"
@@ -20,6 +21,7 @@ import (
 
 	"slides/db"
 	"slides/otelcfg"
+	"slides/webhook"
 )
 
 var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
@@ -279,6 +281,9 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	brand := ensureBranding(ev)
 	writeJSON(w, http.StatusOK, eventDTO(ev, brand))
 	BroadcastEvent(id)
+	if s, ok := fields["status"]; ok && s == "closed" {
+		webhook.Notify(ev.Code, "event.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "event_id": ev.ID})
+	}
 }
 
 // AdminDeleteEvent deletes an event.
@@ -876,6 +881,10 @@ func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	BroadcastEvent(eid)
+	// webhook trigger question.activated
+	if ev, _ := db.GetEventByID(eid); ev != nil {
+		webhook.Notify(ev.Code, "question.activated", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": qid})
+	}
 	q, err := db.GetQuestion(qid)
 	if err != nil || q == nil {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -952,6 +961,9 @@ func AdminCloseQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	BroadcastEvent(eid)
+	if ev, _ := db.GetEventByID(eid); ev != nil {
+		webhook.Notify(ev.Code, "question.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": qid})
+	}
 	q, err := db.GetQuestion(qid)
 	if err != nil || q == nil {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
@@ -1414,4 +1426,272 @@ func AdminUpdateOTelSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, otelSettingsDTO())
+}
+
+func AdminCloneEvent(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	src, err := db.GetEventByID(id)
+	if err != nil || src == nil {
+		jsonError(w, "not found", http.StatusNotFound)
+		return
+	}
+	var body struct {
+		Name string `json:"name"`
+	}
+	if r.ContentLength != 0 {
+		_ = decodeJSON(r, &body)
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		name = src.Name
+	}
+	// code generation try <code>-copy etc. Let db.CloneEvent handle uniqueness but we also generate candidate here
+	candidate := src.Code + "-copy"
+	exists, _ := db.EventCodeExists(candidate)
+	if exists {
+		for i := 2; i < 100; i++ {
+			c := fmt.Sprintf("%s-copy%d", src.Code, i)
+			ex, _ := db.EventCodeExists(c)
+			if !ex {
+				candidate = c
+				break
+			}
+		}
+		if ex, _ := db.EventCodeExists(candidate); ex {
+			if rc, err := genRoomCode(); err == nil {
+				candidate = src.Code + "-" + strings.ToLower(rc)
+			}
+		}
+	}
+	newID, err := db.CloneEvent(id, candidate, name)
+	if err != nil {
+		jsonError(w, "failed to clone", http.StatusInternalServerError)
+		return
+	}
+	ev, err := db.GetEventByID(newID)
+	if err != nil || ev == nil {
+		jsonError(w, "failed to load cloned event", http.StatusInternalServerError)
+		return
+	}
+	brand := ensureBranding(ev)
+	writeJSON(w, http.StatusOK, eventDTO(ev, brand))
+}
+
+func AdminGetWebhookSettings(w http.ResponseWriter, r *http.Request) {
+	u, secret, enabled, events, err := db.GetWebhookSettings()
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	if events == nil {
+		events = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"url": u, "enabled": enabled, "events": events, "webhook_secret_set": secret != ""})
+}
+
+func AdminUpdateWebhookSettings(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		URL     *string  `json:"url"`
+		Secret  *string  `json:"secret"`
+		Enabled *bool    `json:"enabled"`
+		Events  []string `json:"events"`
+	}
+	// capture raw to detect secret absence
+	var raw map[string]json.RawMessage
+	if err := decodeJSON(r, &raw); err != nil {
+		jsonError(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	_ = json.Unmarshal(raw["url"], &body.URL)
+	// Events may be absent
+	if v, ok := raw["events"]; ok {
+		_ = json.Unmarshal(v, &body.Events)
+	}
+	if v, ok := raw["enabled"]; ok {
+		var b bool
+		if err := json.Unmarshal(v, &b); err == nil {
+			body.Enabled = &b
+		} else {
+			var n int
+			if err2 := json.Unmarshal(v, &n); err2 == nil {
+				bb := n != 0
+				body.Enabled = &bb
+			}
+		}
+	}
+	_, hasSecret := raw["secret"]
+	if hasSecret {
+		var s string
+		_ = json.Unmarshal(raw["secret"], &s)
+		body.Secret = &s
+	}
+	u, secret, enabled, events, err := db.GetWebhookSettings()
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	if body.URL != nil {
+		u = strings.TrimSpace(*body.URL)
+	}
+	if body.Enabled != nil {
+		enabled = *body.Enabled
+	}
+	if _, ok := raw["events"]; ok {
+		events = body.Events
+		if events == nil {
+			events = []string{}
+		}
+	}
+	if hasSecret {
+		s := ""
+		if body.Secret != nil {
+			s = *body.Secret
+		}
+		if s != "" {
+			secret = s
+		} else if body.Secret != nil && s == "" {
+			// empty string provided: if secret field explicitly empty, preserve? spec says empty/absent secret preserves stored one; so don't clear
+		}
+	}
+	if err := db.UpdateWebhookSettings(u, secret, enabled, events); err != nil {
+		jsonError(w, "failed to update", http.StatusInternalServerError)
+		return
+	}
+	nu, ns, ne, nev, _ := db.GetWebhookSettings()
+	if nev == nil {
+		nev = []string{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"url": nu, "enabled": ne, "events": nev, "webhook_secret_set": ns != ""})
+}
+
+func AdminTestWebhook(w http.ResponseWriter, r *http.Request) {
+	u, secret, _, _, err := db.GetWebhookSettings()
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	if strings.TrimSpace(u) == "" {
+		jsonError(w, "webhook url not configured", http.StatusBadRequest)
+		return
+	}
+	// Use webhook.Sign for signature, mimic sender envelope
+	envelope := map[string]any{"event": "test", "type": "test", "data": map[string]any{"message": "webhook test"}, "timestamp": time.Now().UnixMilli()}
+	body, _ := json.Marshal(envelope)
+	req, err := http.NewRequest(http.MethodPost, u, strings.NewReader(string(body)))
+	if err != nil {
+		jsonError(w, "failed to create request", http.StatusInternalServerError)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Webhook-Event", "test")
+	if secret != "" {
+		req.Header.Set("X-Signature", webhook.Sign(secret, body))
+	}
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "status": 0, "body": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(io.LimitReader(resp.Body, 2048))
+	trunc := string(b)
+	if len(trunc) > 2048 {
+		trunc = trunc[:2048]
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": resp.StatusCode >= 200 && resp.StatusCode < 300, "status": resp.StatusCode, "body": trunc})
+}
+
+func AdminEventReport(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	ev, err := db.GetEventByID(id)
+	if err != nil || ev == nil {
+		jsonError(w, "not found", http.StatusNotFound)
+		return
+	}
+	brand, _ := db.GetBranding()
+	qs, _ := db.ListQuestions(id)
+	fb, _ := db.ListFeedbackQuestions(id)
+	if qs == nil {
+		qs = []db.Question{}
+	}
+	if fb == nil {
+		fb = []db.Question{}
+	}
+	toReportQ := func(qlist []db.Question) []ReportQuestion {
+		out := make([]ReportQuestion, 0, len(qlist))
+		for _, q := range qlist {
+			st, _ := db.GetQuestionStats(q.ID)
+			var rows []ReportResultRow
+			var nps *float64
+			var avgRank *float64
+			total := 0
+			if st != nil {
+				total = st.Total
+				rows = make([]ReportResultRow, 0, len(st.Results))
+				for _, rr := range st.Results {
+					rows = append(rows, ReportResultRow{Label: rr.Label, Count: rr.Count})
+				}
+				if st.NPS != nil {
+					v := float64(*st.NPS)
+					nps = &v
+				}
+				// avg rank: average of AvgRank across ranking results if any
+				if q.Kind == "ranking" && len(st.Results) > 0 {
+					sum := 0.0
+					cnt := 0
+					for _, rr := range st.Results {
+						if rr.Count > 0 {
+							sum += rr.AvgRank
+							cnt++
+						}
+					}
+					if cnt > 0 {
+						v := sum / float64(cnt)
+						avgRank = &v
+					}
+				}
+			}
+			var ci *int
+			if q.CorrectIndex != nil {
+				v := *q.CorrectIndex
+				ci = &v
+			}
+			out = append(out, ReportQuestion{Prompt: q.Prompt, Kind: q.Kind, Total: total, Results: rows, NPS: nps, AvgRank: avgRank, CorrectIndex: ci, ShowResults: q.ShowResults, Options: q.Options})
+		}
+		return out
+	}
+	questions := toReportQ(qs)
+	feedback := toReportQ(fb)
+	qaRows, _ := db.ListQA(id, "approved")
+	var qa []ReportQA
+	for _, q := range qaRows {
+		qa = append(qa, ReportQA{Body: q.Body, Author: q.Author, Votes: q.Votes})
+	}
+	if qa == nil {
+		qa = []ReportQA{}
+	}
+	lb, _ := db.GetLeaderboard(id)
+	var leaderboard []ReportLeaderboardRow
+	for _, e := range lb {
+		leaderboard = append(leaderboard, ReportLeaderboardRow{Rank: e.Rank, Name: e.Name, Emoji: e.Emoji, Color: e.Color, Points: e.Points})
+	}
+	if leaderboard == nil {
+		leaderboard = []ReportLeaderboardRow{}
+	}
+	stats, _ := db.EventStats(id)
+	statsMap := map[string]any{}
+	if stats != nil {
+		statsMap["participants"] = stats.Participants
+		statsMap["answers"] = stats.Answers
+		statsMap["qa_total"] = stats.QA
+		statsMap["questions"] = stats.Questions
+		statsMap["votes"] = stats.Votes
+	}
+	data := ReportData{Event: ReportEvent{Name: ev.Name, Code: ev.Code, Description: ev.Description, Date: ev.EventDate, Status: ev.Status, Brand: brand}, GeneratedAt: time.Now(), Questions: questions, Feedback: feedback, QA: qa, Leaderboard: leaderboard, Stats: statsMap}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"event-%s-report.html\"", ev.Code))
+	if err := RenderEventReport(w, data); err != nil {
+		log.Printf("report render: %v", err)
+	}
 }

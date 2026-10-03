@@ -391,6 +391,16 @@ func migrate() error {
 	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_client_uuid ON answers(client_uuid) WHERE client_uuid IS NOT NULL"); err != nil {
 		return err
 	}
+	for _, col := range []struct{ name, ddl string }{
+		{"webhook_url", "webhook_url TEXT NOT NULL DEFAULT ''"},
+		{"webhook_secret", "webhook_secret TEXT NOT NULL DEFAULT ''"},
+		{"webhook_enabled", "webhook_enabled INTEGER NOT NULL DEFAULT 0"},
+		{"webhook_events", "webhook_events TEXT NOT NULL DEFAULT ''"},
+	} {
+		if err := ensureColumn("settings", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -2086,6 +2096,137 @@ func UpdateEmailSettings(s EmailSettings) error {
 	return err
 }
 
+func GetWebhookSettings() (string, string, bool, []string, error) {
+	var url, secret, eventsStr string
+	var enabled int
+	err := DB.QueryRow("SELECT webhook_url, webhook_secret, webhook_enabled, webhook_events FROM settings WHERE id=1").Scan(&url, &secret, &enabled, &eventsStr)
+	if err != nil {
+		return "", "", false, nil, err
+	}
+	var events []string
+	if strings.TrimSpace(eventsStr) != "" {
+		if err := json.Unmarshal([]byte(eventsStr), &events); err != nil {
+			// Fallback: comma-separated
+			parts := strings.Split(eventsStr, ",")
+			events = nil
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if p != "" {
+					events = append(events, p)
+				}
+			}
+			if events == nil {
+				events = []string{}
+			}
+		}
+	}
+	if events == nil {
+		events = []string{}
+	}
+	return url, secret, enabled == 1, events, nil
+}
+
+func UpdateWebhookSettings(url, secret string, enabled bool, events []string) error {
+	var eventsStr string
+	if len(events) > 0 {
+		b, _ := json.Marshal(events)
+		eventsStr = string(b)
+	} else {
+		eventsStr = ""
+	}
+	_, err := DB.Exec("UPDATE settings SET webhook_url=?, webhook_secret=?, webhook_enabled=?, webhook_events=?, updated_at=CURRENT_TIMESTAMP WHERE id=1", url, secret, btoi(enabled), eventsStr)
+	return err
+}
+
+func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+	var src Event
+	var fo int
+	var ca string
+	err = tx.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE id=?", sourceID).Scan(&src.ID, &src.Code, &src.RoomCode, &src.Name, &src.Description, &src.EventDate, &src.Status, &fo, &ca)
+	if err != nil {
+		return 0, err
+	}
+	// Generate unique newCode if needed already handled by caller; ensure fallback here
+	if newCode == "" {
+		newCode = src.Code + "-copy"
+	}
+	// Ensure code uniqueness within transaction lookups against DB
+	tryCode := newCode
+	for i := 1; ; i++ {
+		var cnt int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM events WHERE code=?", tryCode).Scan(&cnt); err != nil {
+			return 0, err
+		}
+		if cnt == 0 {
+			break
+		}
+		if i == 1 {
+			tryCode = src.Code + "-copy2"
+		} else {
+			tryCode = fmt.Sprintf("%s-copy%d", src.Code, i+1)
+		}
+		if i > 20 {
+			// fallback to random
+			rc, _ := GenRoomCode()
+			tryCode = src.Code + "-" + strings.ToLower(rc)
+			var cnt2 int
+			if err := tx.QueryRow("SELECT COUNT(*) FROM events WHERE code=?", tryCode).Scan(&cnt2); err != nil {
+				return 0, err
+			}
+			if cnt2 == 0 {
+				break
+			}
+		}
+	}
+	newCode = tryCode
+	// Generate fresh room_code
+	var newRoomCode string
+	for attempt := 0; attempt < 30; attempt++ {
+		rc, err := GenRoomCode()
+		if err != nil {
+			return 0, err
+		}
+		var cnt int
+		if err := tx.QueryRow("SELECT COUNT(*) FROM events WHERE room_code=?", rc).Scan(&cnt); err != nil {
+			return 0, err
+		}
+		if cnt == 0 {
+			newRoomCode = rc
+			break
+		}
+	}
+	if newRoomCode == "" {
+		rc, err := GenRoomCode()
+		if err != nil {
+			return 0, err
+		}
+		newRoomCode = rc
+	}
+	name := newName
+	if strings.TrimSpace(name) == "" {
+		name = src.Name
+	}
+	res, err := tx.Exec("INSERT INTO events (code, room_code, name, description, event_date, status, feedback_open) VALUES (?, ?, ?, ?, ?, ?, ?)", newCode, newRoomCode, name, src.Description, src.EventDate, src.Status, fo)
+	if err != nil {
+		return 0, err
+	}
+	newID, _ := res.LastInsertId()
+	_, err = tx.Exec(`INSERT INTO questions (event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, activated_at)
+		SELECT ?, kind, mode, prompt, options, position, 'draft', 0, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, NULL FROM questions WHERE event_id=?`, newID, sourceID)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return newID, nil
+}
+
 // password reset tokens
 
 func CreatePasswordResetToken(hash string, userID int64, expiresAt time.Time) error {
@@ -2119,3 +2260,5 @@ func DeleteExpiredPasswordResetTokens() error {
 	_, err := DB.Exec("DELETE FROM password_reset_tokens WHERE expires_at <= datetime('now')")
 	return err
 }
+
+// func GetWebhookSettings() (string, string, bool, []string, error) { return "", "", false, nil, nil }

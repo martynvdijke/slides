@@ -113,7 +113,7 @@
       state.user=j.user; if(els.meInfo) els.meInfo.textContent=j.user.username+' · '+j.user.role;
       showGate('app'); return loadEvents();
     }).then(function(){
-      loadBranding(); loadAnalytics(); loadOtel(); loadEmail();
+      loadBranding(); loadAnalytics(); loadOtel(); loadEmail(); loadWebhooks();
     }).catch(function(err){
       if(err==='setup') return;
       if(err && err.code===401){ showGate('login'); return; }
@@ -188,7 +188,27 @@
       var aLive=document.createElement('a'); aLive.className='btn btn-ghost btn-small'; aLive.href='/live/'+encodeURIComponent(ev.code); aLive.target='_blank'; aLive.textContent='Live';
       var aAud=document.createElement('a'); aAud.className='btn btn-ghost btn-small'; aAud.href='/e/'+encodeURIComponent(ev.code); aAud.target='_blank'; aAud.textContent='Audience';
       var aJoin=document.createElement('a'); aJoin.className='btn btn-ghost btn-small'; aJoin.href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):''); aJoin.target='_blank'; aJoin.textContent='Join';
-      actions.appendChild(btnSel); actions.appendChild(aLive); actions.appendChild(aAud); actions.appendChild(aJoin);
+      var btnClone=document.createElement('button'); btnClone.className='btn btn-ghost btn-small'; btnClone.type='button'; btnClone.textContent='Clone';
+      btnClone.addEventListener('click', function(){
+        var defName=(ev.name||'')+' (copy)';
+        var newName=window.prompt('Clone name (leave blank to auto-generate)', defName);
+        if(newName===null) return;
+        newName=newName.trim();
+        var payload=newName?{name:newName}:{};
+        btnClone.disabled=true;
+        api('/api/admin/events/'+ev.id+'/clone',{method:'POST', body:JSON.stringify(payload)}).then(function(newEv){
+          toast('Event cloned');
+          var nid=newEv && (newEv.id || (newEv.event && newEv.event.id));
+          return loadEvents().then(function(){
+            if(nid) selectEvent(nid);
+            else if(newEv && newEv.code){
+              var found=state.events.find(function(e){return e.code===newEv.code});
+              if(found) selectEvent(found.id);
+            }
+          });
+        }).catch(function(err){ toast((err.j && err.j.error) || err.message || 'Clone failed','err'); }).then(function(){ btnClone.disabled=false; });
+      });
+      actions.appendChild(btnSel); actions.appendChild(aLive); actions.appendChild(aAud); actions.appendChild(aJoin); actions.appendChild(btnClone);
       card.appendChild(top); card.appendChild(actions); root.appendChild(card);
     });
   }
@@ -715,6 +735,11 @@
 
   // results
   document.getElementById('btn-refresh-results').addEventListener('click', function(){ if(state.selectedId) loadResults(state.selectedId); });
+  var btnReport=document.getElementById('btn-report');
+  if(btnReport) btnReport.addEventListener('click', function(){
+    if(!state.selectedId) return toast('Select an event first','err');
+    window.open('/api/admin/events/'+state.selectedId+'/report','_blank');
+  });
   function loadResults(id){
     api('/api/admin/events/'+id+'/questions').then(function(list){
       var root=document.getElementById('results-list'); root.textContent='';
@@ -1133,6 +1158,69 @@
   if(btnTest) btnTest.addEventListener('click', function(){
     var st=document.getElementById('email-status'); if(st) st.textContent='Sending…';
     api('/api/admin/settings/email/test',{method:'POST', body:JSON.stringify({})}).then(function(){ toast('Test email sent'); if(st) st.textContent='Test sent'; }).catch(function(err){ toast(err.message||'Test failed','err'); if(st) st.textContent=err.message||'Failed'; });
+  });
+
+  // webhooks
+  function loadWebhooks(){
+    api('/api/admin/settings/webhooks').then(function(j){
+      var urlEl=document.getElementById('wh-url');
+      var secEl=document.getElementById('wh-secret');
+      var enEl=document.getElementById('wh-enabled');
+      var evEl=document.getElementById('wh-events');
+      if(urlEl) urlEl.value=j.url||'';
+      if(enEl) enEl.checked=!!j.enabled;
+      if(evEl) evEl.value=Array.isArray(j.events)?j.events.join(', '):(j.events||'');
+      if(secEl){
+        secEl.value='';
+        if(j.webhook_secret_set) secEl.placeholder='•••••••• (unchanged)';
+        else secEl.placeholder='optional secret';
+      }
+      var st=document.getElementById('wh-status');
+      if(st) st.textContent=j.enabled?'Enabled':'Disabled';
+    }).catch(function(){});
+  }
+  var formWH=document.getElementById('form-webhooks');
+  if(formWH) formWH.addEventListener('submit', function(e){
+    e.preventDefault();
+    var url=(document.getElementById('wh-url').value||'').trim();
+    var secret=document.getElementById('wh-secret').value;
+    var enabled=!!document.getElementById('wh-enabled').checked;
+    var raw=(document.getElementById('wh-events').value||'').trim();
+    var events=raw? raw.split(',').map(function(s){return s.trim()}).filter(Boolean) : [];
+    var payload={url:url, enabled:enabled, events:events};
+    if(secret) payload.secret=secret;
+    var st=document.getElementById('wh-status'); if(st) st.textContent='Saving…';
+    api('/api/admin/settings/webhooks',{method:'PUT', body:JSON.stringify(payload)}).then(function(){
+      toast('Webhook settings saved');
+      var secEl=document.getElementById('wh-secret'); if(secEl) secEl.value='';
+      if(st) st.textContent='Saved';
+      loadWebhooks();
+    }).catch(function(err){ toast((err.j&&err.j.error)||err.message||'Save failed','err'); if(st) st.textContent=err.message||'Failed'; });
+  });
+  var btnTestWH=document.getElementById('btn-test-webhook');
+  if(btnTestWH) btnTestWH.addEventListener('click', function(){
+    var st=document.getElementById('wh-status'); if(st) st.textContent='Sending test…';
+    var resEl=document.getElementById('wh-test-result');
+    if(resEl){ resEl.textContent=''; resEl.classList.add('hidden'); }
+    api('/api/admin/settings/webhooks/test',{method:'POST', body:JSON.stringify({})}).then(function(j){
+      toast('Webhook test sent');
+      if(st) st.textContent=j.ok ? 'Test ok · '+j.status : 'Test returned '+j.status;
+      if(resEl){
+        var body=j.body||'';
+        if(body.length>2000) body=body.slice(0,2000)+'…';
+        resEl.textContent='ok: '+j.ok+'\nstatus: '+j.status+'\nbody: '+body;
+        resEl.classList.remove('hidden');
+      }
+    }).catch(function(err){
+      toast((err.j&&err.j.error)||err.message||'Test failed','err');
+      if(st) st.textContent=err.message||'Failed';
+      if(resEl && err.j){
+        var b=err.j.body||err.j.error||'';
+        if(typeof b==='string' && b.length>2000) b=b.slice(0,2000)+'…';
+        resEl.textContent='error: '+(err.j.error||err.message)+'\nstatus: '+(err.j.status||'')+'\nbody: '+b;
+        resEl.classList.remove('hidden');
+      }
+    });
   });
 
   // branding / analytics / otel

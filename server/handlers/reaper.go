@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"slides/db"
+	"slides/webhook"
 )
 
 func StartReaper(ctx context.Context, interval time.Duration) {
@@ -30,6 +31,9 @@ func StartReaper(ctx context.Context, interval time.Duration) {
 						_ = db.SetQuestionShowResults(q.ID, true)
 					}
 					BroadcastEvent(q.EventID)
+					if ev, _ := db.GetEventByID(q.EventID); ev != nil {
+						webhook.Notify(ev.Code, "question.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": q.ID})
+					}
 				}
 			}
 		}

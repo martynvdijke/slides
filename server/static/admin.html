@@ -197,7 +197,7 @@
 
     <!-- Results panel -->
     <section data-panel="results" class="hidden" aria-labelledby="results-title">
-      <div class="admin-top"><div><h2 id="results-title" class="section-title">Results</h2><p class="section-sub">Live totals, bars and word clouds.</p></div><button class="btn btn-ghost btn-small" type="button" id="btn-refresh-results">Refresh</button></div>
+      <div class="admin-top"><div><h2 id="results-title" class="section-title">Results</h2><p class="section-sub">Live totals, bars and word clouds.</p></div><div class="inline"><button class="btn btn-ghost btn-small" type="button" id="btn-report">Report</button><button class="btn btn-ghost btn-small" type="button" id="btn-refresh-results">Refresh</button></div></div>
       <div id="results-list" class="stack"></div>
       <div class="glass card-pad mt-4">
         <h3 class="section-title text-[1rem]">Feedback summary</h3>
@@ -303,6 +303,24 @@
             <button class="btn btn-ghost btn-small" type="button" id="btn-test-email">Send test email</button>
             <span id="email-status" class="text-[#9AA0B8] text-[0.85rem]"></span>
           </div>
+        </form>
+      </div>
+
+      <div class="glass card-pad mt-4">
+        <h3 class="section-title">Webhooks</h3>
+        <p class="text-[#9AA0B8] text-[0.85rem] mt-1">Outbound notifications for event activity. WEBHOOK_* environment variables override these values.</p>
+        <form id="form-webhooks" class="mt-3 grid gap-2.5">
+          <div class="field"><label for="wh-url">Webhook URL</label><input id="wh-url" class="input" placeholder="https://example.com/hook" type="url"></div>
+          <div class="field"><label for="wh-secret">Secret (HMAC signing)</label><input id="wh-secret" class="input" type="password" placeholder="optional secret" autocomplete="off"></div>
+          <div class="field"><label for="wh-events">Events (comma separated, empty = all)</label><input id="wh-events" class="input" placeholder="qa.created, question.activated, question.closed, event.closed"></div>
+          <p class="text-[#9AA0B8] text-[0.8rem]">Allowed: qa.created, question.activated, question.closed, event.closed</p>
+          <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="wh-enabled"> <span>Enabled</span></label>
+          <div class="inline gap-2">
+            <button class="btn btn-primary" type="submit">Save webhooks</button>
+            <button class="btn btn-ghost btn-small" type="button" id="btn-test-webhook">Send test</button>
+            <span id="wh-status" class="text-[#9AA0B8] text-[0.85rem]"></span>
+          </div>
+          <div id="wh-test-result" class="hidden glass card-pad" style="font-size:.82rem;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto"></div>
         </form>
       </div>
 

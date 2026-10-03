@@ -128,6 +128,11 @@ func main() {
 	adminMux.HandleFunc("GET /api/admin/settings/email", handlers.AdminGetEmailSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/email", handlers.AdminUpdateEmailSettings)
 	adminMux.HandleFunc("POST /api/admin/settings/email/test", handlers.AdminTestEmail)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/clone", handlers.AdminCloneEvent)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/report", handlers.AdminEventReport)
+	adminMux.HandleFunc("GET /api/admin/settings/webhooks", handlers.AdminGetWebhookSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/webhooks", handlers.AdminUpdateWebhookSettings)
+	adminMux.HandleFunc("POST /api/admin/settings/webhooks/test", handlers.AdminTestWebhook)
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 		mux.Handle(method+" /api/admin/", handlers.AdminAuth(adminMux))
 	}
