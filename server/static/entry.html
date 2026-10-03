@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slides — Host or Join</title>
+<meta name="description" content="Slides — choose to host an event or join a room.">
+<link rel="icon" type="image/svg+xml" href="/logo.svg">
+<link rel="stylesheet" href="/tailwind.css">
+<style>
+  .entry-code {
+    text-transform: uppercase;
+    letter-spacing: 0.32em;
+    font-weight: 700;
+    text-align: center;
+    font-size: 1.35rem;
+  }
+  .continue-banner {
+    border-color: rgba(124,107,255,.35);
+    background: linear-gradient(135deg, rgba(99,102,241,.18), rgba(236,72,153,.12));
+  }
+</style>
+</head>
+<body class="antialiased">
+<header class="site-header" role="banner">
+  <div class="container flex items-center justify-between h-16 gap-4">
+    <a class="brand" href="/" aria-label="Slides home">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="currentColor" class="w-[18px] h-[18px]"><path fill-rule="evenodd" d="M7.5 6.75h9a3 3 0 0 1 3 3v4.5a3 3 0 0 1-3 3h-5.25l-2.625 2.625v-2.625H7.5a3 3 0 0 1-3-3v-4.5a3 3 0 0 1 3-3zM10.125 9.75v4.5L13.875 12z"/></svg>
+      </span>
+      Meetup
+    </a>
+    <nav aria-label="Secondary">
+      <a class="btn btn-ghost btn-small" href="/index.html">Browse decks</a>
+    </nav>
+  </div>
+</header>
+
+<main id="main" class="container" role="main">
+  <!-- Signed-in short-circuit -->
+  <div id="continue-banner" class="glass card-pad continue-banner hidden mt-6 flex flex-wrap gap-3 items-center justify-between" role="status" aria-live="polite">
+    <div class="flex items-center gap-3">
+      <span class="pill live" aria-hidden="true">Signed in</span>
+      <p class="m-0 text-[0.95rem] leading-[1.4]"><span class="text-[#9AA0B8]">Continue as</span> <strong id="continue-name" class="font-bold tracking-[-0.02em] text-[#F2F3F8]"></strong></p>
+    </div>
+    <div class="inline">
+      <a id="continue-link" class="btn btn-primary" href="/admin">Continue to dashboard
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+      </a>
+      <span id="continue-hint" class="text-[#9AA0B8] text-[0.78rem] hidden md:inline">Redirecting…</span>
+    </div>
+  </div>
+
+  <section class="pt-8 md:pt-10 pb-6" aria-labelledby="entry-title">
+    <span class="eyebrow"><i aria-hidden="true"></i> Slides</span>
+    <h1 id="entry-title" class="font-extrabold tracking-[-0.04em] leading-[0.95] mt-3 mb-2" style="font-size:clamp(2rem,5vw,3rem)">Host or join</h1>
+    <p class="section-sub text-[0.96rem] max-w-[52ch] leading-[1.6] m-0">Pick what you need. Hosts manage events and present. Participants join with a room code.</p>
+  </section>
+
+  <section class="two-col pb-6" aria-label="Choose your path">
+    <!-- Host -->
+    <div class="glass card-pad flex flex-col gap-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="grid gap-1">
+          <h2 class="section-title flex items-center gap-2">
+            <span class="brand-mark w-8 h-8 rounded-[10px] shrink-0" style="width:32px;height:32px" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" width="16" height="16"><path d="M12 13a3 3 0 100-6 3 3 0 000 6z"/><path d="M5 19a7 7 0 0114 0"/></svg>
+            </span>
+            Host
+          </h2>
+          <p id="host-copy" class="section-sub m-0 leading-[1.55]">Sign in to manage events</p>
+        </div>
+        <span class="pill">For organizers</span>
+      </div>
+      <p class="text-[#C2C7DD] text-[0.9rem] leading-[1.6] m-0">Create events, run polls and Q&amp;A, present slides.</p>
+      <div class="mt-auto pt-2">
+        <a id="host-cta" class="btn btn-primary w-full justify-center" href="/admin">Host — sign in
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+        </a>
+        <p class="text-[#9AA0B8] text-[0.78rem] mt-2 text-center m-0">Takes you to the dashboard. First run will ask to create an admin.</p>
+      </div>
+    </div>
+
+    <!-- Participant -->
+    <div class="glass card-pad flex flex-col gap-4">
+      <div class="flex items-start justify-between gap-3">
+        <div class="grid gap-1">
+          <h2 class="section-title flex items-center gap-2">
+            <span class="brand-mark w-8 h-8 rounded-[10px] shrink-0" style="width:32px;height:32px;background:linear-gradient(135deg,#22D3EE,#6366F1)" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.8" width="16" height="16"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+            </span>
+            Participant
+          </h2>
+          <p class="section-sub m-0 leading-[1.55]">Join a room</p>
+        </div>
+        <span class="pill">No login</span>
+      </div>
+      <p class="text-[#C2C7DD] text-[0.9rem] leading-[1.6] m-0">Enter the 5-character code from the screen.</p>
+
+      <form id="entry-join-form" class="grid gap-3 mt-1" novalidate aria-label="Join a room by code">
+        <div class="field">
+          <label for="entry-room-code">Room code</label>
+          <input id="entry-room-code" class="input entry-code" placeholder="AB2C3" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="5" aria-describedby="entry-join-hint">
+        </div>
+        <button id="entry-join-btn" class="btn btn-primary w-full justify-center" type="submit">Join room
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+        </button>
+        <p id="entry-join-hint" class="text-[#9AA0B8] text-[0.78rem] m-0 text-center">Or <a class="underline decoration-white/20 underline-offset-4 hover:decoration-white/40" href="/join">go to full join page</a> — same code, bigger keypad.</p>
+      </form>
+    </div>
+  </section>
+
+  <div class="flex justify-center pb-8">
+    <a class="btn btn-ghost btn-small" href="/index.html" aria-label="Browse slide decks">Browse slide decks
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
+    </a>
+  </div>
+
+  <footer class="py-[18px] pb-9 border-t border-white/10 text-[#9AA0B8] text-[0.84rem] flex flex-wrap gap-3 justify-between">
+    <span>© 2026 Meetup · Present and participate.</span>
+    <span class="inline-flex gap-2 items-center"><span class="pill">No app needed</span><span class="pill">Works on any phone</span></span>
+  </footer>
+</main>
+
+<div id="toast-root" aria-live="polite" aria-atomic="true"></div>
+<script>
+(function(){
+  'use strict';
+  var banner = document.getElementById('continue-banner');
+  var nameEl = document.getElementById('continue-name');
+  var hint = document.getElementById('continue-hint');
+  var hostCopy = document.getElementById('host-copy');
+  var hostCta = document.getElementById('host-cta');
+  var form = document.getElementById('entry-join-form');
+  var input = document.getElementById('entry-room-code');
+
+  function normalize(v){
+    return String(v||'').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,5);
+  }
+
+  // Room code inline — navigate to /join?room=CODE (join.js auto-submits)
+  if(form && input){
+    input.addEventListener('input', function(){
+      var v = normalize(input.value);
+      if(input.value !== v) input.value = v;
+    });
+    form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var code = normalize(input.value);
+      if(code.length < 4){
+        input.focus();
+        input.select();
+        return;
+      }
+      location.href = '/join?room=' + encodeURIComponent(code);
+    });
+    // also allow Enter with 5 chars to go immediately
+    input.addEventListener('keydown', function(e){
+      if(e.key === 'Enter'){
+        // let submit handler do the work
+      }
+    });
+  }
+
+  // Signed-in short-circuit + first-run awareness — never break the page
+  try{
+    // check auth
+    fetch('/api/auth/me', {credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('not signed in');
+      return r.json();
+    }).then(function(j){
+      var u = j && (j.username || j.user || j.name || (j.data && j.data.username));
+      // some APIs return {user:{username}} — handle broadly
+      if(!u && j && j.user && typeof j.user === 'object') u = j.user.username || j.user.name;
+      if(!u) u = 'host';
+      if(banner && nameEl){
+        nameEl.textContent = u;
+        banner.classList.remove('hidden');
+        banner.classList.add('flex');
+        if(hint) hint.classList.remove('hidden');
+      }
+      // short, non-annoying auto-redirect
+      setTimeout(function(){
+        try{ location.href = '/admin'; }catch(e){}
+      }, 900);
+    }).catch(function(){});
+
+    // check setup status
+    fetch('/api/setup/status', {credentials:'same-origin'}).then(function(r){
+      if(!r.ok) throw new Error('no status');
+      return r.json();
+    }).then(function(j){
+      var needs = j && (j.needs_setup === true || j.needsSetup === true || j.setup_required === true);
+      if(needs){
+        if(hostCopy) hostCopy.textContent = 'Set up the first admin account';
+        if(hostCta){
+          hostCta.textContent = '';
+          hostCta.appendChild(document.createTextNode('Set up admin account '));
+          var svg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+          svg.setAttribute('width','16'); svg.setAttribute('height','16'); svg.setAttribute('viewBox','0 0 24 24'); svg.setAttribute('fill','none'); svg.setAttribute('stroke','currentColor'); svg.setAttribute('stroke-width','1.9'); svg.setAttribute('aria-hidden','true');
+          var p1 = document.createElementNS('http://www.w3.org/2000/svg','path'); p1.setAttribute('d','M5 12h14');
+          var p2 = document.createElementNS('http://www.w3.org/2000/svg','path'); p2.setAttribute('d','M13 5l7 7-7 7');
+          svg.appendChild(p1); svg.appendChild(p2);
+          hostCta.appendChild(svg);
+        }
+      }
+    }).catch(function(){});
+  }catch(e){}
+})();
+</script>
+</body>
+</html>

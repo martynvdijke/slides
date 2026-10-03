@@ -36,31 +36,38 @@ func writeServiceErr(w http.ResponseWriter, err error) {
 
 // submitAnswer validates and stores an answer, then notifies live subscribers.
 func submitAnswer(ev *db.Event, pid, questionID int64, raw string) error {
+	_, _, _, err := submitAnswerWithMeta(ev, pid, questionID, raw, "")
+	return err
+}
+
+func submitAnswerWithMeta(ev *db.Event, pid, questionID int64, raw string, clientUUID string) (bool, int, int, error) {
 	if questionID == 0 {
-		return badRequest("question_id is required")
+		return false, 0, 0, badRequest("question_id is required")
 	}
 	q, err := db.GetQuestion(questionID)
 	if err != nil || q == nil {
-		return notFound("question not found")
+		return false, 0, 0, notFound("question not found")
 	}
 	if q.EventID != ev.ID {
-		return notFound("question not found")
+		return false, 0, 0, notFound("question not found")
 	}
 	if q.Status != "live" && !q.IsFeedback {
-		return badRequest("question is not live")
+		return false, 0, 0, badRequest("question is not live")
 	}
 	val, err := db.ValidateAnswer(q.Kind, q.Options, raw)
 	if err != nil {
-		return badRequest(err.Error())
+		return false, 0, 0, badRequest(err.Error())
 	}
 	if pid == 0 {
-		return badRequest("could not identify participant")
+		return false, 0, 0, badRequest("could not identify participant")
 	}
-	if err := db.UpsertAnswer(q.ID, pid, val); err != nil {
-		return internal("could not save answer")
+	isCorrect, pts, total, err := db.UpsertAnswerWithScoring(q.ID, pid, val, clientUUID)
+	if err != nil {
+		return false, 0, 0, internal("could not save answer")
 	}
+	db.InvalidateLeaderboard(ev.ID)
 	BroadcastEvent(ev.ID)
-	return nil
+	return isCorrect, pts, total, nil
 }
 
 // createQA trims and stores a moderated Q&A question.
@@ -111,6 +118,7 @@ func toggleVote(ev *db.Event, pid, qaID int64) (int, bool, error) {
 type AnswerRequest struct {
 	QuestionID int64  `json:"question_id"`
 	Value      string `json:"value"`
+	ClientUUID string `json:"client_uuid,omitempty"`
 }
 
 // QARequest is the body for CreateQA.
@@ -178,11 +186,12 @@ func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pid := participantID(w, r, ev.ID)
-	if err := submitAnswer(ev, pid, req.QuestionID, req.Value); err != nil {
+	isCorrect, pts, total, err := submitAnswerWithMeta(ev, pid, req.QuestionID, req.Value, req.ClientUUID)
+	if err != nil {
 		writeServiceErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "is_correct": isCorrect, "points_awarded": pts, "total_points": total})
 }
 
 // ListPublicQA lists approved Q&A for the event.
@@ -429,6 +438,30 @@ func ResolveRoom(w http.ResponseWriter, r *http.Request) {
 		"name":      ev.Name,
 		"room_code": ev.RoomCode,
 	})
+}
+
+func PublicGetLeaderboard(w http.ResponseWriter, r *http.Request) {
+	ev, err := eventByCode(r)
+	if err != nil || ev == nil {
+		jsonError(w, "event not found", http.StatusNotFound)
+		return
+	}
+	entries, err := db.GetLeaderboard(ev.ID)
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
+}
+
+func AdminGetLeaderboard(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
+	entries, err := db.GetLeaderboard(eid)
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"entries": entries})
 }
 
 // PublicGetAnalyticsSettings returns public analytics settings.

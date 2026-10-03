@@ -132,8 +132,11 @@
     if(name==='qa' && state.selectedId) loadQA(state.selectedId);
     if(name==='slides' && state.selectedId) loadSlides(state.selectedId);
     if(name==='results' && state.selectedId) loadResults(state.selectedId);
+    if(name==='leaderboard' && state.selectedId) loadLeaderboard(state.selectedId);
     if(name==='stats') loadStats();
     if(name!=='stats') closeStatsStream();
+    if(name==='leaderboard') startLeaderboardPolling();
+    else stopLeaderboardPolling();
   }
   navBtns.forEach(function(b){ b.addEventListener('click', function(){ setView(b.getAttribute('data-view')); }); });
 
@@ -246,8 +249,33 @@
   var qKind=document.getElementById('aq-kind');
   var qOptsWrap=document.getElementById('aq-options-wrap');
   var qOptionKinds=['poll','multi','ranking'];
-  function syncQuestionKind(){ qOptsWrap.style.display = qOptionKinds.indexOf(qKind.value)>=0 ? '' : 'none'; }
+  var aqCorrect=document.getElementById('aq-correct');
+  var aqPoints=document.getElementById('aq-points');
+  var aqScoringWrap=document.getElementById('aq-scoring-wrap');
+  function syncScoringControls(){
+    var kind=qKind.value;
+    var scorable=kind==='poll'||kind==='yesno';
+    if(aqScoringWrap) aqScoringWrap.style.display=scorable?'':'none';
+    if(!scorable) return;
+    var prev=aqCorrect.value;
+    aqCorrect.textContent='';
+    var none=document.createElement('option'); none.value=''; none.textContent='— Not scored —'; aqCorrect.appendChild(none);
+    if(kind==='poll'){
+      var raw=(document.getElementById('aq-options').value||'').split(',').map(function(s){return s.trim()}).filter(Boolean);
+      if(!raw.length) raw=['Option A','Option B'];
+      raw.forEach(function(label, idx){
+        var o=document.createElement('option'); o.value=String(idx); o.textContent=(idx+1)+'. '+label; aqCorrect.appendChild(o);
+      });
+    } else if(kind==='yesno'){
+      var oYes=document.createElement('option'); oYes.value='0'; oYes.textContent='Yes (correct)'; aqCorrect.appendChild(oYes);
+      var oNo=document.createElement('option'); oNo.value='1'; oNo.textContent='No (correct)'; aqCorrect.appendChild(oNo);
+    }
+    if(prev!==null) aqCorrect.value=prev;
+  }
+  function syncQuestionKind(){ qOptsWrap.style.display = qOptionKinds.indexOf(qKind.value)>=0 ? '' : 'none'; syncScoringControls(); }
   qKind.addEventListener('change', syncQuestionKind);
+  var aqOptsInput=document.getElementById('aq-options');
+  if(aqOptsInput) aqOptsInput.addEventListener('input', syncScoringControls);
   syncQuestionKind();
 
   // question media (upload or external url)
@@ -299,7 +327,12 @@
     if(!prompt) return;
     if(qOptionKinds.indexOf(kind)>=0 && opts.length<2) return toast('Add at least 2 options','err');
     var payload={ kind:kind, mode:mode, prompt:prompt, options:opts, is_feedback: document.getElementById('aq-feedback').checked, show_results: document.getElementById('aq-show').checked, position: 0, media_url: qMedia.url, media_type: qMedia.type };
-    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; resetQuestionMedia(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
+    if(kind==='poll'||kind==='yesno'){
+      var cv=aqCorrect.value;
+      if(cv==='') payload.correct_index=null; else payload.correct_index=parseInt(cv,10);
+      var pb=parseInt(aqPoints.value,10); if(!isNaN(pb)&&pb>0) payload.points_base=pb; else payload.points_base=100;
+    }
+    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; aqPoints.value='100'; resetQuestionMedia(); syncScoringControls(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
   });
 
   function loadQuestions(id){
@@ -319,6 +352,19 @@
       var meta=document.createElement('div'); meta.style.color='var(--muted)'; meta.style.fontSize='.82rem'; meta.style.marginTop='4px';
       meta.textContent = q.kind+' · '+q.mode + (q.is_feedback?' · feedback':'') + ' · '+q.status + (q.show_results?' · results visible':' · results hidden') + (q.options && q.options.length ? ' · '+q.options.join(', '):'') + (q.respondents? ' · '+q.respondents+' respondents':'') + (q.media_url? ' · '+q.media_type:'');
       left.appendChild(prompt); left.appendChild(meta);
+      // correct badge
+      var correctLabel=null;
+      if((q.kind==='poll'||q.kind==='yesno') && q.correct_index!==null && q.correct_index!==undefined){
+        if(q.kind==='poll' && q.options && q.options[q.correct_index]!==undefined) correctLabel=q.options[q.correct_index];
+        else if(q.kind==='yesno') correctLabel=q.correct_index===0?'yes':'no';
+        else correctLabel=String(q.correct_index);
+        var cpill=document.createElement('span'); cpill.className='pill'; cpill.style.marginTop='6px'; cpill.style.display='inline-flex'; cpill.style.alignItems='center'; cpill.style.gap='4px';
+        cpill.innerHTML='<span style="color:#22C55E">✓</span> Correct: '+correctLabel+' · '+(q.points_base||100)+' pts';
+        left.appendChild(cpill);
+      } else if(q.kind==='poll'||q.kind==='yesno'){
+        var npill=document.createElement('span'); npill.className='pill'; npill.style.marginTop='6px'; npill.style.display='inline-block'; npill.style.opacity='.7'; npill.textContent='Not scored · '+(q.points_base||100)+' pts';
+        left.appendChild(npill);
+      }
       var badge=document.createElement('span'); badge.className='badge '+(q.status==='live'?'open':''); badge.textContent=q.status;
       top.appendChild(left); top.appendChild(badge);
       var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
@@ -348,6 +394,30 @@
       var bSave=document.createElement('button'); bSave.className='btn btn-ghost btn-small'; bSave.type='button'; bSave.textContent='Save';
       bSave.addEventListener('click', function(){ api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify({prompt:inp.value.trim()})}).then(function(){ toast('Saved'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); }); });
       editWrap.appendChild(inp); editWrap.appendChild(bSave);
+      // scoring edit for poll/yesno
+      if(q.kind==='poll'||q.kind==='yesno'){
+        var scoreWrap=document.createElement('div'); scoreWrap.style.display='flex'; scoreWrap.style.gap='8px'; scoreWrap.style.marginTop='8px'; scoreWrap.style.flexWrap='wrap'; scoreWrap.style.alignItems='center';
+        var sel=document.createElement('select'); sel.className='select'; sel.style.minWidth='180px';
+        var oNone=document.createElement('option'); oNone.value=''; oNone.textContent='— Not scored —'; sel.appendChild(oNone);
+        if(q.kind==='poll' && q.options){
+          q.options.forEach(function(opt, idx){ var o=document.createElement('option'); o.value=String(idx); o.textContent=(idx+1)+'. '+opt; sel.appendChild(o); });
+        } else if(q.kind==='yesno'){
+          var oY=document.createElement('option'); oY.value='0'; oY.textContent='Yes'; sel.appendChild(oY);
+          var oN=document.createElement('option'); oN.value='1'; oN.textContent='No'; sel.appendChild(oN);
+        }
+        if(q.correct_index!==null && q.correct_index!==undefined) sel.value=String(q.correct_index); else sel.value='';
+        var ptInput=document.createElement('input'); ptInput.className='input'; ptInput.type='number'; ptInput.min='10'; ptInput.step='10'; ptInput.style.width='110px'; ptInput.value=String(q.points_base||100); ptInput.setAttribute('aria-label','Base points');
+        var ptLabel=document.createElement('span'); ptLabel.style.fontSize='.82rem'; ptLabel.style.color='var(--muted)'; ptLabel.textContent='pts';
+        var bScore=document.createElement('button'); bScore.className='btn btn-ghost btn-small'; bScore.type='button'; bScore.textContent='Save scoring';
+        bScore.addEventListener('click', function(){
+          var payload={};
+          if(sel.value==='') payload.correct_index=null; else payload.correct_index=parseInt(sel.value,10);
+          var pb=parseInt(ptInput.value,10); if(!isNaN(pb)&&pb>0) payload.points_base=pb;
+          api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify(payload)}).then(function(){ toast('Scoring saved'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); });
+        });
+        scoreWrap.appendChild(sel); scoreWrap.appendChild(ptInput); scoreWrap.appendChild(ptLabel); scoreWrap.appendChild(bScore);
+        editWrap.insertAdjacentElement('afterend', scoreWrap);
+      }
 
       // results mini bars
       var barWrap=document.createElement('div'); barWrap.style.display='grid'; barWrap.style.gap='6px'; barWrap.style.marginTop='8px';
@@ -357,9 +427,15 @@
       }
       if(q.results && q.results.length){
         var total=q.total||0;
+        var qCorrectLabelForBar=null;
+        if((q.kind==='poll'||q.kind==='yesno') && q.correct_index!==null && q.correct_index!==undefined && q.show_results){
+          if(q.kind==='poll' && q.options) qCorrectLabelForBar=q.options[q.correct_index];
+          else if(q.kind==='yesno') qCorrectLabelForBar=q.correct_index===0?'yes':'no';
+        }
         q.results.forEach(function(r){
+          var isCorrect = qCorrectLabelForBar!==null && r.label===qCorrectLabelForBar;
           var row2=document.createElement('div'); row2.style.display='flex'; row2.style.justifyContent='space-between'; row2.style.fontSize='.84rem'; row2.style.gap='10px';
-          var lab=document.createElement('span'); lab.textContent=r.label; lab.style.fontWeight='600';
+          var lab=document.createElement('span'); lab.style.fontWeight='600'; lab.textContent=(isCorrect?'✓ ':'')+r.label; if(isCorrect) lab.style.color='#22C55E';
           var cnt=document.createElement('span'); cnt.style.color='var(--muted)';
           if(q.kind==='ranking'){
             cnt.textContent=r.count+' ballots · '+r.score+' pts · avg '+(r.avg_rank||0).toFixed(2);
@@ -367,7 +443,7 @@
             cnt.textContent=r.count + (total? ' · '+Math.round(r.count/total*100)+'%':'');
           }
           row2.appendChild(lab); row2.appendChild(cnt);
-          var track=document.createElement('div'); track.style.height='8px'; track.style.borderRadius='999px'; track.style.background='rgba(255,255,255,.08)'; track.style.overflow='hidden';
+          var track=document.createElement('div'); track.style.height='8px'; track.style.borderRadius='999px'; track.style.background='rgba(255,255,255,.08)'; track.style.overflow='hidden'; if(isCorrect) track.style.outline='1px solid rgba(34,197,94,.6)';
           var pct = 0;
           if(q.kind==='ranking' && q.results.length){
             var maxScore=Math.max.apply(null, q.results.map(function(x){return x.score||0}));
@@ -375,12 +451,16 @@
           }else{
             pct = total? r.count/total*100 : 0;
           }
-          var fill=document.createElement('div'); fill.style.height='100%'; fill.style.background='linear-gradient(135deg,#6366F1,#EC4899)'; fill.style.width= pct+'%';
+          var fill=document.createElement('div'); fill.style.height='100%'; fill.style.width= pct+'%';
+          fill.style.background=isCorrect?'linear-gradient(135deg,#22C55E,#16A34A)':'linear-gradient(135deg,#6366F1,#EC4899)';
           track.appendChild(fill); barWrap.appendChild(row2); barWrap.appendChild(track);
         });
       }
 
-      row.appendChild(top); row.appendChild(actions); row.appendChild(editWrap); if(barWrap.childNodes.length) row.appendChild(barWrap);
+      row.appendChild(top); row.appendChild(actions); row.appendChild(editWrap);
+      var scoreEl = row.querySelector('div:nth-of-type(3)');
+      // scoreWrap already inserted after editWrap
+      if(barWrap.childNodes.length) row.appendChild(barWrap);
       root.appendChild(row);
     });
   }
@@ -480,7 +560,13 @@
       qs.forEach(function(q){
         var card=document.createElement('div'); card.className='glass card-pad';
         var title=document.createElement('div'); title.style.fontWeight='700'; title.textContent=q.prompt;
-        var meta=document.createElement('div'); meta.style.color='var(--muted)'; meta.style.fontSize='.82rem'; meta.textContent=q.kind+' · '+q.status+' · '+(q.total||0)+' responses'+(q.is_feedback?' · feedback':'')+(q.media_url?' · '+q.media_type:'');
+        var metaText=q.kind+' · '+q.status+' · '+(q.total||0)+' responses'+(q.is_feedback?' · feedback':'')+(q.media_url?' · '+q.media_type:'');
+        if((q.kind==='poll'||q.kind==='yesno') && q.correct_index!==null && q.correct_index!==undefined){
+          var clab=q.kind==='poll'?(q.options[q.correct_index]||'#'+q.correct_index):(q.correct_index===0?'yes':'no');
+          metaText+=' · ✓ '+clab+' · '+(q.points_base||100)+' pts';
+          if(!q.show_results) metaText+=' (answer hidden until results visible)';
+        }
+        var meta=document.createElement('div'); meta.style.color='var(--muted)'; meta.style.fontSize='.82rem'; meta.textContent=metaText;
         card.appendChild(title); card.appendChild(meta);
         if(q.media_url){
           var m=document.createElement(q.media_type==='video'?'video':'img');
@@ -513,10 +599,16 @@
           if(q.kind==='ranking'){
             maxScore=Math.max.apply(null, q.results.map(function(x){return x.score||0}));
           }
+          var correctResLabel=null;
+          if((q.kind==='poll'||q.kind==='yesno') && q.correct_index!==null && q.correct_index!==undefined && q.show_results){
+            if(q.kind==='poll' && q.options) correctResLabel=q.options[q.correct_index];
+            else if(q.kind==='yesno') correctResLabel=q.correct_index===0?'yes':'no';
+          }
           q.results.forEach(function(r){
+            var isCorrect = correctResLabel!==null && r.label===correctResLabel;
             var row=document.createElement('div'); row.style.display='grid'; row.style.gap='4px';
             var head=document.createElement('div'); head.style.display='flex'; head.style.justifyContent='space-between'; head.style.fontSize='.88rem';
-            var lab=document.createElement('strong'); lab.textContent=r.label;
+            var lab=document.createElement('strong'); lab.textContent=(isCorrect?'✓ ':'')+r.label; if(isCorrect) lab.style.color='#22C55E';
             var cnt=document.createElement('span'); cnt.style.color='var(--muted)';
             if(q.kind==='ranking'){
               cnt.textContent=r.count+' ballots · '+r.score+' pts · avg '+(r.avg_rank||0).toFixed(2);
@@ -525,13 +617,15 @@
             }
             head.appendChild(lab); head.appendChild(cnt);
             var track=document.createElement('div'); track.style.height='10px'; track.style.borderRadius='999px'; track.style.background='rgba(255,255,255,.07)'; track.style.overflow='hidden';
+            if(isCorrect) track.style.outline='1px solid rgba(34,197,94,.5)';
             var pct=0;
             if(q.kind==='ranking'){
               pct = maxScore>0? (r.score||0)/maxScore*100 : 0;
             }else{
               pct = q.total? (r.count/q.total*100) : 0;
             }
-            var fill=document.createElement('div'); fill.style.height='100%'; fill.style.background='linear-gradient(135deg,#6366F1,#EC4899)'; fill.style.width= pct+'%';
+            var fill=document.createElement('div'); fill.style.height='100%'; fill.style.width= pct+'%';
+            fill.style.background=isCorrect?'linear-gradient(135deg,#22C55E,#16A34A)':'linear-gradient(135deg,#6366F1,#EC4899)';
             track.appendChild(fill); row.appendChild(head); row.appendChild(track); wrap.appendChild(row);
           });
           card.appendChild(wrap);
@@ -750,6 +844,98 @@
     loadStatsEvent(id);
     connectStatsStream(id);
   });
+
+  // leaderboard
+  var lbTimer=null; var lbWS=null;
+  function renderLeaderboard(entries){
+    var root=document.getElementById('leaderboard-list'); if(!root) return;
+    root.textContent='';
+    var countEl=document.getElementById('lb-count'); if(countEl) countEl.textContent=(entries&&entries.length?entries.length:0)+' players';
+    if(!entries||!entries.length){
+      var empty=document.createElement('div'); empty.className='glass card-pad'; empty.style.color='var(--muted)'; empty.textContent='No scores yet — activate a scored question and collect answers.';
+      root.appendChild(empty); return;
+    }
+    entries.forEach(function(e){
+      var row=document.createElement('div'); row.className='glass card-pad'; row.style.display='flex'; row.style.alignItems='center'; row.style.gap='14px';
+      var rank=document.createElement('div'); rank.style.minWidth='28px'; rank.style.textAlign='center'; rank.style.fontWeight='800'; rank.style.fontSize='1.05rem';
+      rank.textContent='#'+e.rank; if(e.rank===1) rank.style.color='#F59E0B'; else if(e.rank===2) rank.style.color='#9AA0B8'; else if(e.rank===3) rank.style.color='#D97706';
+      var avatar=document.createElement('div'); avatar.style.width='36px'; avatar.style.height='36px'; avatar.style.borderRadius='999px'; avatar.style.display='grid'; avatar.style.placeItems='center'; avatar.style.fontSize='1.1rem'; avatar.style.flexShrink='0';
+      avatar.style.background=e.color||'#6366F1'; avatar.style.color='#fff'; avatar.textContent=e.emoji||'🙂';
+      var info=document.createElement('div'); info.style.flex='1'; info.style.minWidth='0';
+      var name=document.createElement('div'); name.style.fontWeight='700'; name.style.whiteSpace='nowrap'; name.style.overflow='hidden'; name.style.textOverflow='ellipsis'; name.textContent=e.name||'Anonymous';
+      var sub=document.createElement('div'); sub.style.color='var(--muted)'; sub.style.fontSize='.82rem'; sub.textContent=e.points+' pts';
+      info.appendChild(name); info.appendChild(sub);
+      var pts=document.createElement('div'); pts.style.fontWeight='800'; pts.style.fontSize='1.1rem'; pts.textContent=String(e.points);
+      row.appendChild(rank); row.appendChild(avatar); row.appendChild(info); row.appendChild(pts);
+      root.appendChild(row);
+    });
+  }
+  function fetchLeaderboard(id){
+    if(!id) return Promise.resolve([]);
+    // try admin endpoint first, fall back to public via code if needed
+    return api('/api/admin/events/'+id+'/leaderboard').then(function(j){
+      var arr=j.entries||j.leaderboard||j||[]; return Array.isArray(arr)?arr:[];
+    }).catch(function(err){
+      // fallback to public leaderboard via event code
+      var ev=(state.events||[]).find(function(e){return e.id===id});
+      if(ev&&ev.code){
+        return api('/api/events/'+encodeURIComponent(ev.code)+'/leaderboard').then(function(j){
+          var arr=j.entries||[]; return Array.isArray(arr)?arr:[];
+        }).catch(function(){ return []; });
+      }
+      return [];
+    });
+  }
+  function loadLeaderboard(id){
+    var target=id||state.selectedId;
+    if(!target){ renderLeaderboard([]); return; }
+    var liveEl=document.getElementById('lb-live'); if(liveEl) liveEl.textContent='Live: loading…';
+    fetchLeaderboard(target).then(function(entries){ renderLeaderboard(entries); if(liveEl) liveEl.textContent='Live: updated '+new Date().toLocaleTimeString(); }).catch(function(){ renderLeaderboard([]); if(liveEl) liveEl.textContent='Live: failed'; });
+  }
+  function startLeaderboardPolling(){
+    stopLeaderboardPolling();
+    if(!state.selectedId) return;
+    loadLeaderboard(state.selectedId);
+    lbTimer=setInterval(function(){
+      var panel=document.querySelector('[data-panel="leaderboard"]');
+      if(panel && panel.classList.contains('hidden')) return;
+      if(state.selectedId) fetchLeaderboard(state.selectedId).then(renderLeaderboard);
+    }, 4000);
+    // optionally listen to admin stats WS as hint to refresh (reuses existing infra)
+    // if stats WS is active, its messages trigger a refresh
+    var origOnMessage=null;
+    // simple: when stats socket pushes, refresh leaderboard too
+    // we hook into statsSource if present
+    if(typeof WebSocket!=='undefined' && state.selectedId){
+      try{
+        var url=(location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/admin/events/'+encodeURIComponent(state.selectedId)+'/stats';
+        lbWS=new WebSocket(url);
+        lbWS.onmessage=function(ev){
+          try{
+            var m=JSON.parse(ev.data);
+            if(m.type==='stats' && m.data) fetchLeaderboard(state.selectedId).then(renderLeaderboard);
+          }catch(e){}
+        };
+        lbWS.onerror=function(){ try{ lbWS.close(); }catch(e){} };
+      }catch(e){}
+    }
+  }
+  function stopLeaderboardPolling(){
+    if(lbTimer){ clearInterval(lbTimer); lbTimer=null; }
+    if(lbWS){ try{ lbWS.close(); }catch(e){} lbWS=null; }
+  }
+  var btnLb=document.getElementById('btn-refresh-leaderboard');
+  if(btnLb) btnLb.addEventListener('click', function(){ if(state.selectedId) loadLeaderboard(state.selectedId); else toast('Select an event','err'); });
+
+  // keep leaderboard in sync when event changes
+  var origSelectEvent=selectEvent;
+  // wrap selectEvent to also refresh leaderboard if visible
+  var _selectEvent=selectEvent;
+  selectEvent=function(id){
+    _selectEvent(id);
+    var lbPanel=document.querySelector('[data-panel="leaderboard"]');
+    if(lbPanel && !lbPanel.classList.contains('hidden')) loadLeaderboard(id);
+  };
 
   // branding / analytics / otel
   function loadBranding(){

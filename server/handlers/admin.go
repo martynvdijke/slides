@@ -389,15 +389,17 @@ func validateQuestionMedia(mediaURL, mediaType string) error {
 func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	eid := pathID(r, "id")
 	var body struct {
-		Kind        string   `json:"kind"`
-		Mode        string   `json:"mode"`
-		Prompt      string   `json:"prompt"`
-		Options     []string `json:"options"`
-		Position    int      `json:"position"`
-		ShowResults *bool    `json:"show_results"`
-		IsFeedback  *bool    `json:"is_feedback"`
-		MediaURL    string   `json:"media_url"`
-		MediaType   string   `json:"media_type"`
+		Kind         string   `json:"kind"`
+		Mode         string   `json:"mode"`
+		Prompt       string   `json:"prompt"`
+		Options      []string `json:"options"`
+		Position     int      `json:"position"`
+		ShowResults  *bool    `json:"show_results"`
+		IsFeedback   *bool    `json:"is_feedback"`
+		MediaURL     string   `json:"media_url"`
+		MediaType    string   `json:"media_type"`
+		CorrectIndex *int     `json:"correct_index"`
+		PointsBase   *int     `json:"points_base"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		jsonError(w, "invalid json", http.StatusBadRequest)
@@ -450,6 +452,14 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		jsonError(w, "failed to create question", http.StatusInternalServerError)
 		return
+	}
+	if body.CorrectIndex != nil {
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"correct_index": *body.CorrectIndex})
+		q, _ = db.GetQuestion(q.ID)
+	}
+	if body.PointsBase != nil {
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"points_base": *body.PointsBase})
+		q, _ = db.GetQuestion(q.ID)
 	}
 	writeJSON(w, http.StatusOK, questionDTO(*q, true))
 	BroadcastEvent(eid)
@@ -550,6 +560,19 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 			var s string
 			_ = json.Unmarshal(v, &s)
 			fields["media_type"] = strings.TrimSpace(s)
+		case "correct_index":
+			if string(v) == "null" {
+				fields["correct_index"] = nil
+			} else {
+				var n int
+				if err := json.Unmarshal(v, &n); err == nil {
+					fields["correct_index"] = n
+				}
+			}
+		case "points_base":
+			var n int
+			_ = json.Unmarshal(v, &n)
+			fields["points_base"] = n
 		}
 	}
 	effKind := q.Kind

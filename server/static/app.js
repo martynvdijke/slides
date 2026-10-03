@@ -29,6 +29,170 @@
   var code=getCode();
   var stateCache=null;
 
+  // --- helpers ---
+  function vibrate(pat){ try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
+  function genUUID(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'qt-'+Date.now()+'-'+Math.random().toString(36).slice(2,9); }
+
+  // --- identity ---
+  var REACTION_EMOJIS=['👏','🔥','❤️','😂','🤯','👍'];
+  var COLOR_LIST=["#6366F1","#EC4899","#F59E0B","#10B981","#38BDF8","#F43F5E","#A855F7","#84CC16"];
+  function loadIdentity(){
+    try{
+      var raw=localStorage.getItem('qt_identity');
+      if(raw){ var j=JSON.parse(raw); if(j && typeof j.name==='string') return j; }
+    }catch(e){}
+    return {name:'', emoji:'🙂', color:'#6366F1'};
+  }
+  var identity=loadIdentity();
+  // ensure defaults
+  if(!identity.emoji || REACTION_EMOJIS.indexOf(identity.emoji)===-1) {
+    // keep 🙂 as default avatar even if not in allowlist? but spec says choose from allowlist; keep 🙂 for display but ensure valid for sending
+    if(!identity.emoji) identity.emoji='🙂';
+  }
+  if(COLOR_LIST.indexOf(identity.color)===-1) identity.color='#6366F1';
+
+  function saveIdentity(){
+    try{ localStorage.setItem('qt_identity', JSON.stringify(identity)); }catch(e){}
+  }
+  function sendIdentity(){
+    if(!identity) return;
+    var em = REACTION_EMOJIS.indexOf(identity.emoji)!==-1 ? identity.emoji : '';
+    var col = COLOR_LIST.indexOf(identity.color)!==-1 ? identity.color : '';
+    var nm = (identity.name||'').trim().slice(0,24);
+    if(isOpen()) wsSend({type:'identity', name:nm, emoji:em||identity.emoji, color:col||identity.color});
+    // also allow server to store trimmed name
+  }
+  // build identity UI
+  function initIdentityUI(){
+    var nameInput=document.getElementById('identity-name');
+    var avatar=document.getElementById('identity-avatar');
+    var eWrap=document.getElementById('identity-emoji-pick');
+    var cWrap=document.getElementById('identity-color-pick');
+    var saveBtn=document.getElementById('identity-save');
+    if(!nameInput || !eWrap) return;
+    function refreshAvatar(){
+      if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
+    }
+    nameInput.value=identity.name||'';
+    refreshAvatar();
+    // emoji picker
+    eWrap.textContent='';
+    REACTION_EMOJIS.forEach(function(em){
+      var b=document.createElement('button'); b.type='button'; b.className='emoji-dot'+(identity.emoji===em?' selected':''); b.textContent=em; b.setAttribute('aria-label','Pick '+em);
+      b.addEventListener('click', function(){
+        identity.emoji=em; saveIdentity(); refreshAvatar();
+        Array.prototype.forEach.call(eWrap.querySelectorAll('.emoji-dot'), function(x){ x.classList.toggle('selected', x.textContent===em); });
+      });
+      eWrap.appendChild(b);
+    });
+    // color picker
+    if(cWrap){
+      cWrap.textContent='';
+      COLOR_LIST.forEach(function(col){
+        var b=document.createElement('button'); b.type='button'; b.className='color-dot'+(identity.color===col?' selected':'');
+        b.style.background=col; b.setAttribute('aria-label','Pick color '+col);
+        b.addEventListener('click', function(){
+          identity.color=col; saveIdentity(); refreshAvatar();
+          Array.prototype.forEach.call(cWrap.querySelectorAll('.color-dot'), function(x){ x.classList.toggle('selected', x.style.background===col || x.style.backgroundColor===col); });
+          // simpler: toggle by comparing
+          Array.prototype.forEach.call(cWrap.children, function(ch){ ch.classList.toggle('selected', ch.style.background===col); });
+        });
+        cWrap.appendChild(b);
+      });
+    }
+    function doSave(){
+      var v=nameInput.value.trim().slice(0,24);
+      identity.name=v; saveIdentity(); refreshAvatar(); sendIdentity();
+      // reflect as author for qa
+      var qaAuthor=document.getElementById('qa-author');
+      if(qaAuthor && !qaAuthor.value) qaAuthor.placeholder = v ? v : 'Anonymous';
+      toast('Profile saved');
+      vibrate(40);
+    }
+    if(saveBtn) saveBtn.addEventListener('click', doSave);
+    nameInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); doSave(); }});
+    nameInput.addEventListener('blur', function(){
+      var v=nameInput.value.trim().slice(0,24);
+      if(v!==identity.name){ identity.name=v; saveIdentity(); }
+    });
+    // reflect initial me if server provides later
+  }
+  // init after DOM
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initIdentityUI); else initIdentityUI();
+
+  function applyMe(me){
+    if(!me) return;
+    // update local identity display if server me differs (e.g., after reconnect)
+    if(me.name && me.name!=='Anonymous') identity.name=me.name;
+    if(me.emoji) identity.emoji=me.emoji;
+    if(me.color) identity.color=me.color;
+    saveIdentity();
+    var nameInput=document.getElementById('identity-name');
+    var avatar=document.getElementById('identity-avatar');
+    if(nameInput && document.activeElement!==nameInput) nameInput.value=identity.name||'';
+    if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
+    var qaAuthor=document.getElementById('qa-author');
+    if(qaAuthor) qaAuthor.placeholder=identity.name||'Anonymous';
+  }
+
+  // --- offline queue ---
+  var QUEUE_KEY='qt_queue_'+code;
+  var MAX_QUEUE=30;
+  function loadQueue(){
+    try{ var raw=localStorage.getItem(QUEUE_KEY); if(!raw) return []; var a=JSON.parse(raw); return Array.isArray(a)?a:[]; }catch(e){return [];}
+  }
+  function saveQueue(q){ try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(q.slice(-MAX_QUEUE))); }catch(e){} }
+  function enqueue(item){
+    var q=loadQueue();
+    // dedup answers: same question_id replace
+    if(item.type==='answer'){
+      var found=-1;
+      for(var i=0;i<q.length;i++){ if(q[i].type==='answer' && q[i].question_id===item.question_id){ found=i; break; } }
+      if(found!==-1) q.splice(found,1);
+    }
+    q.push(item);
+    if(q.length>MAX_QUEUE) q.splice(0, q.length-MAX_QUEUE);
+    saveQueue(q);
+  }
+  function flushQueue(){
+    if(!isOpen()) return;
+    var q=loadQueue();
+    if(!q.length) return;
+    var remain=[];
+    q.forEach(function(it){
+      var ok=false;
+      if(it.type==='answer') ok=wsSend({type:'answer', question_id:it.question_id, value:it.value, client_uuid:it.client_uuid});
+      else if(it.type==='vote') ok=wsSend({type:'vote', id:it.id});
+      else if(it.type==='qa') ok=wsSend({type:'qa', body:it.body, author:it.author});
+      if(!ok) remain.push(it);
+    });
+    saveQueue(remain);
+  }
+  function pruneQueue(state){
+    var q=loadQueue(); if(!q.length) return;
+    var filtered=[];
+    var active=state.active_question;
+    var qaList=state.qa||[];
+    var votedIds={}; qaList.forEach(function(x){ if(x.voted) votedIds[x.id]=true; });
+    q.forEach(function(it){
+      if(it.type==='answer'){
+        if(active && active.answered && active.id===it.question_id){
+          // server already has an answer for this question, drop queued
+          return;
+        }
+      } else if(it.type==='vote'){
+        if(votedIds[it.id]) return;
+      } else if(it.type==='qa'){
+        // if body already appears in qa list, prune
+        var exists=false;
+        for(var i=0;i<qaList.length;i++){ if(qaList[i].body===it.body){ exists=true; break; } }
+        if(exists) return;
+      }
+      filtered.push(it);
+    });
+    if(filtered.length!==q.length) saveQueue(filtered);
+  }
+
   function parseAnswerArray(s){
     if(!s) return [];
     try{ var v=JSON.parse(s); return Array.isArray(v) ? v : []; }catch(e){ return []; }
@@ -55,7 +219,7 @@
 
   // tabs
   var tabs=document.querySelectorAll('.tab');
-  var panels={ live: document.getElementById('panel-live'), qa: document.getElementById('panel-qa'), slides: document.getElementById('panel-slides'), feedback: document.getElementById('panel-feedback') };
+  var panels={ live: document.getElementById('panel-live'), qa: document.getElementById('panel-qa'), slides: document.getElementById('panel-slides'), feedback: document.getElementById('panel-feedback'), leaderboard: document.getElementById('panel-leaderboard') };
   function selectTab(name){
     tabs.forEach(function(b){
       var on=b.getAttribute('data-tab')===name;
@@ -111,6 +275,23 @@
     wrap.appendChild(el); container.appendChild(wrap);
   }
 
+  function showQuizBanner(isCorrect, points){
+    var el=document.getElementById('quiz-banner');
+    if(!el) return;
+    el.style.display='block'; el.className='glass card-pad show';
+    el.textContent='';
+    if(isCorrect){
+      el.style.borderColor='rgba(16,185,129,.35)'; el.style.background='rgba(16,185,129,.12)';
+      var strong=document.createElement('strong'); strong.textContent='Correct! +'+points+' pts';
+      var sub=document.createElement('span'); sub.style.marginLeft='8px'; sub.style.color='var(--muted)'; sub.textContent='Nice one.';
+      el.appendChild(strong); el.appendChild(sub);
+    } else {
+      el.style.borderColor='rgba(244,63,94,.28)'; el.style.background='rgba(244,63,94,.08)';
+      el.textContent='Not this time — keep going!';
+    }
+    setTimeout(function(){ el.style.display='none'; el.classList.remove('show'); }, 3200);
+  }
+
   function renderLive(active){
     var card=document.getElementById('live-card');
     card.textContent='';
@@ -128,7 +309,13 @@
     var meta=document.createElement('div'); meta.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
     var pill=document.createElement('span'); pill.className='pill'; pill.textContent=active.kind;
     var total=document.createElement('span'); total.style.color='var(--muted)'; total.style.fontSize='.84rem'; total.textContent= active.show_results ? (active.total+' responses') : 'Responses hidden until host reveals';
-    meta.appendChild(pill); meta.appendChild(total); card.appendChild(meta);
+    meta.appendChild(pill); meta.appendChild(total);
+    // points badge
+    if(active.points_base){
+      var pb=document.createElement('span'); pb.className='pill'; pb.textContent=active.points_base+' pts';
+      meta.appendChild(pb);
+    }
+    card.appendChild(meta);
 
     if(active.answered){
       var th=document.createElement('div'); th.className='thanks'; th.style.marginTop='12px';
@@ -139,6 +326,25 @@
       var s=document.createElement('span');
       s.textContent= answerText ? ('Thanks — your answer: '+answerText+'. Wait for results or keep exploring Q&A.') : 'Thanks — your answer is in. You can wait for results or keep exploring Q&A.';
       th.appendChild(s); card.appendChild(th);
+      // show correctness if available
+      if(active.my_correct!==null && active.my_correct!==undefined){
+        var cb=document.createElement('div'); cb.className='pill'; cb.style.marginTop='8px';
+        if(active.my_correct){ cb.textContent='✓ Correct +'+(active.my_points||0)+' pts'; cb.style.background='rgba(16,185,129,.18)'; cb.style.color='#6EE7B7'; }
+        else { cb.textContent='Not correct this time'; cb.style.background='rgba(244,63,94,.14)'; }
+        card.appendChild(cb);
+      }
+    }
+
+    // highlight correct answer when revealed
+    function isCorrectOption(opt, idx){
+      if(!active.show_results || active.correct_index===null || active.correct_index===undefined) return false;
+      if(active.kind==='poll'){
+        return idx===active.correct_index;
+      }
+      if(active.kind==='yesno'){
+        var vs=['yes','no']; return vs[active.correct_index]===opt.toLowerCase();
+      }
+      return false;
     }
 
     if(active.kind==='poll'){
@@ -147,6 +353,12 @@
         card.appendChild(buttonGrid(opts, 'option-btn', function(opt,b){ submitAnswer(active.id, opt, b); }));
       }
       renderBars(card, active);
+      if(active.show_results && active.correct_index!==null && active.correct_index!==undefined){
+        var hint=document.createElement('div'); hint.style.color='#6EE7B7'; hint.style.fontSize='.82rem'; hint.style.marginTop='8px';
+        var correctOpt=opts[active.correct_index];
+        if(correctOpt) hint.textContent='Correct: '+correctOpt;
+        card.appendChild(hint);
+      }
     } else if(active.kind==='rating'){
       if(!active.answered){
         var stars=document.createElement('div'); stars.className='stars'; stars.style.marginTop='16px'; stars.setAttribute('role','group'); stars.setAttribute('aria-label','Rating 1 to 5');
@@ -242,7 +454,6 @@
         });
         card.appendChild(form);
       }
-      // for open, show result bars only if show_results
       if(active.show_results) renderBars(card, active);
     } else if(active.kind==='wordcloud'){
       if(!active.answered){
@@ -263,7 +474,6 @@
     var res=active.results||[];
     if(!res.length) return;
     var max=Math.max.apply(null, res.map(function(r){return r.count})) || 1;
-    // if total==0 hide counts? still show 0 bars
     var wrap=document.createElement('div'); wrap.className='results';
     res.forEach(function(r){
       var row=document.createElement('div'); row.className='result-row';
@@ -273,9 +483,7 @@
       head.appendChild(lab); head.appendChild(cnt);
       var track=document.createElement('div'); track.className='track';
       var fill=document.createElement('div'); fill.className='fill';
-      // width based on max or total
       var pct = active.total ? (r.count/active.total*100) : (r.count/max*100);
-      // animate next frame
       row.appendChild(head); track.appendChild(fill); row.appendChild(track); wrap.appendChild(row);
       requestAnimationFrame(function(){ fill.style.width = pct+'%'; });
     });
@@ -307,7 +515,6 @@
     var res=active.results||[];
     if(!res.length) return;
     var cloud=document.createElement('div'); cloud.className='cloud'; cloud.style.marginTop='14px';
-    // filter 0 counts
     var filtered=res.filter(function(r){return r.count>0});
     if(!filtered.length){
       var empty=document.createElement('span'); empty.style.color='var(--muted)'; empty.style.fontSize='.88rem'; empty.textContent='No answers yet — be the first!';
@@ -317,7 +524,6 @@
       filtered.sort(function(a,b){return b.count-a.count});
       filtered.forEach(function(r, idx){
         var s=document.createElement('span'); s.className='cloud-item';
-        // scale font by count
         var scale = 0.82 + (r.count/max)*0.55;
         var opacity = 0.85 + (r.count/max)*0.15;
         s.style.fontSize = (scale)+'rem';
@@ -338,7 +544,6 @@
       var empty=document.createElement('div'); empty.className='glass card-pad'; empty.style.color='var(--muted)'; empty.textContent='No questions yet. Be the first to ask!';
       root.appendChild(empty); return;
     }
-    // sort by votes desc
     var sorted=list.slice().sort(function(a,b){return b.votes-a.votes});
     sorted.forEach(function(q){
       var card=document.createElement('div'); card.className='glass qa-item';
@@ -347,23 +552,23 @@
       var author=document.createElement('strong'); author.textContent = q.author ? q.author : 'Anonymous';
       var votes=document.createElement('span'); votes.textContent='· '+q.votes+' votes';
       var btn=document.createElement('button'); btn.className='vote-btn'+(q.voted?' voted':''); btn.type='button';
-      btn.innerHTML='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M12 19l-7-7 1.4-1.4L12 16.2l5.6-5.6L19 12z"/><path d="M12 19V5"/></svg> '+(q.voted?'Voted':'Upvote');
-      // different icon: arrow up
       btn.innerHTML='<svg viewBox="0 0 24 24" fill="'+(q.voted?'currentColor':'none')+'" stroke="currentColor" stroke-width="1.8"><path d="M12 5l7 7-1.4 1.4L12 7.8 6.4 13.4 5 12z"/><path d="M12 5v14"/></svg> '+(q.voted?'Voted':'Upvote');
       btn.setAttribute('aria-pressed', q.voted?'true':'false');
       btn.setAttribute('aria-label', q.voted?'Already voted':'Upvote this question');
       if(q.voted) btn.disabled=true;
       btn.addEventListener('click', function(){
         if(btn.disabled) return;
-        btn.disabled=true;
+        vibrate(40);
         if(isOpen()){
           pendingVotes[q.id]={btn:btn, q:q, sorted:sorted};
           if(!wsSend({type:'vote', id:q.id})){
             delete pendingVotes[q.id];
+            enqueue({type:'vote', id:q.id});
             doVoteFetch(q, sorted, btn);
           }
           return;
         }
+        enqueue({type:'vote', id:q.id});
         doVoteFetch(q, sorted, btn);
       });
       meta.appendChild(author); meta.appendChild(votes); meta.appendChild(btn);
@@ -392,8 +597,39 @@
     });
   }
 
-  // Builds an input control for a question, used by the feedback form and
-  // anywhere else a value must be collected before submission.
+  function renderLeaderboard(entries){
+    var card=document.getElementById('leaderboard-card');
+    if(!card) return;
+    card.textContent='';
+    var h=document.createElement('h2'); h.className='section-title'; h.textContent='Leaderboard'; card.appendChild(h);
+    var sub=document.createElement('p'); sub.className='section-sub'; sub.textContent='Top 10 — points from quiz questions.'; card.appendChild(sub);
+    if(!entries || !entries.length){
+      var empty=document.createElement('div'); empty.style.color='var(--muted)'; empty.style.marginTop='14px'; empty.style.fontSize='.9rem'; empty.textContent='No scores yet — answer a quiz to get on the board!';
+      card.appendChild(empty); return;
+    }
+    var list=document.createElement('div'); list.style.display='grid'; list.style.gap='8px'; list.style.marginTop='14px';
+    entries.forEach(function(e){
+      var row=document.createElement('div'); row.className='lb-row';
+      var isMe = identity.name && e.name===identity.name || (e.emoji===identity.emoji && e.color===identity.color && e.points>0);
+      if(isMe) row.classList.add('is-me');
+      var rank=document.createElement('div'); rank.className='lb-rank'; rank.textContent=String(e.rank);
+      if(e.rank===1){ rank.style.background='linear-gradient(135deg,#F59E0B,#F43F5E)'; rank.style.color='#fff'; }
+      else if(e.rank===2){ rank.style.background='rgba(148,163,184,.25)'; }
+      else if(e.rank===3){ rank.style.background='rgba(180,83,9,.25)'; }
+      var avatar=document.createElement('div'); avatar.style.cssText='width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font-size:18px;flex-shrink:0;color:#fff';
+      avatar.style.background=e.color||'#6366F1'; avatar.textContent=e.emoji||'🙂';
+      var info=document.createElement('div'); info.style.flex='1'; info.style.minWidth='0';
+      var nm=document.createElement('div'); nm.style.fontWeight='700'; nm.style.whiteSpace='nowrap'; nm.style.overflow='hidden'; nm.style.textOverflow='ellipsis'; nm.textContent=e.name||'Anonymous';
+      var pts=document.createElement('div'); pts.style.color='var(--muted)'; pts.style.fontSize='.82rem'; pts.textContent=e.points+' pts';
+      info.appendChild(nm); info.appendChild(pts);
+      var score=document.createElement('div'); score.style.fontWeight='800'; score.style.letterSpacing='-.02em'; score.textContent=String(e.points);
+      row.appendChild(rank); row.appendChild(avatar); row.appendChild(info); row.appendChild(score);
+      list.appendChild(row);
+    });
+    card.appendChild(list);
+  }
+
+  // Builds an input control for a question
   function buildFeedbackControl(q, inputId){
     var el=document.createElement('div'); el.style.display='grid'; el.style.gap='8px';
     var i;
@@ -480,7 +716,6 @@
       paint(); el.appendChild(rlist);
       return { el:el, read:function(){ return touched ? JSON.stringify(order) : ''; }, clear:function(){ touched=false; } };
     }
-    // open, wordcloud and fallback
     var ta=document.createElement('textarea'); ta.className='textarea'; ta.id=inputId; ta.rows=3; ta.placeholder='Your answer…'; ta.maxLength = q.kind==='wordcloud' ? 200 : 500;
     el.appendChild(ta);
     return { el:el, read:function(){return ta.value.trim();}, clear:function(){ ta.value=''; } };
@@ -529,6 +764,7 @@
         items.push({q:q, ctl:ctl, val:val});
       });
       if(!items.length){ toast('Please fill at least one field','err'); return; }
+      vibrate(40);
       if(isOpen()){
         var waiting={}; var total=items.length;
         items.forEach(function(it){ waiting[it.q.id]=true; });
@@ -547,16 +783,61 @@
       }
       var tasks=[];
       items.forEach(function(it){
+        enqueue({type:'answer', question_id:it.q.id, value:it.val, client_uuid:genUUID()});
         tasks.push(fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:it.q.id, value:it.val})}).then(function(r){
           if(!r.ok) throw new Error('failed '+it.q.id);
           it.ctl.clear();
         }));
       });
       submit.disabled=true; submit.textContent='Sending\u2026';
-      Promise.all(tasks).then(function(){ toast('Feedback sent — thank you!'); }).catch(function(){ toast('Some answers failed to send','err'); }).finally(function(){ submit.disabled=false; submit.textContent='Submit feedback'; });
+      Promise.all(tasks).then(function(){ toast('Feedback sent — thank you!'); vibrate(40); }).catch(function(){ toast('Some answers failed to send','err'); }).finally(function(){ submit.disabled=false; submit.textContent='Submit feedback'; });
     });
     card.appendChild(form);
   }
+
+  // reaction bar
+  function initReactionBar(){
+    var wrap=document.getElementById('reaction-btns');
+    var countsEl=document.getElementById('reaction-counts');
+    if(!wrap) return;
+    wrap.textContent='';
+    var lastSend=0;
+    REACTION_EMOJIS.forEach(function(em){
+      var b=document.createElement('button'); b.type='button'; b.className='r-btn'; b.textContent=em; b.setAttribute('aria-label','React '+em);
+      b.addEventListener('click', function(){
+        var now=Date.now();
+        if(now-lastSend<80) return;
+        lastSend=now;
+        b.classList.add('pressed');
+        setTimeout(function(){ b.classList.remove('pressed'); }, 180);
+        if(isOpen()){
+          wsSend({type:'reaction', emoji:em});
+        }
+        spawnFloat(em);
+        // local haptic
+        vibrate(20);
+      });
+      wrap.appendChild(b);
+    });
+    // expose updater
+    window._qtUpdateReactions=function(data){
+      if(!countsEl) return;
+      countsEl.textContent='';
+      if(!data || !data.length) return;
+      data.forEach(function(r){
+        var s=document.createElement('span'); s.textContent=r.emoji+' '+r.count;
+        countsEl.appendChild(s);
+      });
+    };
+  }
+  function spawnFloat(emoji){
+    var root=document.getElementById('reaction-float');
+    if(!root) return;
+    var el=document.createElement('div'); el.className='float-emoji'; el.textContent=emoji;
+    root.appendChild(el);
+    setTimeout(function(){ if(el.parentNode) el.parentNode.removeChild(el); }, 1100);
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initReactionBar); else initReactionBar();
 
   // WebSocket live channel
   var ws=null; var wsBackoff=1000; var wsTimer=null;
@@ -568,46 +849,70 @@
   function handleWsMessage(m){
     if(!m || !m.type) return;
     if(m.type==='state' && m.data){ applyState(m.data); return; }
+    if(m.type==='reactions'){
+      if(window._qtUpdateReactions) window._qtUpdateReactions(m.data);
+      if(m.data && m.data.length){
+        // spawn one float for the most frequent
+        var top=m.data.slice().sort(function(a,b){return b.count-a.count;})[0];
+        if(top) spawnFloat(top.emoji);
+      }
+      return;
+    }
     if(m.type==='ping' && isOpen()){ wsSend({type:'pong'}); return; }
     if(m.type==='pong') return;
     if(m.type==='result'){
       if(m.for==='vote'){
         var pv=pendingVotes[m.id];
-        if(pv){ delete pendingVotes[m.id]; if(typeof m.votes==='number') pv.q.votes=m.votes; pv.q.voted=!!m.voted; renderQA(pv.sorted); toast('Upvoted — thanks!'); }
+        if(pv){ delete pendingVotes[m.id]; if(typeof m.votes==='number') pv.q.votes=m.votes; pv.q.voted=!!m.voted; renderQA(pv.sorted); toast('Upvoted — thanks!'); vibrate(40); pruneQueue(stateCache||{}); saveQueue(loadQueue().filter(function(x){ return !(x.type==='vote' && x.id===m.id);})); }
         return;
       }
       if(m.for==='answer'){
-        // feedback bulk takes precedence if pendingFeedback exists
         if(pendingFeedback && pendingFeedback.waiting[m.id||m.question_id]){
           delete pendingFeedback.waiting[m.id||m.question_id];
           var qidFb=m.id||m.question_id;
           var ctl=pendingFeedback.states[qidFb];
           if(ctl) ctl.clear();
           pendingFeedback.done++;
+          if(m.is_correct!==undefined) {
+            if(m.is_correct) { toast('Correct! +'+(m.points_awarded||0)+' pts'); vibrate([20,30,20]); } else { toast('Answer saved'); vibrate(40); }
+          }
           if(pendingFeedback.done>=pendingFeedback.total){
             toast('Feedback sent — thank you!');
             pendingFeedback.submit.textContent='Submit feedback';
             pendingFeedback.submit.disabled=false;
             pendingFeedback=null;
           }
-          // also handle single answer case keys
           if(pendingAnswers[qidFb]) delete pendingAnswers[qidFb];
           return;
         }
         var pa=pendingAnswers[m.id||m.question_id];
-        if(pa){ delete pendingAnswers[m.id||m.question_id]; toast('Answer sent!'); pa.btn.textContent='Sent \u2713'; }
+        if(pa){
+          delete pendingAnswers[m.id||m.question_id];
+          // quiz feedback
+          if(typeof m.is_correct==='boolean'){
+            if(m.is_correct){ toast('Correct! +'+(m.points_awarded||0)+' pts'); showQuizBanner(true, m.points_awarded||0); vibrate([20,30,20]); }
+            else { toast('Not this time'); showQuizBanner(false, 0); vibrate(40); }
+          } else {
+            toast('Answer sent!'); vibrate(40);
+          }
+          pa.btn.textContent='Sent \u2713';
+          // prune queue
+          var qid=m.id||m.question_id;
+          var qq=loadQueue().filter(function(x){ return !(x.type==='answer' && x.question_id===qid); });
+          saveQueue(qq);
+        }
         return;
       }
       if(m.for==='qa'){
-        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; toast('Question submitted — awaiting approval'); btn.disabled=false; btn.textContent='Submit question'; }
+        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; toast('Question submitted — awaiting approval'); vibrate(40); btn.disabled=false; btn.textContent='Submit question'; var qq2=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq2); }
         return;
       }
+      if(m.for==='identity'){ return; }
     }
     if(m.type==='error'){
       if(m.for==='vote'){
         var pv2=pendingVotes[m.id];
         if(pv2){ delete pendingVotes[m.id]; pv2.btn.disabled=false; toast(m.error||'Could not vote','err'); }
-        else if(m.id && pendingVotes[m.id]){ /* noop */ }
         return;
       }
       if(m.for==='answer'){
@@ -634,23 +939,33 @@
 
   function submitAnswer(qid, value, btn){
     var orig=btn.textContent; btn.disabled=true; btn.textContent='Sending\u2026';
+    var client_uuid=genUUID();
     if(isOpen()){
       pendingAnswers[qid]={btn:btn, orig:orig};
-      if(!wsSend({type:'answer', question_id:qid, value:value})){
+      if(!wsSend({type:'answer', question_id:qid, value:value, client_uuid:client_uuid})){
         delete pendingAnswers[qid];
-        doSubmitAnswerFetch(qid, value, btn, orig);
+        enqueue({type:'answer', question_id:qid, value:value, client_uuid:client_uuid});
+        doSubmitAnswerFetch(qid, value, btn, orig, client_uuid);
       }
       return;
     }
-    doSubmitAnswerFetch(qid, value, btn, orig);
+    enqueue({type:'answer', question_id:qid, value:value, client_uuid:client_uuid});
+    doSubmitAnswerFetch(qid, value, btn, orig, client_uuid);
   }
-  function doSubmitAnswerFetch(qid, value, btn, orig){
-    fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:qid, value:value})}).then(function(r){
+  function doSubmitAnswerFetch(qid, value, btn, orig, client_uuid){
+    fetch('/api/events/'+encodeURIComponent(code)+'/answers',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({question_id:qid, value:value, client_uuid:client_uuid})}).then(function(r){
       if(!r.ok) throw new Error('answer failed');
       return r.json();
-    }).then(function(){
-      toast('Answer sent!');
+    }).then(function(j){
+      if(typeof j.is_correct==='boolean'){
+        if(j.is_correct){ toast('Correct! +'+(j.points_awarded||0)+' pts'); showQuizBanner(true, j.points_awarded||0); vibrate([20,30,20]); }
+        else { toast('Not this time'); showQuizBanner(false,0); vibrate(40); }
+      } else {
+        toast('Answer sent!'); vibrate(40);
+      }
       btn.textContent='Sent \u2713';
+      var qq=loadQueue().filter(function(x){ return !(x.type==='answer' && x.question_id===qid); });
+      saveQueue(qq);
     }).catch(function(){ btn.disabled=false; btn.textContent=orig; toast('Could not submit answer','err'); });
   }
   function doVoteFetch(q, sorted, btn){
@@ -659,7 +974,9 @@
       return r.json();
     }).then(function(j){
       q.votes=j.votes; q.voted=true; renderQA(sorted);
-      toast('Upvoted — thanks!');
+      toast('Upvoted — thanks!'); vibrate(40);
+      var qq=loadQueue().filter(function(x){ return !(x.type==='vote' && x.id===q.id); });
+      saveQueue(qq);
     }).catch(function(){ btn.disabled=false; toast('Could not vote','err'); });
   }
 
@@ -669,7 +986,8 @@
     qaForm.addEventListener('submit', function(e){
       e.preventDefault();
       var body=document.getElementById('qa-body').value.trim();
-      var author=document.getElementById('qa-author').value.trim();
+      var authorRaw=document.getElementById('qa-author').value.trim();
+      var author = authorRaw || (identity.name||'');
       if(!body) return;
       var btn=qaForm.querySelector('button[type="submit"]');
       btn.disabled=true; btn.textContent='Submitting\u2026';
@@ -679,15 +997,18 @@
           pendingQA=null;
           btn.disabled=false; btn.textContent='Submit question';
           toast('Could not submit question','err');
+          enqueue({type:'qa', body:body, author:author});
         }
         return;
       }
+      enqueue({type:'qa', body:body, author:author});
       fetch('/api/events/'+encodeURIComponent(code)+'/qa',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:body, author:author})}).then(function(r){
         if(!r.ok) throw new Error('qa failed');
         return r.json();
       }).then(function(j){
         document.getElementById('qa-body').value=''; document.getElementById('qa-author').value='';
-        toast(j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!');
+        toast(j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!'); vibrate(40);
+        var qq=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq);
         fetchState();
       }).catch(function(){ toast('Could not submit question','err'); }).finally(function(){ btn.disabled=false; btn.textContent='Submit question'; });
     });
@@ -699,8 +1020,10 @@
     if(data.event) renderEvent(data.event);
     renderLive(data.active_question || null);
     renderQA(data.qa || []);
-    // slides are fetched separately but state may not include; fetch via presentations endpoint
     renderFeedback(data.feedback || {open:false, questions:[]}, data.event);
+    renderLeaderboard(data.leaderboard || []);
+    if(data.me) applyMe(data.me);
+    pruneQueue(data);
   }
 
   function fetchState(){
@@ -713,7 +1036,6 @@
       card.textContent=''; var p=document.createElement('p'); p.style.color='var(--muted)'; p.textContent='Could not load event. Check the link and try again.';
       card.appendChild(p);
     });
-    // also fetch presentations
     fetch('/api/events/'+encodeURIComponent(code)+'/presentations',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){ renderSlides(Array.isArray(j)?j:[]); }).catch(function(){});
     return p;
   }
@@ -722,7 +1044,7 @@
     if(!code || typeof WebSocket==='undefined') return;
     if(wsTimer){ clearTimeout(wsTimer); wsTimer=null; }
     try{ ws=new WebSocket(wsUrl()); }catch(e){ return; }
-    ws.onopen=function(){ wsBackoff=1000; };
+    ws.onopen=function(){ wsBackoff=1000; sendIdentity(); flushQueue(); };
     ws.onmessage=function(ev){
       try{ var m=JSON.parse(ev.data); handleWsMessage(m); }catch(err){}
     };

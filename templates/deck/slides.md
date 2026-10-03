@@ -48,3 +48,13 @@ Opt-in presenter panel: author questions (with photos/video) from the slides.
 Press "p" to toggle, or add `fab` for a small on-screen button.
 <PresenterPanel />
 -->
+
+<!--
+Reactions overlay — floating emoji from the audience (full-bleed, no config needed beyond room/event).
+<LiveReactions />
+-->
+
+<!--
+Leaderboard — top participants by quiz points.
+<Leaderboard :limit="10" title="Leaderboard" />
+-->

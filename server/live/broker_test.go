@@ -11,11 +11,11 @@ func TestMultipleSubscribers(t *testing.T) {
 	ch2, _ := b.Subscribe("ev")
 	ch3, _ := b.Subscribe("ev")
 	b.Broadcast("ev", []byte("hello"))
-	for i, ch := range []<-chan []byte{ch1, ch2, ch3} {
+	for i, ch := range []<-chan Frame{ch1, ch2, ch3} {
 		select {
 		case v := <-ch:
-			if string(v) != "hello" {
-				t.Fatalf("sub %d got %q", i, v)
+			if string(v.Data) != "hello" || v.Kind != KindRefresh {
+				t.Fatalf("sub %d got %q kind %q", i, v.Data, v.Kind)
 			}
 		case <-time.After(200 * time.Millisecond):
 			t.Fatalf("sub %d timeout", i)
@@ -39,7 +39,6 @@ func TestUnsubscribeStopsDelivery(t *testing.T) {
 	case <-time.After(50 * time.Millisecond):
 		t.Fatalf("channel not closed after unsubscribe")
 	}
-	// ensure no panic broadcasting after unsubscribe
 	b.Broadcast("ev", []byte("y"))
 }
 
@@ -47,7 +46,7 @@ func TestUnsubscribeIdempotent(t *testing.T) {
 	b := New()
 	_, unsub := b.Subscribe("ev")
 	unsub()
-	unsub() // should not panic
+	unsub()
 	unsub()
 	if n := b.Subscribers("ev"); n != 0 {
 		t.Fatalf("expected 0 got %d", n)
@@ -57,11 +56,9 @@ func TestUnsubscribeIdempotent(t *testing.T) {
 func TestDropNewest(t *testing.T) {
 	b := New()
 	ch, _ := b.Subscribe("ev")
-	// don't read, broadcast 20
 	for i := range 20 {
 		b.Broadcast("ev", []byte{byte(i)})
 	}
-	// drain
 	var got [][]byte
 loop:
 	for {
@@ -70,7 +67,7 @@ loop:
 			if !ok {
 				break loop
 			}
-			got = append(got, v)
+			got = append(got, v.Data)
 			if len(got) > 20 {
 				t.Fatal("too many")
 			}
@@ -81,7 +78,6 @@ loop:
 	if len(got) != 16 {
 		t.Fatalf("expected 16 got %d", len(got))
 	}
-	// should be first 16
 	for i, v := range got {
 		if v[0] != byte(i) {
 			t.Fatalf("idx %d expected %d got %d", i, i, v[0])
@@ -123,8 +119,7 @@ func TestClose(t *testing.T) {
 	ch1, _ := b.Subscribe("ev")
 	ch2, _ := b.Subscribe("other")
 	b.Close()
-	// channels should be closed
-	for i, ch := range []<-chan []byte{ch1, ch2} {
+	for i, ch := range []<-chan Frame{ch1, ch2} {
 		select {
 		case _, ok := <-ch:
 			if ok {
@@ -134,9 +129,7 @@ func TestClose(t *testing.T) {
 			t.Fatalf("ch %d not closed", i)
 		}
 	}
-	// Broadcast after close is no-op no panic
 	b.Broadcast("ev", []byte("x"))
-	// Subscribe after close returns closed channel
 	ch3, unsub := b.Subscribe("ev")
 	select {
 	case _, ok := <-ch3:
@@ -146,8 +139,8 @@ func TestClose(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("Subscribe after Close didn't return closed channel")
 	}
-	unsub()   // idempotent no panic
-	b.Close() // idempotent
+	unsub()
+	b.Close()
 	b.Broadcast("ev", nil)
 }
 
@@ -159,8 +152,8 @@ func TestPayloadCopied(t *testing.T) {
 	payload[0] = 'X'
 	select {
 	case v := <-ch:
-		if string(v) != "hello" {
-			t.Fatalf("expected copy got %q", v)
+		if string(v.Data) != "hello" {
+			t.Fatalf("expected copy got %q", v.Data)
 		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatal("timeout")

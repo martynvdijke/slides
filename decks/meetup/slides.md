@@ -455,3 +455,9 @@ class: "bg-white px-12 py-10"
 <!--
 Stay in touch — three channels, bold prefix as in original.
 -->
+
+<!--
+<LiveReactions />
+<Leaderboard :limit="10" />
+<PresenterPanel />
+-->

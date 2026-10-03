@@ -64,6 +64,7 @@
       <button type="button" data-view="qa"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 11.5a8.5 8.5 0 01-12 7.7L3 21l1.8-6A8.5 8.5 0 0121 11.5z"/></svg> Q&amp;A</button>
       <button type="button" data-view="slides"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg> Slides</button>
       <button type="button" data-view="results"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 20V10"/><path d="M12 20V4"/><path d="M6 20v-6"/></svg> Results</button>
+      <button type="button" data-view="leaderboard"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 21h8"/><path d="M12 17a4 4 0 004-4V5H8v8a4 4 0 004 4z"/><path d="M5 8H3a4 4 0 004 4"/><path d="M19 8h2a4 4 0 01-4 4"/></svg> Leaderboard</button>
       <button type="button" data-view="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg> Stats</button>
       <button type="button" data-view="settings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/></svg> Settings</button>
     </nav>
@@ -140,6 +141,10 @@
             <div id="aq-media-preview" class="mt-2 hidden"></div>
             <div class="mt-2"><button type="button" class="btn btn-ghost btn-small hidden" id="aq-media-clear">Remove media</button></div>
           </div>
+          <div id="aq-scoring-wrap" class="form-row cols2">
+            <div class="field"><label for="aq-correct">Correct answer</label><select id="aq-correct" class="select"><option value="">— Not scored —</option></select></div>
+            <div class="field"><label for="aq-points">Base points</label><input id="aq-points" class="input" type="number" min="10" max="10000" step="10" value="100" placeholder="100"></div>
+          </div>
           <div class="form-row cols2">
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-feedback"> <span class="text-[0.88rem]">Is feedback</span></label>
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-show" checked> <span class="text-[0.88rem]">Show results</span></label>
@@ -180,6 +185,19 @@
         <h3 class="section-title text-[1rem]">Feedback summary</h3>
         <div id="feedback-summary" class="mt-3 text-[#9AA0B8] text-[0.9rem]">—</div>
       </div>
+    </section>
+
+    <!-- Leaderboard panel -->
+    <section data-panel="leaderboard" class="hidden" aria-labelledby="lb-title">
+      <div class="admin-top">
+        <div><h2 id="lb-title" class="section-title">Leaderboard</h2><p class="section-sub">Top participants by quiz points. Refresh or keep open — it updates when results come in.</p></div>
+        <div class="inline">
+          <span class="pill" id="lb-count">—</span>
+          <button class="btn btn-ghost btn-small" type="button" id="btn-refresh-leaderboard">Refresh</button>
+        </div>
+      </div>
+      <div id="leaderboard-list" class="stack"></div>
+      <div class="text-[#9AA0B8] text-[0.8rem] mt-3" id="lb-live">Live: off</div>
     </section>
 
     <!-- Stats panel -->

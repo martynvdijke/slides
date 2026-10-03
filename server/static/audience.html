@@ -37,11 +37,27 @@
     <button class="tab" role="tab" aria-selected="false" data-tab="feedback" id="tab-feedback">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 20l-7 2 2-7a8 8 0 1112 0L12 20z"/><path d="M9 10h6"/><path d="M9 14h4"/></svg> Feedback
     </button>
+    <button class="tab" role="tab" aria-selected="false" data-tab="leaderboard" id="tab-leaderboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 20V14"/><path d="M12 20V8"/><path d="M16 20v-10"/><path d="M4 20h16"/></svg> Board
+    </button>
+  </div>
+  <!-- identity pill -->
+  <div id="identity-bar" class="glass" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:10px 14px;border-radius:14px;margin-top:12px">
+    <div id="identity-avatar" style="width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:18px;flex-shrink:0;background:#6366F1;color:#fff">🙂</div>
+    <input id="identity-name" class="input" placeholder="Your name" maxlength="24" style="flex:1;min-width:120px;max-width:190px;height:36px" aria-label="Your display name">
+    <div id="identity-emoji-pick" style="display:flex;gap:4px;flex-wrap:wrap"></div>
+    <div id="identity-color-pick" style="display:flex;gap:6px;flex-wrap:wrap"></div>
+    <button id="identity-save" class="btn btn-ghost btn-small" type="button">Save</button>
   </div>
 
   <div class="py-3.5 pb-10">
     <section class="grid gap-3.5" role="tabpanel" id="panel-live" aria-labelledby="tab-live">
       <div class="glass card-pad" id="live-card" aria-live="polite"></div>
+      <div id="reaction-bar" class="glass" style="display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;padding:10px 12px;border-radius:14px">
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="reaction-btns"></div>
+        <div id="reaction-counts" style="display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem;color:var(--muted)"></div>
+      </div>
+      <div id="quiz-banner" style="display:none" class="glass card-pad"></div>
     </section>
 
     <section class="grid gap-3.5 hidden" role="tabpanel" id="panel-qa" aria-labelledby="tab-qa">
@@ -68,10 +84,31 @@
     <section class="grid gap-3.5 hidden" role="tabpanel" id="panel-feedback" aria-labelledby="tab-feedback">
       <div class="glass card-pad" id="feedback-card"></div>
     </section>
+
+    <section class="grid gap-3.5 hidden" role="tabpanel" id="panel-leaderboard" aria-labelledby="tab-leaderboard">
+      <div class="glass card-pad" id="leaderboard-card"></div>
+    </section>
   </div>
 </main>
 
 <div id="toast-root" aria-live="polite" aria-atomic="true"></div>
+<div id="reaction-float" aria-hidden="true" style="position:fixed;left:0;right:0;bottom:90px;pointer-events:none;display:flex;justify-content:center;z-index:40"></div>
+<style>
+  #identity-bar .color-dot{width:26px;height:26px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .15s, border-color .15s}
+  #identity-bar .color-dot.selected{border-color:#fff;transform:scale(1.15);box-shadow:0 0 0 2px rgba(255,255,255,.35)}
+  #identity-bar .emoji-dot{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:rgba(255,255,255,.06);cursor:pointer;display:grid;place-items:center;font-size:16px;transition:transform .12s, background .12s}
+  #identity-bar .emoji-dot.selected{background:rgba(124,107,255,.22);border-color:#7C6BFF;transform:scale(1.05)}
+  #reaction-bar .r-btn{width:44px;height:44px;border-radius:12px;border:1px solid var(--border);background:rgba(255,255,255,.06);font-size:20px;cursor:pointer;display:grid;place-items:center;transition:transform .12s, background .12s}
+  #reaction-bar .r-btn:active{transform:scale(.88)}
+  #reaction-bar .r-btn.pressed{transform:scale(1.18);background:rgba(124,107,255,.22)}
+  #reaction-float .float-emoji{font-size:28px;animation:floatUp 1.1s ease forwards}
+  @keyframes floatUp{0%{transform:translateY(8px) scale(.9);opacity:0}15%{opacity:1}100%{transform:translateY(-44px) scale(1.1);opacity:0}}
+  #quiz-banner.show{display:block!important;animation:slideIn .22s ease}
+  @keyframes slideIn{from{opacity:0;transform:translateY(6px)}}
+  .lb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--border)}
+  .lb-rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.82rem;background:rgba(124,107,255,.2);color:#C4B5FD;flex-shrink:0}
+  .lb-row.is-me{border-color:#7C6BFF;background:rgba(124,107,255,.14)}
+</style>
 <script src="/app.js"></script>
 </body>
 </html>

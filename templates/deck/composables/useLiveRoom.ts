@@ -39,6 +39,10 @@ export interface LiveQuestion {
   is_feedback?: boolean
   answered?: boolean
   nps?: number
+  correct_index?: number | null
+  points_base?: number
+  my_correct?: boolean | null
+  my_points?: number
 }
 
 export interface LiveEvent {
@@ -56,6 +60,31 @@ interface QAItem {
   author: string
   votes: number
   voted?: boolean
+}
+
+export interface ReactionCount {
+  emoji: string
+  count: number
+}
+
+export interface LeaderboardEntry {
+  rank: number
+  name: string
+  emoji: string
+  color: string
+  points: number
+}
+
+export interface Me {
+  name: string
+  emoji: string
+  color: string
+}
+
+export interface AnswerResult {
+  is_correct: boolean | null
+  points_awarded: number
+  total_points: number
 }
 
 type Value<T> = T | Ref<T>
@@ -80,6 +109,8 @@ function trimSlash(s: string): string {
 class RoomClient {
   state = ref<any>(null)
   connected = ref(false)
+  reactions = ref<ReactionCount[]>([])
+  answerResult = ref<AnswerResult | null>(null)
   private ws: WebSocket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private backoff = 1000
@@ -125,7 +156,37 @@ class RoomClient {
       ws.onmessage = (ev: MessageEvent) => {
         try {
           const m = JSON.parse(ev.data)
-          if (m && m.type === 'state') this.state.value = m.data
+          if (!m || typeof m.type !== 'string') return
+          if (m.type === 'state' && m.data) {
+            this.state.value = m.data
+            // also update answer-result fields from state if present
+            const aq = m.data?.active_question
+            if (aq && typeof aq.my_correct !== 'undefined') {
+              // keep answerResult in sync when state carries scoring
+              if (aq.my_correct !== null && aq.my_correct !== undefined) {
+                this.answerResult.value = {
+                  is_correct: aq.my_correct ?? null,
+                  points_awarded: aq.my_points ?? 0,
+                  total_points: m.data?.me_total_points ?? this.answerResult.value?.total_points ?? 0,
+                }
+              }
+            }
+          } else if (m.type === 'reactions' && Array.isArray(m.data)) {
+            this.reactions.value = m.data as ReactionCount[]
+          } else if (m.type === 'result' && m.for === 'answer' && m.data) {
+            const d = m.data
+            if (typeof d.is_correct !== 'undefined' || typeof d.points_awarded !== 'undefined') {
+              this.answerResult.value = {
+                is_correct: d.is_correct ?? null,
+                points_awarded: d.points_awarded ?? 0,
+                total_points: d.total_points ?? 0,
+              }
+            }
+          } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
+            // ignore / keep connected
+          } else {
+            // unknown type — ignore for backward compat
+          }
         } catch {
           /* ignore malformed frames */
         }
@@ -164,6 +225,13 @@ class RoomClient {
     } catch {
       /* offline; the join card still renders */
     }
+  }
+
+  sendIdentity(name: string, emoji: string, color: string) {
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
+    try {
+      this.ws.send(JSON.stringify({ type: 'identity', name, emoji, color }))
+    } catch {}
   }
 
   dispose() {
@@ -266,10 +334,20 @@ export function useLiveRoom(options: {
   const qrSrc = computed(() => (code.value ? trimSlash(baseUrl.value) + '/api/events/' + encodeURIComponent(code.value) + '/qr.png' : ''))
   const joinPageUrl = computed(() => trimSlash(baseUrl.value) + '/join')
 
+  // new streams
+  const reactions = computed<ReactionCount[]>(() => client.value?.reactions.value ?? [])
+  const leaderboard = computed<LeaderboardEntry[]>(() => state.value?.leaderboard ?? [])
+  const me = computed<Me | null>(() => state.value?.me ?? null)
+  const answerResult = computed<AnswerResult | null>(() => client.value?.answerResult.value ?? null)
+
   function mediaUrl(raw?: string): string {
     if (!raw) return ''
     if (/^https?:\/\//.test(raw)) return raw
     return trimSlash(baseUrl.value) + (raw.startsWith('/') ? raw : '/' + raw)
+  }
+
+  function sendIdentity(name: string, emoji: string, color: string) {
+    client.value?.sendIdentity(name, emoji, color)
   }
 
   return {
@@ -286,5 +364,10 @@ export function useLiveRoom(options: {
     joinPageUrl,
     qrSrc,
     mediaUrl,
+    reactions,
+    leaderboard,
+    me,
+    answerResult,
+    sendIdentity,
   }
 }

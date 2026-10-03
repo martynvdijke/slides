@@ -59,25 +59,29 @@ type EventDTO struct {
 }
 
 type QuestionDTO struct {
-	ID          int64       `json:"id"`
-	EventID     int64       `json:"event_id"`
-	Kind        string      `json:"kind"`
-	Mode        string      `json:"mode"`
-	Prompt      string      `json:"prompt"`
-	Options     []string    `json:"options"`
-	Position    int         `json:"position"`
-	Status      string      `json:"status"`
-	ShowResults bool        `json:"show_results"`
-	IsFeedback  bool        `json:"is_feedback"`
-	Results     []db.Result `json:"results"`
-	Total       int         `json:"total"`
-	Respondents int         `json:"respondents"`
-	NPS         *int        `json:"nps,omitempty"`
-	MediaURL    string      `json:"media_url"`
-	MediaType   string      `json:"media_type"`
-	MyAnswer    string      `json:"my_answer"`
-	Answered    bool        `json:"answered"`
-	CreatedAt   string      `json:"created_at,omitempty"`
+	ID           int64       `json:"id"`
+	EventID      int64       `json:"event_id"`
+	Kind         string      `json:"kind"`
+	Mode         string      `json:"mode"`
+	Prompt       string      `json:"prompt"`
+	Options      []string    `json:"options"`
+	Position     int         `json:"position"`
+	Status       string      `json:"status"`
+	ShowResults  bool        `json:"show_results"`
+	IsFeedback   bool        `json:"is_feedback"`
+	Results      []db.Result `json:"results"`
+	Total        int         `json:"total"`
+	Respondents  int         `json:"respondents"`
+	NPS          *int        `json:"nps,omitempty"`
+	MediaURL     string      `json:"media_url"`
+	MediaType    string      `json:"media_type"`
+	MyAnswer     string      `json:"my_answer"`
+	Answered     bool        `json:"answered"`
+	CreatedAt    string      `json:"created_at,omitempty"`
+	CorrectIndex *int        `json:"correct_index,omitempty"`
+	PointsBase   int         `json:"points_base"`
+	MyCorrect    *bool       `json:"my_correct,omitempty"`
+	MyPoints     int         `json:"my_points"`
 }
 
 // MediaDTO describes an uploaded question media file.
@@ -113,11 +117,19 @@ type FeedbackDTO struct {
 	Questions []QuestionDTO `json:"questions"`
 }
 
+type MeDTO struct {
+	Name  string `json:"name"`
+	Emoji string `json:"emoji"`
+	Color string `json:"color"`
+}
+
 type StateDTO struct {
-	Event          EventDTO     `json:"event"`
-	ActiveQuestion *QuestionDTO `json:"active_question"`
-	QA             []QADTO      `json:"qa"`
-	Feedback       FeedbackDTO  `json:"feedback"`
+	Event          EventDTO              `json:"event"`
+	ActiveQuestion *QuestionDTO          `json:"active_question"`
+	QA             []QADTO               `json:"qa"`
+	Feedback       FeedbackDTO           `json:"feedback"`
+	Leaderboard    []db.LeaderboardEntry `json:"leaderboard"`
+	Me             MeDTO                 `json:"me"`
 }
 
 type AnalyticsDTO struct {
@@ -333,6 +345,13 @@ func questionDTO(q db.Question, withResults bool) QuestionDTO {
 		MediaURL:    q.MediaURL,
 		MediaType:   q.MediaType,
 		CreatedAt:   q.CreatedAt.Format(time.RFC3339),
+		PointsBase:  q.PointsBase,
+	}
+	if dto.PointsBase == 0 {
+		dto.PointsBase = 100
+	}
+	if q.ShowResults {
+		dto.CorrectIndex = q.CorrectIndex
 	}
 	if dto.Options == nil {
 		dto.Options = []string{}
@@ -402,9 +421,11 @@ func analyticsDTO(a *db.AnalyticsSettings) AnalyticsDTO {
 func BuildState(ev *db.Event, participantID int64) StateDTO {
 	brand, _ := db.GetBranding()
 	state := StateDTO{
-		Event:    eventDTO(ev, brand),
-		QA:       []QADTO{},
-		Feedback: FeedbackDTO{Open: ev.FeedbackOpen, Questions: []QuestionDTO{}},
+		Event:       eventDTO(ev, brand),
+		QA:          []QADTO{},
+		Feedback:    FeedbackDTO{Open: ev.FeedbackOpen, Questions: []QuestionDTO{}},
+		Leaderboard: []db.LeaderboardEntry{},
+		Me:          MeDTO{Name: "Anonymous", Emoji: "🙂", Color: "#6366F1"},
 	}
 
 	if q, err := db.GetActiveQuestion(ev.ID); err == nil && q != nil {
@@ -413,6 +434,8 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 			if a, err := db.GetAnswer(q.ID, participantID); err == nil && a != nil {
 				dto.Answered = true
 				dto.MyAnswer = a.Value
+				dto.MyCorrect = a.IsCorrect
+				dto.MyPoints = a.PointsAwarded
 			}
 		}
 		state.ActiveQuestion = &dto
@@ -431,6 +454,23 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 	if fq, err := db.ListFeedbackQuestions(ev.ID); err == nil {
 		for _, q := range fq {
 			state.Feedback.Questions = append(state.Feedback.Questions, questionDTO(q, false))
+		}
+	}
+
+	if lb, err := db.GetLeaderboard(ev.ID); err == nil {
+		state.Leaderboard = lb
+	}
+	if participantID > 0 {
+		if p, err := db.GetParticipantByID(participantID); err == nil && p != nil {
+			if p.DisplayName != "" {
+				state.Me.Name = p.DisplayName
+			}
+			if p.Emoji != "" {
+				state.Me.Emoji = p.Emoji
+			}
+			if p.Color != "" {
+				state.Me.Color = p.Color
+			}
 		}
 	}
 

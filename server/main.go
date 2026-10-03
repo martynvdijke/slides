@@ -84,6 +84,7 @@ func main() {
 	mux.HandleFunc("GET /api/events/{code}/presentations", handlers.ListPublicPresentations)
 	mux.HandleFunc("GET /api/events/{code}/presentations/{id}/download", handlers.DownloadPresentation)
 	mux.HandleFunc("GET /api/events/{code}/qr.png", handlers.EventQR)
+	mux.HandleFunc("GET /api/events/{code}/leaderboard", handlers.PublicGetLeaderboard)
 	mux.HandleFunc("GET /api/join/{room}", handlers.ResolveRoom)
 	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 
@@ -110,6 +111,7 @@ func main() {
 	adminMux.HandleFunc("POST /api/admin/events/{id}/presentations", handlers.AdminUploadPresentation)
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/presentations/{pid}", handlers.AdminDeletePresentation)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/export.csv", handlers.AdminExportCSV)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/leaderboard", handlers.AdminGetLeaderboard)
 	adminMux.HandleFunc("GET /api/admin/stats", handlers.AdminGetStats)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/stats", handlers.AdminGetEventStats)
 	adminMux.HandleFunc("GET /api/admin/settings/analytics", handlers.AdminGetAnalyticsSettings)
@@ -144,6 +146,10 @@ func main() {
 	mux.HandleFunc("GET /live/{code}", page("live.html"))
 	mux.HandleFunc("GET /admin", page("admin.html"))
 	mux.HandleFunc("GET /join", page("join.html"))
+	// Exact root landing: Host/Audience split entry. The pattern /{$} matches
+	// only "/", so deck subpaths (e.g. /meetup/) and assets still fall through
+	// to the catch-all file server below.
+	mux.HandleFunc("GET /{$}", page("entry.html"))
 	// SPA assets live at the site root, next to the built decks.
 	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "tailwind.css", "logo.svg"} {
 		mux.HandleFunc("GET /"+asset, page(asset))

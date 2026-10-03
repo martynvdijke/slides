@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 	"unicode/utf8"
 
@@ -70,23 +71,26 @@ type QuestionStats struct {
 }
 
 type Question struct {
-	ID          int64
-	EventID     int64
-	Kind        string
-	Mode        string
-	Prompt      string
-	Options     []string
-	Position    int
-	Status      string
-	ShowResults bool
-	IsFeedback  bool
-	MediaURL    string
-	MediaType   string
-	CreatedAt   time.Time
-	Results     []Result `json:"results"`
-	Total       int      `json:"total"`
-	Respondents int      `json:"respondents"`
-	NPS         *int     `json:"nps,omitempty"`
+	ID           int64
+	EventID      int64
+	Kind         string
+	Mode         string
+	Prompt       string
+	Options      []string
+	Position     int
+	Status       string
+	ShowResults  bool
+	IsFeedback   bool
+	MediaURL     string
+	MediaType    string
+	CreatedAt    time.Time
+	Results      []Result `json:"results"`
+	Total        int      `json:"total"`
+	Respondents  int      `json:"respondents"`
+	NPS          *int     `json:"nps,omitempty"`
+	CorrectIndex *int
+	PointsBase   int
+	ActivatedAt  *int64
 }
 
 type QAQuestion struct {
@@ -115,10 +119,14 @@ type OTelSettings struct {
 }
 
 type Participant struct {
-	ID        int64
-	EventID   int64
-	Token     string
-	CreatedAt time.Time
+	ID          int64
+	EventID     int64
+	Token       string
+	CreatedAt   time.Time
+	DisplayName string
+	Emoji       string
+	Color       string
+	LastSeen    int64
 }
 
 type Answer struct {
@@ -127,6 +135,10 @@ type Answer struct {
 	ParticipantID int64
 	Value         string
 	CreatedAt     time.Time
+	IsCorrect     *bool
+	PointsAwarded int
+	ElapsedMs     *int
+	ClientUUID    *string
 }
 
 var DB *sql.DB
@@ -282,6 +294,39 @@ func migrate() error {
 		return err
 	}
 	if err := backfillRoomCodes(); err != nil {
+		return err
+	}
+	// quiz/identity migrations
+	for _, col := range []struct{ name, ddl string }{
+		{"correct_index", "correct_index INTEGER"},
+		{"points_base", "points_base INTEGER NOT NULL DEFAULT 100"},
+		{"activated_at", "activated_at INTEGER"},
+	} {
+		if err := ensureColumn("questions", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"is_correct", "is_correct INTEGER"},
+		{"points_awarded", "points_awarded INTEGER NOT NULL DEFAULT 0"},
+		{"elapsed_ms", "elapsed_ms INTEGER"},
+		{"client_uuid", "client_uuid TEXT"},
+	} {
+		if err := ensureColumn("answers", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"display_name", "display_name TEXT"},
+		{"emoji", "emoji TEXT"},
+		{"color", "color TEXT"},
+		{"last_seen", "last_seen INTEGER"},
+	} {
+		if err := ensureColumn("participants", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_client_uuid ON answers(client_uuid) WHERE client_uuid IS NOT NULL"); err != nil {
 		return err
 	}
 	return nil
@@ -700,7 +745,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	var q Question
 	var opts, ca string
 	var sr, fb int
-	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca)
+	var ci, aa sql.NullInt64
+	var pb sql.NullInt64
+	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa)
 	if err != nil {
 		return nil, err
 	}
@@ -710,6 +757,19 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	_ = json.Unmarshal([]byte(opts), &q.Options)
 	if q.Options == nil {
 		q.Options = []string{}
+	}
+	if ci.Valid {
+		v := int(ci.Int64)
+		q.CorrectIndex = &v
+	}
+	if pb.Valid {
+		q.PointsBase = int(pb.Int64)
+	} else {
+		q.PointsBase = 100
+	}
+	if aa.Valid {
+		v := aa.Int64
+		q.ActivatedAt = &v
 	}
 	return &q, nil
 }
@@ -730,7 +790,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	var q Question
 	var opts, ca string
 	var sr, fb int
-	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca)
+	var ci, aa sql.NullInt64
+	var pb sql.NullInt64
+	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa)
 	if err != nil {
 		return nil, err
 	}
@@ -740,6 +802,19 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	_ = json.Unmarshal([]byte(opts), &q.Options)
 	if q.Options == nil {
 		q.Options = []string{}
+	}
+	if ci.Valid {
+		v := int(ci.Int64)
+		q.CorrectIndex = &v
+	}
+	if pb.Valid {
+		q.PointsBase = int(pb.Int64)
+	} else {
+		q.PointsBase = 100
+	}
+	if aa.Valid {
+		v := aa.Int64
+		q.ActivatedAt = &v
 	}
 	fillQuestionStats(&q)
 	return &q, nil
@@ -762,7 +837,7 @@ func CreateQuestion(eventID int64, kind, mode, prompt string, options []string, 
 }
 
 func ListQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -785,7 +860,7 @@ func ListQuestions(eventID int64) ([]Question, error) {
 }
 
 func ListFeedbackQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -808,22 +883,25 @@ func ListFeedbackQuestions(eventID int64) ([]Question, error) {
 }
 
 func GetQuestion(id int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at FROM questions WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE id=?", id)
 	return scanQuestionRow(row)
 }
 
 func UpdateQuestion(id int64, fields map[string]any) (*Question, error) {
 	allowed := map[string]string{
-		"prompt":       "prompt",
-		"options":      "options",
-		"position":     "position",
-		"show_results": "show_results",
-		"is_feedback":  "is_feedback",
-		"kind":         "kind",
-		"mode":         "mode",
-		"status":       "status",
-		"media_url":    "media_url",
-		"media_type":   "media_type",
+		"prompt":        "prompt",
+		"options":       "options",
+		"position":      "position",
+		"show_results":  "show_results",
+		"is_feedback":   "is_feedback",
+		"kind":          "kind",
+		"mode":          "mode",
+		"status":        "status",
+		"media_url":     "media_url",
+		"media_type":    "media_type",
+		"correct_index": "correct_index",
+		"points_base":   "points_base",
+		"activated_at":  "activated_at",
 	}
 	var sets []string
 	var args []any
@@ -900,7 +978,8 @@ func ActivateQuestion(eventID, questionID int64) error {
 	if err != nil {
 		return err
 	}
-	_, err = tx.Exec("UPDATE questions SET status='live' WHERE id=? AND event_id=?", questionID, eventID)
+	nowMs := time.Now().UnixMilli()
+	_, err = tx.Exec("UPDATE questions SET status='live', activated_at=? WHERE id=? AND event_id=?", nowMs, questionID, eventID)
 	if err != nil {
 		return err
 	}
@@ -920,7 +999,7 @@ func CloseQuestion(eventID, questionID int64) error {
 }
 
 func GetActiveQuestion(eventID int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at FROM questions WHERE event_id=? AND status='live' LIMIT 1", eventID)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at FROM questions WHERE event_id=? AND status='live' LIMIT 1", eventID)
 	q, err := scanQuestionRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -1292,11 +1371,30 @@ func orderedResults(opts []string, counts map[string]int) []Result {
 func GetAnswer(questionID, participantID int64) (*Answer, error) {
 	var a Answer
 	var ca string
-	err := DB.QueryRow("SELECT id, question_id, participant_id, value, created_at FROM answers WHERE question_id=? AND participant_id=?", questionID, participantID).Scan(&a.ID, &a.QuestionID, &a.ParticipantID, &a.Value, &ca)
+	var ic sql.NullInt64
+	var pa sql.NullInt64
+	var em sql.NullInt64
+	var cu sql.NullString
+	err := DB.QueryRow("SELECT id, question_id, participant_id, value, created_at, is_correct, points_awarded, elapsed_ms, client_uuid FROM answers WHERE question_id=? AND participant_id=?", questionID, participantID).Scan(&a.ID, &a.QuestionID, &a.ParticipantID, &a.Value, &ca, &ic, &pa, &em, &cu)
 	if err != nil {
 		return nil, err
 	}
 	a.CreatedAt = parseTimePragmatic(ca)
+	if ic.Valid {
+		v := ic.Int64 != 0
+		a.IsCorrect = &v
+	}
+	if pa.Valid {
+		a.PointsAwarded = int(pa.Int64)
+	}
+	if em.Valid {
+		v := int(em.Int64)
+		a.ElapsedMs = &v
+	}
+	if cu.Valid {
+		v := cu.String
+		a.ClientUUID = &v
+	}
 	return &a, nil
 }
 
@@ -1304,6 +1402,122 @@ func CountAnswers(questionID int64) (int, error) {
 	var n int
 	err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE question_id=?", questionID).Scan(&n)
 	return n, err
+}
+
+// UpsertAnswerWithScoring inserts or updates an answer with scoring and optional client_uuid dedup.
+// Returns is_correct, points_awarded, total_points.
+func UpsertAnswerWithScoring(questionID, participantID int64, value string, clientUUID string) (bool, int, int, error) {
+	if clientUUID != "" {
+		var exists int
+		err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE client_uuid=?", clientUUID).Scan(&exists)
+		if err == nil && exists > 0 {
+			// duplicate, return existing scoring
+			var ic sql.NullInt64
+			var pa sql.NullInt64
+			_ = DB.QueryRow("SELECT is_correct, points_awarded FROM answers WHERE client_uuid=?", clientUUID).Scan(&ic, &pa)
+			correct := false
+			if ic.Valid && ic.Int64 != 0 {
+				correct = true
+			}
+			pts := 0
+			if pa.Valid {
+				pts = int(pa.Int64)
+			}
+			total, _ := GetParticipantTotalPoints(participantID)
+			return correct, pts, total, nil
+		}
+	}
+	// fetch question
+	q, err := GetQuestion(questionID)
+	if err != nil {
+		return false, 0, 0, err
+	}
+	// compute scoring
+	isCorrect := false
+	points := 0
+	elapsed := 0
+	if q.CorrectIndex != nil && (q.Kind == "poll" || q.Kind == "yesno") {
+		nowMs := time.Now().UnixMilli()
+		if q.ActivatedAt != nil {
+			elapsed = int(nowMs - *q.ActivatedAt)
+			if elapsed < 0 {
+				elapsed = 0
+			}
+			if elapsed > 30000 {
+				elapsed = 30000
+			}
+		} else {
+			elapsed = 0
+		}
+		correctVal := ""
+		if q.Kind == "poll" {
+			idx := *q.CorrectIndex
+			if idx >= 0 && idx < len(q.Options) {
+				correctVal = q.Options[idx]
+			}
+		} else {
+			if *q.CorrectIndex == 0 {
+				correctVal = "yes"
+			} else {
+				correctVal = "no"
+			}
+		}
+		isCorrect = value == correctVal
+		if isCorrect {
+			pb := q.PointsBase
+			if pb == 0 {
+				pb = 100
+			}
+			points = int(math.Round(float64(pb) * (1 - float64(elapsed)/30000)))
+			minPts := int(math.Round(float64(pb) * 0.1))
+			if points < minPts {
+				points = minPts
+			}
+		}
+	}
+	icVal := sql.NullInt64{Valid: true, Int64: 0}
+	if isCorrect {
+		icVal.Int64 = 1
+	}
+	// When correct_index is null, store NULL for is_correct
+	var icParam any
+	var elapsedParam any
+	var pointsParam = points
+	if q.CorrectIndex == nil {
+		icParam = nil
+		elapsedParam = nil
+		pointsParam = 0
+		isCorrect = false
+	} else {
+		icParam = icVal.Int64
+		elapsedParam = elapsed
+	}
+	var cuParam any
+	if clientUUID != "" {
+		cuParam = clientUUID
+	} else {
+		cuParam = nil
+	}
+	_, err = DB.Exec(`INSERT INTO answers (question_id, participant_id, value, is_correct, points_awarded, elapsed_ms, client_uuid) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET value=excluded.value, is_correct=excluded.is_correct, points_awarded=excluded.points_awarded, elapsed_ms=excluded.elapsed_ms, client_uuid=COALESCE(excluded.client_uuid, answers.client_uuid), created_at=CURRENT_TIMESTAMP`, questionID, participantID, value, icParam, pointsParam, elapsedParam, cuParam)
+	if err != nil {
+		return false, 0, 0, err
+	}
+	InvalidateQuestionStats(questionID)
+	// leaderboard cache invalidate handled via caller
+	total, _ := GetParticipantTotalPoints(participantID)
+	return isCorrect, pointsParam, total, nil
+}
+
+func GetParticipantTotalPoints(participantID int64) (int, error) {
+	var n sql.NullInt64
+	err := DB.QueryRow("SELECT SUM(points_awarded) FROM answers WHERE participant_id=?", participantID).Scan(&n)
+	if err != nil {
+		return 0, err
+	}
+	if !n.Valid {
+		return 0, nil
+	}
+	return int(n.Int64), nil
 }
 
 // participants
@@ -1327,11 +1541,55 @@ func GetOrCreateParticipant(token string, eventID int64) (int64, error) {
 func GetParticipantByToken(token string) (*Participant, error) {
 	var p Participant
 	var ca string
-	err := DB.QueryRow("SELECT id, event_id, token, created_at FROM participants WHERE token=?", token).Scan(&p.ID, &p.EventID, &p.Token, &ca)
+	var dn, em, cl sql.NullString
+	var ls sql.NullInt64
+	err := DB.QueryRow("SELECT id, event_id, token, created_at, display_name, emoji, color, last_seen FROM participants WHERE token=?", token).Scan(&p.ID, &p.EventID, &p.Token, &ca, &dn, &em, &cl, &ls)
 	if err != nil {
 		return nil, err
 	}
 	p.CreatedAt = parseTimePragmatic(ca)
+	if dn.Valid {
+		p.DisplayName = dn.String
+	}
+	if em.Valid {
+		p.Emoji = em.String
+	}
+	if cl.Valid {
+		p.Color = cl.String
+	}
+	if ls.Valid {
+		p.LastSeen = ls.Int64
+	}
+	return &p, nil
+}
+
+func UpdateParticipantIdentity(id int64, name, emoji, color string) error {
+	_, err := DB.Exec("UPDATE participants SET display_name=?, emoji=?, color=?, last_seen=? WHERE id=?", name, emoji, color, time.Now().UnixMilli(), id)
+	return err
+}
+
+func GetParticipantByID(id int64) (*Participant, error) {
+	var p Participant
+	var ca string
+	var dn, em, cl sql.NullString
+	var ls sql.NullInt64
+	err := DB.QueryRow("SELECT id, event_id, token, created_at, display_name, emoji, color, last_seen FROM participants WHERE id=?", id).Scan(&p.ID, &p.EventID, &p.Token, &ca, &dn, &em, &cl, &ls)
+	if err != nil {
+		return nil, err
+	}
+	p.CreatedAt = parseTimePragmatic(ca)
+	if dn.Valid {
+		p.DisplayName = dn.String
+	}
+	if em.Valid {
+		p.Emoji = em.String
+	}
+	if cl.Valid {
+		p.Color = cl.String
+	}
+	if ls.Valid {
+		p.LastSeen = ls.Int64
+	}
 	return &p, nil
 }
 
@@ -1463,6 +1721,93 @@ func CountPendingQA(eventID int64) (int, error) {
 	var n int
 	err := DB.QueryRow("SELECT COUNT(*) FROM qa_questions WHERE event_id=? AND status='pending'", eventID).Scan(&n)
 	return n, err
+}
+
+// leaderboard
+
+type LeaderboardEntry struct {
+	Rank   int    `json:"rank"`
+	Name   string `json:"name"`
+	Emoji  string `json:"emoji"`
+	Color  string `json:"color"`
+	Points int    `json:"points"`
+}
+
+var (
+	lbMu    sync.RWMutex
+	lbCache = map[int64]*lbCacheEntry{}
+)
+
+type lbCacheEntry struct {
+	entries []LeaderboardEntry
+	exp     time.Time
+}
+
+func GetLeaderboard(eventID int64) ([]LeaderboardEntry, error) {
+	lbMu.RLock()
+	if e, ok := lbCache[eventID]; ok && time.Now().Before(e.exp) {
+		cp := append([]LeaderboardEntry(nil), e.entries...)
+		lbMu.RUnlock()
+		return cp, nil
+	}
+	lbMu.RUnlock()
+	rows, err := DB.Query(`
+		SELECT p.id, p.display_name, p.emoji, p.color, SUM(a.points_awarded) as pts
+		FROM answers a
+		JOIN questions q ON q.id=a.question_id
+		JOIN participants p ON p.id=a.participant_id
+		WHERE q.event_id=? AND a.participant_id IS NOT NULL
+		GROUP BY a.participant_id
+		ORDER BY pts DESC, p.id ASC
+		LIMIT 10`, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []LeaderboardEntry
+	rank := 1
+	for rows.Next() {
+		var pid int64
+		var dn, em, cl sql.NullString
+		var pts sql.NullInt64
+		if err := rows.Scan(&pid, &dn, &em, &cl, &pts); err != nil {
+			return nil, err
+		}
+		name := "Anonymous"
+		if dn.Valid && strings.TrimSpace(dn.String) != "" {
+			name = dn.String
+		}
+		emoji := "🙂"
+		if em.Valid && em.String != "" {
+			emoji = em.String
+		}
+		color := "#6366F1"
+		if cl.Valid && cl.String != "" {
+			color = cl.String
+		}
+		points := 0
+		if pts.Valid {
+			points = int(pts.Int64)
+		}
+		out = append(out, LeaderboardEntry{Rank: rank, Name: name, Emoji: emoji, Color: color, Points: points})
+		rank++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if out == nil {
+		out = []LeaderboardEntry{}
+	}
+	lbMu.Lock()
+	lbCache[eventID] = &lbCacheEntry{entries: append([]LeaderboardEntry(nil), out...), exp: time.Now().Add(1 * time.Second)}
+	lbMu.Unlock()
+	return out, nil
+}
+
+func InvalidateLeaderboard(eventID int64) {
+	lbMu.Lock()
+	delete(lbCache, eventID)
+	lbMu.Unlock()
 }
 
 // settings

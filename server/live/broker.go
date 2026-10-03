@@ -1,28 +1,43 @@
 package live
 
 import (
+	"encoding/json"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
-// Broker is an in-process fan-out broker for SSE.
-type Broker struct {
-	mu      sync.Mutex
-	subs    map[string]map[chan []byte]struct{}
-	closed  bool
-	dropped atomic.Uint64
+type Frame struct {
+	Kind string
+	Data []byte
 }
 
-// New creates a new Broker.
+const (
+	KindRefresh   = "refresh"
+	KindReactions = "reactions"
+)
+
+type Broker struct {
+	mu      sync.Mutex
+	subs    map[string]map[chan Frame]struct{}
+	closed  bool
+	dropped atomic.Uint64
+
+	rMu       sync.Mutex
+	reactions map[string]map[string]int
+	timers    map[string]*time.Timer
+}
+
 func New() *Broker {
 	return &Broker{
-		subs: make(map[string]map[chan []byte]struct{}),
+		subs:      make(map[string]map[chan Frame]struct{}),
+		reactions: make(map[string]map[string]int),
+		timers:    make(map[string]*time.Timer),
 	}
 }
 
-// Subscribe registers a subscriber for event. Returns receive-only channel and unsubscribe func.
-func (b *Broker) Subscribe(event string) (<-chan []byte, func()) {
-	ch := make(chan []byte, 16)
+func (b *Broker) Subscribe(event string) (<-chan Frame, func()) {
+	ch := make(chan Frame, 16)
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -31,11 +46,10 @@ func (b *Broker) Subscribe(event string) (<-chan []byte, func()) {
 	}
 	m, ok := b.subs[event]
 	if !ok {
-		m = make(map[chan []byte]struct{})
+		m = make(map[chan Frame]struct{})
 		b.subs[event] = m
 	}
 	m[ch] = struct{}{}
-
 	var once sync.Once
 	unsub := func() {
 		once.Do(func() {
@@ -55,8 +69,11 @@ func (b *Broker) Subscribe(event string) (<-chan []byte, func()) {
 	return ch, unsub
 }
 
-// Broadcast delivers payload to every subscriber of event non-blocking.
 func (b *Broker) Broadcast(event string, payload []byte) {
+	b.broadcastFrame(event, Frame{Kind: KindRefresh, Data: payload})
+}
+
+func (b *Broker) broadcastFrame(event string, f Frame) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.closed {
@@ -67,29 +84,73 @@ func (b *Broker) Broadcast(event string, payload []byte) {
 		return
 	}
 	for ch := range m {
-		cp := make([]byte, len(payload))
-		copy(cp, payload)
+		cp := make([]byte, len(f.Data))
+		copy(cp, f.Data)
+		fr := Frame{Kind: f.Kind, Data: cp}
 		select {
-		case ch <- cp:
+		case ch <- fr:
 		default:
 			b.dropped.Add(1)
 		}
 	}
 }
 
-// Subscribers reports count for event.
+func (b *Broker) AddReaction(event, emoji string) {
+	b.rMu.Lock()
+	defer b.rMu.Unlock()
+	if b.reactions[event] == nil {
+		b.reactions[event] = make(map[string]int)
+	}
+	total := 0
+	for _, v := range b.reactions[event] {
+		total += v
+	}
+	if total >= 500 {
+		return
+	}
+	b.reactions[event][emoji]++
+	if _, ok := b.timers[event]; !ok {
+		t := time.AfterFunc(150*time.Millisecond, func() { b.flushReactions(event) })
+		b.timers[event] = t
+	}
+}
+
+func (b *Broker) flushReactions(event string) {
+	b.rMu.Lock()
+	counts := b.reactions[event]
+	delete(b.reactions, event)
+	delete(b.timers, event)
+	b.rMu.Unlock()
+	if len(counts) == 0 {
+		return
+	}
+	broadcastReactionsImpl(b, event, counts)
+}
+
+func broadcastReactionsImpl(b *Broker, event string, counts map[string]int) {
+	type rc struct {
+		Emoji string `json:"emoji"`
+		Count int    `json:"count"`
+	}
+	var list []rc
+	for e, c := range counts {
+		list = append(list, rc{Emoji: e, Count: c})
+	}
+	inner, _ := json.Marshal(list)
+	env := map[string]any{"type": "reactions", "data": json.RawMessage(inner)}
+	// Actually envelope field is data: we can just marshal envelope
+	data, _ := json.Marshal(env)
+	b.broadcastFrame(event, Frame{Kind: KindReactions, Data: data})
+}
+
 func (b *Broker) Subscribers(event string) int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	return len(b.subs[event])
 }
 
-// DroppedTotal returns total dropped payloads.
-func (b *Broker) DroppedTotal() uint64 {
-	return b.dropped.Load()
-}
+func (b *Broker) DroppedTotal() uint64 { return b.dropped.Load() }
 
-// Close drops every subscription and closes all channels. Safe to call multiple times.
 func (b *Broker) Close() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -102,5 +163,12 @@ func (b *Broker) Close() {
 			close(ch)
 		}
 	}
-	b.subs = make(map[string]map[chan []byte]struct{})
+	b.subs = make(map[string]map[chan Frame]struct{})
+	b.rMu.Lock()
+	for _, t := range b.timers {
+		t.Stop()
+	}
+	b.timers = make(map[string]*time.Timer)
+	b.reactions = make(map[string]map[string]int)
+	b.rMu.Unlock()
 }

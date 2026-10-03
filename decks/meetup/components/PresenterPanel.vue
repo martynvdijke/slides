@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<{
   fab: false,
 })
 
-const { event: liveEvent, active, configured } = useLiveRoom({
+const { event: liveEvent, active, configured, leaderboard, roomCode, code } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -146,6 +146,39 @@ const fileInput = ref<HTMLInputElement | null>(null)
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
+
+// ── scoring (poll / yesno) ──
+const correctIndex = ref<number | null>(null)
+const pointsBase = ref(100)
+const scoringBusy = ref(false)
+const isScorableActive = computed(() => active.value && (active.value.kind === 'poll' || active.value.kind === 'yesno'))
+const activeOptions = computed(() => active.value?.options ?? [])
+watch(active, (a) => {
+  if (!a) { correctIndex.value = null; return }
+  if (a.correct_index !== undefined && a.correct_index !== null) correctIndex.value = a.correct_index as number
+  else correctIndex.value = null
+  if (typeof a.points_base === 'number') pointsBase.value = a.points_base
+})
+async function saveScoring() {
+  const id = active.value?.id
+  if (!id || !eventId.value) return
+  scoringBusy.value = true
+  error.value = ''
+  try {
+    await api('/api/admin/events/' + eventId.value + '/questions/' + id, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        correct_index: correctIndex.value,
+        points_base: pointsBase.value,
+      }),
+    })
+    message.value = 'Scoring updated.'
+  } catch (e: any) {
+    error.value = e?.message || 'Failed to save scoring'
+  } finally {
+    scoringBusy.value = false
+  }
+}
 
 const needsOptions = computed(() => optionKinds.includes(kind.value))
 const parsedOptions = computed(() =>
@@ -299,6 +332,41 @@ async function closeActive() {
         <div class="pp-active" v-if="active">
           <span class="pp-live-dot"></span> live: {{ active.prompt }} · {{ active.total }} {{ active.total === 1 ? 'answer' : 'answers' }}
         </div>
+
+        <div v-if="isScorableActive" class="pp-score">
+          <div class="pp-score-title">Quiz scoring</div>
+          <div class="pp-score-row">
+            <label class="pp-score-label">Correct answer</label>
+            <select v-model="correctIndex" class="pp-input pp-input-sm">
+              <option :value="null">— none —</option>
+              <option v-if="active?.kind === 'yesno'" :value="0">Yes</option>
+              <option v-if="active?.kind === 'yesno'" :value="1">No</option>
+              <template v-if="active?.kind === 'poll'">
+                <option v-for="(o, i) in activeOptions" :key="i" :value="i">{{ o }}</option>
+              </template>
+            </select>
+          </div>
+          <div class="pp-score-row">
+            <label class="pp-score-label">Points</label>
+            <input v-model.number="pointsBase" type="number" min="10" max="1000" step="10" class="pp-input pp-input-sm pp-score-points" />
+            <button class="pp-btn" type="button" :disabled="scoringBusy" @click="saveScoring">Save</button>
+          </div>
+          <div class="pp-hint">Speed bonus: faster correct answers earn more (up to base points).</div>
+        </div>
+
+        <div v-if="leaderboard && leaderboard.length" class="pp-lb">
+          <div class="pp-lb-title">Leaderboard</div>
+          <ol class="pp-lb-list">
+            <li v-for="e in leaderboard.slice(0, 5)" :key="e.rank" class="pp-lb-row">
+              <span class="pp-lb-rank">{{ e.rank }}</span>
+              <span class="pp-lb-avatar" :style="{ background: e.color }">{{ e.emoji }}</span>
+              <span class="pp-lb-name">{{ e.name }}</span>
+              <span class="pp-lb-pts">{{ e.points }}</span>
+            </li>
+          </ol>
+        </div>
+        <div v-else-if="leaderboard" class="pp-lb-empty">No scores yet.</div>
+
         <div v-if="message" class="pp-msg">{{ message }}</div>
         <div v-if="error" class="pp-err">{{ error }}</div>
         <button class="pp-btn ghost pp-signout" type="button" @click="logout">Sign out</button>
@@ -415,5 +483,19 @@ async function closeActive() {
   cursor: pointer;
   opacity: 0.25;
 }
+.pp-score { border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.04); display: flex; flex-direction: column; gap: 8px; }
+.pp-score-title, .pp-lb-title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8; font-weight: 700; }
+.pp-score-row { display: flex; align-items: center; gap: 8px; }
+.pp-score-label { font-size: 12px; color: #cbd5e1; min-width: 110px; }
+.pp-input-sm { padding: 6px 8px; font-size: 13px; }
+.pp-score-points { max-width: 90px; }
+.pp-lb { border: 1px solid rgba(255,255,255,0.1); border-radius: 10px; padding: 10px; background: rgba(255,255,255,0.03); }
+.pp-lb-list { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pp-lb-row { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.pp-lb-rank { font-family: 'JetBrains Mono', monospace; color: #94a3b8; min-width: 16px; text-align: right; }
+.pp-lb-avatar { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 12px; border: 1px solid rgba(255,255,255,0.18); }
+.pp-lb-name { flex: 1; color: #e2e8f0; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pp-lb-pts { font-family: 'JetBrains Mono', monospace; color: #38bdf8; font-weight: 700; }
+.pp-lb-empty { font-size: 12px; color: #64748b; font-style: italic; }
 .pp-fab:hover { opacity: 1; }
 </style>
