@@ -80,11 +80,25 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "internal error", http.StatusInternalServerError)
 		return
 	}
-	if _, err := db.CreateUser(req.Username, string(hash), "admin"); err != nil {
+	id, err := db.CreateUser(req.Username, string(hash), "admin")
+	if err != nil {
 		jsonError(w, "failed to create user", http.StatusInternalServerError)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	// Sign the first admin in immediately so setup doesn't bounce back to login.
+	token := uuid.NewString()
+	if err := db.CreateSession(token, id, time.Now().Add(sessionTTL)); err != nil {
+		jsonError(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	setSessionCookie(w, token)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true,
+		"user": map[string]string{
+			"username": req.Username,
+			"role":     "admin",
+		},
+	})
 }
 
 // Login authenticates with username/password.
