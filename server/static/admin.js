@@ -113,7 +113,7 @@
       state.user=j.user; if(els.meInfo) els.meInfo.textContent=j.user.username+' · '+j.user.role;
       showGate('app'); return loadEvents();
     }).then(function(){
-      loadBranding(); loadAnalytics(); loadOtel();
+      loadBranding(); loadAnalytics(); loadOtel(); loadEmail();
     }).catch(function(err){
       if(err==='setup') return;
       if(err && err.code===401){ showGate('login'); return; }
@@ -936,6 +936,41 @@
     var lbPanel=document.querySelector('[data-panel="leaderboard"]');
     if(lbPanel && !lbPanel.classList.contains('hidden')) loadLeaderboard(id);
   };
+
+  // forgot password
+  var forgotLink=document.getElementById('btn-forgot');
+  var forgotForm=document.getElementById('form-forgot');
+  if(forgotLink) forgotLink.addEventListener('click', function(e){ e.preventDefault(); forgotForm.classList.toggle('hidden'); });
+  if(forgotForm) forgotForm.addEventListener('submit', function(e){
+    e.preventDefault();
+    var val=document.getElementById('forgot-input').value.trim();
+    var msg=document.getElementById('forgot-msg'); msg.textContent='Sending…';
+    api('/api/auth/forgot-password',{method:'POST', body:JSON.stringify({email:val})}).then(function(j){ msg.textContent=j.message||'If that account exists, a reset link has been sent.'; toast(msg.textContent); }).catch(function(err){ msg.textContent=err.message||'Failed'; toast(msg.textContent,'err'); });
+  });
+
+  // email settings
+  function loadEmail(){
+    api('/api/admin/settings/email').then(function(j){
+      document.getElementById('em-host').value=j.effective?j.effective.host:j.host||'';
+      document.getElementById('em-port').value=j.effective?j.effective.port:j.port||'';
+      document.getElementById('em-user').value=j.effective?j.effective.user:j.user||'';
+      document.getElementById('em-from').value=j.effective?j.effective.from:j.from||'';
+      document.getElementById('em-tls').value=j.effective?j.effective.tls:j.tls||'starttls';
+      var st=document.getElementById('email-status');
+      if(st) st.textContent=j.enabled?'Configured':'Not configured';
+    }).catch(function(){});
+  }
+  var formEmail=document.getElementById('form-email');
+  if(formEmail) formEmail.addEventListener('submit', function(e){
+    e.preventDefault();
+    var payload={ host: document.getElementById('em-host').value.trim(), port: parseInt(document.getElementById('em-port').value,10)||0, user: document.getElementById('em-user').value.trim(), password: document.getElementById('em-pass').value, from: document.getElementById('em-from').value.trim(), tls: document.getElementById('em-tls').value };
+    api('/api/admin/settings/email',{method:'PUT', body:JSON.stringify(payload)}).then(function(){ toast('Email settings saved'); document.getElementById('em-pass').value=''; loadEmail(); }).catch(function(err){ toast(err.message||'Failed','err'); });
+  });
+  var btnTest=document.getElementById('btn-test-email');
+  if(btnTest) btnTest.addEventListener('click', function(){
+    var st=document.getElementById('email-status'); if(st) st.textContent='Sending…';
+    api('/api/admin/settings/email/test',{method:'POST', body:JSON.stringify({})}).then(function(){ toast('Test email sent'); if(st) st.textContent='Test sent'; }).catch(function(err){ toast(err.message||'Test failed','err'); if(st) st.textContent=err.message||'Failed'; });
+  });
 
   // branding / analytics / otel
   function loadBranding(){

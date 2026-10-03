@@ -21,7 +21,24 @@ type User struct {
 	Username     string
 	PasswordHash string
 	Role         string
+	Email        string
 	CreatedAt    time.Time
+}
+
+type EmailSettings struct {
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPTLS      string
+}
+
+type PasswordResetToken struct {
+	TokenHash string
+	UserID    int64
+	ExpiresAt time.Time
+	CreatedAt time.Time
 }
 
 type Session struct {
@@ -285,6 +302,33 @@ func migrate() error {
 			return err
 		}
 	}
+	for _, col := range []struct{ name, ddl string }{
+		{"smtp_host", "smtp_host TEXT NOT NULL DEFAULT ''"},
+		{"smtp_port", "smtp_port INTEGER NOT NULL DEFAULT 0"},
+		{"smtp_user", "smtp_user TEXT NOT NULL DEFAULT ''"},
+		{"smtp_password", "smtp_password TEXT NOT NULL DEFAULT ''"},
+		{"smtp_from", "smtp_from TEXT NOT NULL DEFAULT ''"},
+		{"smtp_tls", "smtp_tls TEXT NOT NULL DEFAULT ''"},
+	} {
+		if err := ensureColumn("settings", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	if err := ensureColumn("users", "email", "email TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email <> ''"); err != nil {
+		return err
+	}
+	if _, err := DB.Exec(`CREATE TABLE IF NOT EXISTS password_reset_tokens(
+			token_hash TEXT PRIMARY KEY,
+			user_id INTEGER NOT NULL,
+			expires_at DATETIME NOT NULL,
+			created_at DATETIME NOT NULL,
+			FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+		)`); err != nil {
+		return err
+	}
 	if err := ensureColumn("events", "room_code", "room_code TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
@@ -489,9 +533,13 @@ func CreateUser(username, passwordHash, role string) (int64, error) {
 func GetUserByUsername(username string) (*User, error) {
 	u := &User{}
 	var ca string
-	err := DB.QueryRow("SELECT id, username, password_hash, role, created_at FROM users WHERE username=?", username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &ca)
+	var email sql.NullString
+	err := DB.QueryRow("SELECT id, username, password_hash, role, email, created_at FROM users WHERE username=?", username).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &email, &ca)
 	if err != nil {
 		return nil, err
+	}
+	if email.Valid {
+		u.Email = email.String
 	}
 	u.CreatedAt = parseTimePragmatic(ca)
 	return u, nil
@@ -500,12 +548,41 @@ func GetUserByUsername(username string) (*User, error) {
 func GetUserByID(id int64) (*User, error) {
 	u := &User{}
 	var ca string
-	err := DB.QueryRow("SELECT id, username, password_hash, role, created_at FROM users WHERE id=?", id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &ca)
+	var email sql.NullString
+	err := DB.QueryRow("SELECT id, username, password_hash, role, email, created_at FROM users WHERE id=?", id).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &email, &ca)
 	if err != nil {
 		return nil, err
 	}
+	if email.Valid {
+		u.Email = email.String
+	}
 	u.CreatedAt = parseTimePragmatic(ca)
 	return u, nil
+}
+
+func GetUserByEmail(email string) (*User, error) {
+	u := &User{}
+	var ca string
+	var em sql.NullString
+	err := DB.QueryRow("SELECT id, username, password_hash, role, email, created_at FROM users WHERE lower(email)=lower(?) AND email<>'' LIMIT 1", email).Scan(&u.ID, &u.Username, &u.PasswordHash, &u.Role, &em, &ca)
+	if err != nil {
+		return nil, err
+	}
+	if em.Valid {
+		u.Email = em.String
+	}
+	u.CreatedAt = parseTimePragmatic(ca)
+	return u, nil
+}
+
+func UpdateUserEmail(id int64, email string) error {
+	_, err := DB.Exec("UPDATE users SET email=? WHERE id=?", email, id)
+	return err
+}
+
+func UpdateUserPassword(id int64, hash string) error {
+	_, err := DB.Exec("UPDATE users SET password_hash=? WHERE id=?", hash, id)
+	return err
 }
 
 func CreateSession(token string, userID int64, expires time.Time) error {
@@ -1853,5 +1930,53 @@ func GetBranding() (string, error) {
 
 func UpdateBranding(brand string) error {
 	_, err := DB.Exec("UPDATE settings SET brand=?, updated_at=CURRENT_TIMESTAMP WHERE id=1", brand)
+	return err
+}
+
+func GetEmailSettings() (*EmailSettings, error) {
+	var s EmailSettings
+	err := DB.QueryRow("SELECT smtp_host, smtp_port, smtp_user, smtp_password, smtp_from, smtp_tls FROM settings WHERE id=1").Scan(&s.SMTPHost, &s.SMTPPort, &s.SMTPUser, &s.SMTPPassword, &s.SMTPFrom, &s.SMTPTLS)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+func UpdateEmailSettings(s EmailSettings) error {
+	_, err := DB.Exec("UPDATE settings SET smtp_host=?, smtp_port=?, smtp_user=?, smtp_password=?, smtp_from=?, smtp_tls=?, updated_at=CURRENT_TIMESTAMP WHERE id=1", s.SMTPHost, s.SMTPPort, s.SMTPUser, s.SMTPPassword, s.SMTPFrom, s.SMTPTLS)
+	return err
+}
+
+// password reset tokens
+
+func CreatePasswordResetToken(hash string, userID int64, expiresAt time.Time) error {
+	_, err := DB.Exec("INSERT INTO password_reset_tokens (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)", hash, userID, expiresAt.UTC().Format("2006-01-02 15:04:05"), time.Now().UTC().Format("2006-01-02 15:04:05"))
+	return err
+}
+
+func GetPasswordResetToken(hash string) (*PasswordResetToken, error) {
+	var t PasswordResetToken
+	var ea, ca string
+	err := DB.QueryRow("SELECT token_hash, user_id, expires_at, created_at FROM password_reset_tokens WHERE token_hash=?", hash).Scan(&t.TokenHash, &t.UserID, &ea, &ca)
+	if err != nil {
+		return nil, err
+	}
+	t.ExpiresAt = parseTimePragmatic(ea)
+	t.CreatedAt = parseTimePragmatic(ca)
+	return &t, nil
+}
+
+func DeletePasswordResetToken(hash string) error {
+	_, err := DB.Exec("DELETE FROM password_reset_tokens WHERE token_hash=?", hash)
+	return err
+}
+
+func DeletePasswordResetTokensByUser(userID int64) error {
+	_, err := DB.Exec("DELETE FROM password_reset_tokens WHERE user_id=?", userID)
+	return err
+}
+
+func DeleteExpiredPasswordResetTokens() error {
+	_, err := DB.Exec("DELETE FROM password_reset_tokens WHERE expires_at <= datetime('now')")
 	return err
 }

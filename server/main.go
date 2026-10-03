@@ -64,6 +64,8 @@ func main() {
 	mux.HandleFunc("POST /api/setup", handlers.Setup)
 	mux.HandleFunc("POST /api/auth/login", handlers.Login)
 	mux.HandleFunc("POST /api/auth/logout", handlers.Logout)
+	mux.HandleFunc("POST /api/auth/forgot-password", handlers.ForgotPassword)
+	mux.HandleFunc("POST /api/auth/reset-password", handlers.ResetPassword)
 	mux.Handle("GET /api/auth/me", handlers.AuthMiddleware(http.HandlerFunc(handlers.Me)))
 	mux.HandleFunc("GET /api/auth/oidc/status", handlers.OIDCStatus)
 	mux.HandleFunc("GET /api/auth/oidc/login", handlers.OIDCLogin)
@@ -121,6 +123,9 @@ func main() {
 	adminMux.HandleFunc("GET /api/admin/otel/status", handlers.AdminOTelStatus)
 	adminMux.HandleFunc("GET /api/admin/settings/otel", handlers.AdminGetOTelSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/otel", handlers.AdminUpdateOTelSettings)
+	adminMux.HandleFunc("GET /api/admin/settings/email", handlers.AdminGetEmailSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/email", handlers.AdminUpdateEmailSettings)
+	adminMux.HandleFunc("POST /api/admin/settings/email/test", handlers.AdminTestEmail)
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 		mux.Handle(method+" /api/admin/", handlers.AdminAuth(adminMux))
 	}
@@ -150,8 +155,9 @@ func main() {
 	// only "/", so deck subpaths (e.g. /meetup/) and assets still fall through
 	// to the catch-all file server below.
 	mux.HandleFunc("GET /{$}", page("entry.html"))
+	mux.HandleFunc("GET /reset", page("reset.html"))
 	// SPA assets live at the site root, next to the built decks.
-	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "tailwind.css", "logo.svg"} {
+	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "reset.js", "tailwind.css", "logo.svg"} {
 		mux.HandleFunc("GET /"+asset, page(asset))
 	}
 
