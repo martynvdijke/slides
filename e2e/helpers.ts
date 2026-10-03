@@ -42,6 +42,8 @@ export interface QuestionInput {
   media_url?: string
   media_type?: string
   show_results?: boolean
+  correct_index?: number | null
+  points_base?: number
 }
 
 export async function createQuestion(
@@ -49,17 +51,18 @@ export async function createQuestion(
   eventId: number,
   input: QuestionInput,
 ): Promise<{ id: number }> {
-  const res = await request.post(`/api/admin/events/${eventId}/questions`, {
-    data: {
-      kind: input.kind ?? 'poll',
-      mode: 'live',
-      prompt: input.prompt,
-      options: input.options ?? [],
-      show_results: input.show_results ?? true,
-      media_url: input.media_url ?? '',
-      media_type: input.media_type ?? '',
-    },
-  })
+  const data: Record<string, unknown> = {
+    kind: input.kind ?? 'poll',
+    mode: 'live',
+    prompt: input.prompt,
+    options: input.options ?? [],
+    show_results: input.show_results ?? true,
+    media_url: input.media_url ?? '',
+    media_type: input.media_type ?? '',
+  }
+  if (input.correct_index !== undefined) data.correct_index = input.correct_index
+  if (input.points_base !== undefined) data.points_base = input.points_base
+  const res = await request.post(`/api/admin/events/${eventId}/questions`, { data })
   expect(res.ok(), 'create question should succeed').toBeTruthy()
   return (await res.json()) as { id: number }
 }
