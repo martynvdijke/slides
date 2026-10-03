@@ -1,3 +1,10 @@
+# [1.10.0](https://github.com/martynvdijke/slides/compare/v1.9.3...v1.10.0) (2026-10-03)
+
+
+### Features
+
+* host entry page, live reactions, quiz leaderboard and audience polish ([a114471](https://github.com/martynvdijke/slides/commit/a11447193fb9d12cbaf1cf99965f10def62a46c9))
+
 ## [1.9.3](https://github.com/martynvdijke/slides/compare/v1.9.2...v1.9.3) (2026-10-03)
 
 
