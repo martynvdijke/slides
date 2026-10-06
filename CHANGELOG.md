@@ -1,3 +1,15 @@
+# [1.13.0](https://github.com/martynvdijke/slides/compare/v1.12.0...v1.13.0) (2026-10-06)
+
+
+### Bug Fixes
+
+* restore deck index and gate password reset behind OIDC ([9cf2fc6](https://github.com/martynvdijke/slides/commit/9cf2fc687307c5a2c9d0c0703ce72d53f76b5009))
+
+
+### Features
+
+* quiz game loop, audience moderation, and post-event recap ([f268b54](https://github.com/martynvdijke/slides/commit/f268b54fae045d3ffc27d1dc117c9273bdcbfd37))
+
 # [1.12.0](https://github.com/martynvdijke/slides/compare/v1.11.0...v1.12.0) (2026-10-03)
 
 
