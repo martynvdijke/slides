@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -177,6 +178,25 @@ func main() {
 	// only "/", so deck subpaths (e.g. /meetup/) and assets still fall through
 	// to the catch-all file server below.
 	mux.HandleFunc("GET /{$}", page("entry.html"))
+	// Serve the built deck overview directly. http.FileServer (the catch-all
+	// below) redirects /index.html to /, which now serves the host/join entry
+	// page, so "Browse decks" would bounce straight back to the entry. Serving
+	// the file content keeps the relative deck links (./meetup/) working.
+	mux.HandleFunc("GET /index.html", func(w http.ResponseWriter, r *http.Request) {
+		f, err := os.Open(filepath.Join(decksDir, "index.html"))
+		if err != nil {
+			r.URL.Path = "/index.html"
+			staticHandler.ServeHTTP(w, r)
+			return
+		}
+		defer f.Close()
+		mod := time.Now()
+		if fi, statErr := f.Stat(); statErr == nil {
+			mod = fi.ModTime()
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		http.ServeContent(w, r, "index.html", mod, f)
+	})
 	mux.HandleFunc("GET /reset", page("reset.html"))
 	// Public results page: served noindex, code is read client-side.
 	mux.HandleFunc("GET /results/{code}", func(w http.ResponseWriter, r *http.Request) {

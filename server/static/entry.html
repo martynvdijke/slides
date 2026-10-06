@@ -77,6 +77,7 @@
         <a id="host-cta" class="btn btn-primary w-full justify-center" href="/admin">Host — sign in
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
         </a>
+        <a id="host-oidc" class="btn btn-ghost w-full justify-center hidden mt-2" href="/api/auth/oidc/login">Sign in with OIDC</a>
         <p class="text-[#9AA0B8] text-[0.78rem] mt-2 text-center m-0">Takes you to the dashboard. First run will ask to create an admin.</p>
       </div>
     </div>
@@ -204,6 +205,14 @@
           hostCta.appendChild(svg);
         }
       }
+    }).catch(function(){});
+
+    // Offer SSO sign-in directly on the landing when the server has it enabled.
+    fetch('/api/auth/oidc/status', {credentials:'same-origin'}).then(function(r){
+      return r.ok ? r.json() : null;
+    }).then(function(j){
+      var oidc = document.getElementById('host-oidc');
+      if(j && j.enabled && oidc) oidc.classList.remove('hidden');
     }).catch(function(){});
   }catch(e){}
 })();

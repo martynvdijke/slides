@@ -48,6 +48,7 @@
     selMeta: document.getElementById('sel-meta'),
     btnOidcSetup: document.getElementById('btn-oidc-setup'),
     btnOidcLogin: document.getElementById('btn-oidc-login'),
+    btnForgotWrap: document.getElementById('forgot-wrap'),
   };
 
   var state={ user:null, events:[], selectedId:null };
@@ -87,13 +88,19 @@
     api('/api/auth/logout',{method:'POST'}).then(function(){ boot(); }).catch(function(){ boot(); });
   });
 
-  // OIDC buttons: shown on the setup and login gates when enabled.
+  // OIDC buttons: shown on the setup and login gates when enabled. The local
+  // "Forgot password?" link is the opposite: only offered when the user cannot
+  // sign in with SSO (OIDC disabled), since resetting a local password is the
+  // only way back in then. If the status check fails we show it as a fallback.
   function initOIDC(){
     api('/api/auth/oidc/status').then(function(j){
       var on=!!j.enabled;
       if(els.btnOidcSetup) els.btnOidcSetup.classList.toggle('hidden', !on);
       if(els.btnOidcLogin) els.btnOidcLogin.classList.toggle('hidden', !on);
-    }).catch(function(){});
+      if(els.btnForgotWrap) els.btnForgotWrap.classList.toggle('hidden', on);
+    }).catch(function(){
+      if(els.btnForgotWrap) els.btnForgotWrap.classList.remove('hidden');
+    });
   }
 
   function oidcErrorNotice(){
