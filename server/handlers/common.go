@@ -44,18 +44,21 @@ const userKey ctxKey = "user"
 // ── JSON DTOs: the contract the embedded frontend is built against ──
 
 type EventDTO struct {
-	ID             int64  `json:"id"`
-	Code           string `json:"code"`
-	RoomCode       string `json:"room_code"`
-	Name           string `json:"name"`
-	Description    string `json:"description"`
-	EventDate      string `json:"event_date"`
-	Status         string `json:"status"`
-	FeedbackOpen   bool   `json:"feedback_open"`
-	Brand          string `json:"brand"`
-	CreatedAt      string `json:"created_at,omitempty"`
-	QuestionCount  int    `json:"question_count"`
-	PendingQACount int    `json:"pending_qa_count"`
+	ID               int64  `json:"id"`
+	Code             string `json:"code"`
+	RoomCode         string `json:"room_code"`
+	Name             string `json:"name"`
+	Description      string `json:"description"`
+	EventDate        string `json:"event_date"`
+	Status           string `json:"status"`
+	FeedbackOpen     bool   `json:"feedback_open"`
+	ShowPodium       bool   `json:"show_podium"`
+	QASlowModeS      int    `json:"qa_slow_mode_s"`
+	ResultsPublished bool   `json:"results_published"`
+	Brand            string `json:"brand"`
+	CreatedAt        string `json:"created_at,omitempty"`
+	QuestionCount    int    `json:"question_count"`
+	PendingQACount   int    `json:"pending_qa_count"`
 }
 
 type QuestionDTO struct {
@@ -80,6 +83,9 @@ type QuestionDTO struct {
 	CreatedAt    string      `json:"created_at,omitempty"`
 	CorrectIndex *int        `json:"correct_index,omitempty"`
 	PointsBase   int         `json:"points_base"`
+	TimeLimitS   int         `json:"time_limit_s"`
+	ActivatedAt  *int64      `json:"activated_at,omitempty"`
+	DeadlineAt   *int64      `json:"deadline_at,omitempty"`
 	MyCorrect    *bool       `json:"my_correct,omitempty"`
 	MyPoints     int         `json:"my_points"`
 	DurationSec  int         `json:"duration_sec"`
@@ -101,9 +107,26 @@ type QADTO struct {
 	Body      string `json:"body"`
 	Author    string `json:"author"`
 	Status    string `json:"status"`
+	Flagged   bool   `json:"flagged"`
 	Votes     int    `json:"votes"`
 	Voted     bool   `json:"voted"`
 	CreatedAt string `json:"created_at,omitempty"`
+}
+
+// ModerationAnswerDTO is one stored answer in the admin moderation queue. It
+// never exposes participant tokens, only the display identity.
+type ModerationAnswerDTO struct {
+	ID            int64  `json:"id"`
+	QuestionID    int64  `json:"question_id"`
+	Prompt        string `json:"prompt"`
+	Kind          string `json:"kind"`
+	Value         string `json:"value"`
+	Status        string `json:"status"`
+	ParticipantID int64  `json:"participant_id"`
+	Name          string `json:"name"`
+	Emoji         string `json:"emoji"`
+	Color         string `json:"color"`
+	CreatedAt     string `json:"created_at,omitempty"`
 }
 
 type PresentationDTO struct {
@@ -122,9 +145,11 @@ type FeedbackDTO struct {
 }
 
 type MeDTO struct {
-	Name  string `json:"name"`
-	Emoji string `json:"emoji"`
-	Color string `json:"color"`
+	Name            string `json:"name"`
+	Emoji           string `json:"emoji"`
+	Color           string `json:"color"`
+	RecapSubscribed bool   `json:"recap_subscribed"`
+	RecapEmail      string `json:"recap_email,omitempty"`
 }
 
 type StateDTO struct {
@@ -320,18 +345,21 @@ func BroadcastEvent(eventID int64) {
 
 func eventDTO(ev *db.Event, brand string) EventDTO {
 	return EventDTO{
-		ID:             ev.ID,
-		Code:           ev.Code,
-		RoomCode:       ev.RoomCode,
-		Name:           ev.Name,
-		Description:    ev.Description,
-		EventDate:      ev.EventDate,
-		Status:         ev.Status,
-		FeedbackOpen:   ev.FeedbackOpen,
-		Brand:          brand,
-		CreatedAt:      ev.CreatedAt.Format(time.RFC3339),
-		QuestionCount:  ev.QuestionCount,
-		PendingQACount: ev.PendingQACount,
+		ID:               ev.ID,
+		Code:             ev.Code,
+		RoomCode:         ev.RoomCode,
+		Name:             ev.Name,
+		Description:      ev.Description,
+		EventDate:        ev.EventDate,
+		Status:           ev.Status,
+		FeedbackOpen:     ev.FeedbackOpen,
+		ShowPodium:       ev.ShowPodium,
+		QASlowModeS:      ev.QASlowModeS,
+		ResultsPublished: ev.ResultsPublished,
+		Brand:            brand,
+		CreatedAt:        ev.CreatedAt.Format(time.RFC3339),
+		QuestionCount:    ev.QuestionCount,
+		PendingQACount:   ev.PendingQACount,
 	}
 }
 
@@ -351,6 +379,7 @@ func questionDTO(q db.Question, withResults bool) QuestionDTO {
 		MediaType:   q.MediaType,
 		CreatedAt:   q.CreatedAt.Format(time.RFC3339),
 		PointsBase:  q.PointsBase,
+		TimeLimitS:  q.TimeLimitS,
 		DurationSec: q.DurationSec,
 		AutoReveal:  q.AutoReveal,
 	}
@@ -366,7 +395,14 @@ func questionDTO(q db.Question, withResults bool) QuestionDTO {
 	if dto.PointsBase == 0 {
 		dto.PointsBase = 100
 	}
-	if q.ShowResults {
+	if q.ActivatedAt != nil {
+		dto.ActivatedAt = q.ActivatedAt
+		if q.TimeLimitS > 0 {
+			deadline := *q.ActivatedAt + int64(q.TimeLimitS)*1000
+			dto.DeadlineAt = &deadline
+		}
+	}
+	if q.ShowResults || q.Status == "revealed" {
 		dto.CorrectIndex = q.CorrectIndex
 	}
 	if dto.Options == nil {
@@ -400,9 +436,26 @@ func qaDTO(q db.QAQuestion) QADTO {
 		Body:      q.Body,
 		Author:    q.Author,
 		Status:    q.Status,
+		Flagged:   q.Flagged,
 		Votes:     q.Votes,
 		Voted:     q.Voted,
 		CreatedAt: q.CreatedAt.Format(time.RFC3339),
+	}
+}
+
+func moderationAnswerDTO(a db.ModerationAnswer) ModerationAnswerDTO {
+	return ModerationAnswerDTO{
+		ID:            a.ID,
+		QuestionID:    a.QuestionID,
+		Prompt:        a.Prompt,
+		Kind:          a.Kind,
+		Value:         a.Value,
+		Status:        a.Status,
+		ParticipantID: a.ParticipantID,
+		Name:          a.Name,
+		Emoji:         a.Emoji,
+		Color:         a.Color,
+		CreatedAt:     a.CreatedAt.Format(time.RFC3339),
 	}
 }
 
@@ -444,14 +497,25 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 		Me:          MeDTO{Name: "Anonymous", Emoji: "🙂", Color: "#6366F1"},
 	}
 
+	// Reconcile a timed question whose deadline passed while no timer ran (for
+	// example after a server restart) before any client renders state.
+	if n, err := db.LockExpiredQuestions(ev.ID, time.Now().UnixMilli()); err == nil && n > 0 {
+		BroadcastEvent(ev.ID)
+	}
+
 	if q, err := db.GetActiveQuestion(ev.ID); err == nil && q != nil {
 		dto := questionDTO(*q, true)
 		if participantID > 0 {
 			if a, err := db.GetAnswer(q.ID, participantID); err == nil && a != nil {
 				dto.Answered = true
 				dto.MyAnswer = a.Value
-				dto.MyCorrect = a.IsCorrect
-				dto.MyPoints = a.PointsAwarded
+				// Correctness stays hidden until reveal unless results are
+				// enabled for the question (legacy instant feedback). Answers
+				// withheld by moderation never disclose their verdict.
+				if a.Status == "visible" && (q.ShowResults || q.Status == "revealed") {
+					dto.MyCorrect = a.IsCorrect
+					dto.MyPoints = a.PointsAwarded
+				}
 			}
 		}
 		state.ActiveQuestion = &dto
@@ -487,6 +551,10 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 			if p.Color != "" {
 				state.Me.Color = p.Color
 			}
+		}
+		if email, ok, err := db.GetRecapSubscription(ev.ID, participantID); err == nil && ok {
+			state.Me.RecapSubscribed = true
+			state.Me.RecapEmail = email
 		}
 	}
 	if s, ok := Broker.GetSlide(ev.Code); ok {

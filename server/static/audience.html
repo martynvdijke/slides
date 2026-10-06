@@ -16,6 +16,7 @@
     </a>
     <div style="display:flex;gap:8px;align-items:center">
       <span class="pill hidden" id="slide-indicator" style="display:none;font-variant-numeric:tabular-nums;font-size:.82rem" aria-live="polite"></span>
+      <span class="pill live hidden" id="countdown-pill" aria-live="polite">⏱ 0s</span>
       <span class="pill live" aria-live="polite" id="live-badge">Live</span>
     </div>
   </div>
@@ -51,6 +52,20 @@
     <div id="identity-emoji-pick" style="display:flex;gap:4px;flex-wrap:wrap"></div>
     <div id="identity-color-pick" style="display:flex;gap:6px;flex-wrap:wrap"></div>
     <button id="identity-save" class="btn btn-ghost btn-small" type="button">Save</button>
+  </div>
+
+  <!-- optional recap email opt-in -->
+  <div id="recap-card" class="glass" style="padding:12px 14px;border-radius:14px;margin-top:12px">
+    <div style="font-weight:700">Get the recap</div>
+    <div style="color:var(--muted);font-size:.82rem;margin-top:2px">Optional: we'll email you a summary with the results after the event. You can unsubscribe at any time.</div>
+    <form id="recap-form" style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <input id="recap-email" class="input" type="email" placeholder="you@example.com" maxlength="254" autocomplete="email" style="flex:1;min-width:180px;height:36px" aria-label="Email address for the event recap">
+      <button class="btn btn-small" type="submit">Email me the recap</button>
+    </form>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+      <button id="recap-remove" class="btn btn-ghost btn-small hidden" type="button">Unsubscribe</button>
+      <span id="recap-status" style="color:var(--muted);font-size:.78rem" aria-live="polite"></span>
+    </div>
   </div>
 
   <div class="py-3.5 pb-10">

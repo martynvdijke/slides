@@ -87,6 +87,9 @@ func main() {
 	mux.HandleFunc("GET /api/events/{code}/presentations/{id}/download", handlers.DownloadPresentation)
 	mux.HandleFunc("GET /api/events/{code}/qr.png", handlers.EventQR)
 	mux.HandleFunc("GET /api/events/{code}/leaderboard", handlers.PublicGetLeaderboard)
+	mux.HandleFunc("GET /api/events/{code}/results", handlers.GetEventResults)
+	mux.HandleFunc("POST /api/events/{code}/recap/subscribe", handlers.RecapSubscribe)
+	mux.HandleFunc("POST /api/events/{code}/recap/unsubscribe", handlers.RecapUnsubscribe)
 	mux.HandleFunc("GET /api/join/{room}", handlers.ResolveRoom)
 	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 
@@ -108,14 +111,22 @@ func main() {
 	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/{qid}/close", handlers.AdminCloseQuestion)
 	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/reorder", handlers.AdminReorderQuestions)
 	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/next", handlers.AdminNextQuestion)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/questions/{qid}/reveal", handlers.AdminRevealQuestion)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/podium", handlers.AdminSetPodium)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/qa", handlers.AdminListQA)
 	adminMux.HandleFunc("PATCH /api/admin/events/{id}/qa/{qid}", handlers.AdminUpdateQA)
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/qa/{qid}", handlers.AdminDeleteQA)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/answers", handlers.AdminListAnswers)
+	adminMux.HandleFunc("PATCH /api/admin/events/{id}/answers/{aid}", handlers.AdminUpdateAnswer)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/presentations", handlers.AdminListPresentations)
 	adminMux.HandleFunc("POST /api/admin/events/{id}/presentations", handlers.AdminUploadPresentation)
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/presentations/{pid}", handlers.AdminDeletePresentation)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/export.csv", handlers.AdminExportCSV)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/leaderboard", handlers.AdminGetLeaderboard)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/recap", handlers.AdminListRecapSubscriptions)
+	adminMux.HandleFunc("DELETE /api/admin/events/{id}/recap/{sid}", handlers.AdminDeleteRecapSubscription)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/recap/preview", handlers.AdminGetRecapPreview)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/recap/send", handlers.AdminSendRecap)
 	adminMux.HandleFunc("GET /api/admin/stats", handlers.AdminGetStats)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/stats", handlers.AdminGetEventStats)
 	adminMux.HandleFunc("GET /api/admin/settings/analytics", handlers.AdminGetAnalyticsSettings)
@@ -133,6 +144,10 @@ func main() {
 	adminMux.HandleFunc("GET /api/admin/settings/webhooks", handlers.AdminGetWebhookSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/webhooks", handlers.AdminUpdateWebhookSettings)
 	adminMux.HandleFunc("POST /api/admin/settings/webhooks/test", handlers.AdminTestWebhook)
+	adminMux.HandleFunc("GET /api/admin/settings/filter", handlers.AdminGetFilterSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/filter", handlers.AdminUpdateFilterSettings)
+	adminMux.HandleFunc("GET /api/admin/settings/recap", handlers.AdminGetRecapSettings)
+	adminMux.HandleFunc("PUT /api/admin/settings/recap", handlers.AdminUpdateRecapSettings)
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 		mux.Handle(method+" /api/admin/", handlers.AdminAuth(adminMux))
 	}
@@ -163,8 +178,14 @@ func main() {
 	// to the catch-all file server below.
 	mux.HandleFunc("GET /{$}", page("entry.html"))
 	mux.HandleFunc("GET /reset", page("reset.html"))
+	// Public results page: served noindex, code is read client-side.
+	mux.HandleFunc("GET /results/{code}", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Robots-Tag", "noindex")
+		r.URL.Path = "/results.html"
+		staticHandler.ServeHTTP(w, r)
+	})
 	// SPA assets live at the site root, next to the built decks.
-	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "reset.js", "tailwind.css", "logo.svg"} {
+	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "reset.js", "results.js", "tailwind.css", "logo.svg"} {
 		mux.HandleFunc("GET /"+asset, page(asset))
 	}
 

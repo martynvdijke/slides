@@ -33,6 +33,9 @@ type wsEnvelope struct {
 	IsCorrect     *bool `json:"is_correct,omitempty"`
 	PointsAwarded *int  `json:"points_awarded,omitempty"`
 	TotalPoints   *int  `json:"total_points,omitempty"`
+	// moderation fields
+	Status      string `json:"status,omitempty"`
+	RetryAfterS int    `json:"retry_after_s,omitempty"`
 }
 
 type wsInbound struct {
@@ -237,22 +240,33 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 	}
 	switch m.Type {
 	case "answer":
-		isCorrect, pts, total, err := submitAnswerWithMeta(ev, pid, m.QuestionID, m.Value, m.ClientUUID)
+		meta, err := submitAnswerWithMeta(ev, pid, m.QuestionID, m.Value, m.ClientUUID)
 		if err != nil {
-			return wsEnvelope{Type: "error", For: "answer", Error: err.Error()}
+			return wsEnvelope{Type: "error", For: "answer", Error: err.Error(), ID: m.QuestionID}
 		}
 		env := okEnvelope("answer")
-		env.IsCorrect = &isCorrect
-		env.PointsAwarded = &pts
-		env.TotalPoints = &total
+		env.ID = m.QuestionID
+		if meta.Disclose {
+			env.IsCorrect = &meta.IsCorrect
+			env.PointsAwarded = &meta.Points
+		}
+		env.TotalPoints = &meta.Total
+		env.Status = meta.Status
 		return env
 	case "qa":
-		qa, err := createQA(ev, m.Body, m.Author)
+		qa, err := createQA(ev, m.Body, m.Author, pid)
 		if err != nil {
-			return wsEnvelope{Type: "error", For: "qa", Error: err.Error()}
+			env := wsEnvelope{Type: "error", For: "qa", Error: err.Error()}
+			if se, ok := err.(*slowModeError); ok {
+				env.RetryAfterS = se.RetryAfterS
+			}
+			return env
 		}
 		env := okEnvelope("qa")
 		env.ID = qa.ID
+		if qa.Flagged {
+			env.Status = "flagged"
+		}
 		return env
 	case "vote":
 		votes, voted, err := toggleVote(ev, pid, m.ID)

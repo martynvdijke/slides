@@ -44,6 +44,7 @@ export interface QuestionInput {
   show_results?: boolean
   correct_index?: number | null
   points_base?: number
+  time_limit_s?: number
 }
 
 export async function createQuestion(
@@ -62,6 +63,7 @@ export async function createQuestion(
   }
   if (input.correct_index !== undefined) data.correct_index = input.correct_index
   if (input.points_base !== undefined) data.points_base = input.points_base
+  if (input.time_limit_s !== undefined) data.time_limit_s = input.time_limit_s
   const res = await request.post(`/api/admin/events/${eventId}/questions`, { data })
   expect(res.ok(), 'create question should succeed').toBeTruthy()
   return (await res.json()) as { id: number }

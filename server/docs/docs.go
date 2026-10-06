@@ -206,6 +206,52 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/events/{id}/podium": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Toggle podium",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "podium toggle",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.EventDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/events/{id}/presentations": {
             "get": {
                 "security": [
@@ -742,6 +788,232 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/events/{id}/questions/{qid}/reveal": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Reveal question",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "question id",
+                        "name": "qid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.QuestionDTO"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/events/{id}/recap": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "List recap subscriptions",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/events/{id}/recap/preview": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Preview the event recap",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RecapPreviewDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/events/{id}/recap/send": {
+            "post": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Send the event recap",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RecapSendDTO"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/events/{id}/recap/{sid}": {
+            "delete": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Remove a recap subscription",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Event id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Subscription id",
+                        "name": "sid",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/events/{id}/stats": {
             "get": {
                 "security": [
@@ -756,48 +1028,6 @@ const docTemplate = `{
                     "admin"
                 ],
                 "summary": "Event statistics",
-                "parameters": [
-                    {
-                        "type": "integer",
-                        "description": "Event ID",
-                        "name": "id",
-                        "in": "path",
-                        "required": true
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/handlers.EventStatsDTO"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "type": "object",
-                            "additionalProperties": {
-                                "type": "string"
-                            }
-                        }
-                    }
-                }
-            }
-        },
-        "/api/admin/events/{id}/stats/stream": {
-            "get": {
-                "security": [
-                    {
-                        "CookieAuth": []
-                    }
-                ],
-                "produces": [
-                    "text/event-stream"
-                ],
-                "tags": [
-                    "admin"
-                ],
-                "summary": "Stream event statistics",
                 "parameters": [
                     {
                         "type": "integer",
@@ -980,6 +1210,66 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/admin/settings/filter": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get content filter settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FilterSettingsDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update content filter settings",
+                "parameters": [
+                    {
+                        "description": "filter payload",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FilterSettingsDTO"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.FilterSettingsDTO"
+                        }
+                    }
+                }
+            }
+        },
         "/api/admin/settings/otel": {
             "get": {
                 "security": [
@@ -1053,6 +1343,55 @@ const docTemplate = `{
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/admin/settings/recap": {
+            "get": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Get recap settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RecapSettingsDTO"
+                        }
+                    }
+                }
+            },
+            "put": {
+                "security": [
+                    {
+                        "CookieAuth": []
+                    }
+                ],
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin"
+                ],
+                "summary": "Update recap settings",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.RecapSettingsDTO"
                         }
                     }
                 }
@@ -1654,6 +1993,131 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/events/{code}/recap/subscribe": {
+            "post": {
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Subscribe to the event recap",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/events/{code}/recap/unsubscribe": {
+            "post": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Unsubscribe from the event recap",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/events/{code}/results": {
+            "get": {
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "public"
+                ],
+                "summary": "Public event results",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Event code",
+                        "name": "code",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ResultsDTO"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/api/events/{code}/state": {
             "get": {
                 "produces": [
@@ -1691,30 +2155,30 @@ const docTemplate = `{
                 }
             }
         },
-        "/api/events/{code}/stream": {
+        "/api/join/{room}": {
             "get": {
-                "description": "Server-sent events stream of personalized state. Each message is ` + "`" + `event: state` + "`" + ` with JSON StateDTO.",
                 "produces": [
-                    "text/event-stream"
+                    "application/json"
                 ],
                 "tags": [
                     "public"
                 ],
-                "summary": "Stream event state",
+                "summary": "Resolve room code",
                 "parameters": [
                     {
                         "type": "string",
-                        "description": "Event code",
-                        "name": "code",
+                        "description": "Room code",
+                        "name": "room",
                         "in": "path",
                         "required": true
                     }
                 ],
                 "responses": {
                     "200": {
-                        "description": "text/event-stream",
+                        "description": "OK",
                         "schema": {
-                            "type": "string"
+                            "type": "object",
+                            "additionalProperties": true
                         }
                     },
                     "404": {
@@ -1863,6 +2327,26 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "db.LeaderboardEntry": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "points": {
+                    "type": "integer"
+                },
+                "rank": {
+                    "type": "integer"
+                }
+            }
+        },
         "db.Result": {
             "type": "object",
             "properties": {
@@ -1898,6 +2382,9 @@ const docTemplate = `{
         "handlers.AnswerRequest": {
             "type": "object",
             "properties": {
+                "client_uuid": {
+                    "type": "string"
+                },
                 "question_id": {
                     "type": "integer"
                 },
@@ -1936,8 +2423,20 @@ const docTemplate = `{
                 "pending_qa_count": {
                     "type": "integer"
                 },
+                "qa_slow_mode_s": {
+                    "type": "integer"
+                },
                 "question_count": {
                     "type": "integer"
+                },
+                "results_published": {
+                    "type": "boolean"
+                },
+                "room_code": {
+                    "type": "string"
+                },
+                "show_podium": {
+                    "type": "boolean"
                 },
                 "status": {
                     "type": "string"
@@ -2022,6 +2521,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.FilterSettingsDTO": {
+            "type": "object",
+            "properties": {
+                "action": {
+                    "type": "string"
+                },
+                "enabled": {
+                    "type": "boolean"
+                },
+                "words": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.GlobalStatsDTO": {
             "type": "object",
             "properties": {
@@ -2033,6 +2546,26 @@ const docTemplate = `{
                 },
                 "totals": {
                     "$ref": "#/definitions/handlers.StatsTotalsDTO"
+                }
+            }
+        },
+        "handlers.MeDTO": {
+            "type": "object",
+            "properties": {
+                "color": {
+                    "type": "string"
+                },
+                "emoji": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "recap_email": {
+                    "type": "string"
+                },
+                "recap_subscribed": {
+                    "type": "boolean"
                 }
             }
         },
@@ -2134,6 +2667,9 @@ const docTemplate = `{
                 "created_at": {
                     "type": "string"
                 },
+                "flagged": {
+                    "type": "boolean"
+                },
                 "id": {
                     "type": "integer"
                 },
@@ -2162,11 +2698,20 @@ const docTemplate = `{
         "handlers.QuestionDTO": {
             "type": "object",
             "properties": {
+                "activated_at": {
+                    "type": "integer"
+                },
                 "answered": {
                     "type": "boolean"
                 },
+                "correct_index": {
+                    "type": "integer"
+                },
                 "created_at": {
                     "type": "string"
+                },
+                "deadline_at": {
+                    "type": "integer"
                 },
                 "event_id": {
                     "type": "integer"
@@ -2192,6 +2737,12 @@ const docTemplate = `{
                 "my_answer": {
                     "type": "string"
                 },
+                "my_correct": {
+                    "type": "boolean"
+                },
+                "my_points": {
+                    "type": "integer"
+                },
                 "nps": {
                     "type": "integer"
                 },
@@ -2200,6 +2751,9 @@ const docTemplate = `{
                     "items": {
                         "type": "string"
                     }
+                },
+                "points_base": {
+                    "type": "integer"
                 },
                 "position": {
                     "type": "integer"
@@ -2222,8 +2776,100 @@ const docTemplate = `{
                 "status": {
                     "type": "string"
                 },
+                "time_limit_s": {
+                    "type": "integer"
+                },
                 "total": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.RecapPreviewDTO": {
+            "type": "object",
+            "properties": {
+                "body": {
+                    "type": "string"
+                },
+                "cap": {
+                    "type": "integer"
+                },
+                "recipients": {
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "subject": {
+                    "type": "string"
+                },
+                "truncated": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.RecapSendDTO": {
+            "type": "object",
+            "properties": {
+                "cap": {
+                    "type": "integer"
+                },
+                "failed": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.recapSendResultDTO"
+                    }
+                },
+                "sent": {
+                    "type": "integer"
+                },
+                "skipped": {
+                    "type": "integer"
+                },
+                "truncated": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.RecapSettingsDTO": {
+            "type": "object",
+            "properties": {
+                "emails": {
+                    "type": "string"
+                }
+            }
+        },
+        "handlers.ResultsDTO": {
+            "type": "object",
+            "properties": {
+                "event": {
+                    "$ref": "#/definitions/handlers.resultsEventDTO"
+                },
+                "leaderboard": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/db.LeaderboardEntry"
+                    }
+                },
+                "qa": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.QADTO"
+                    }
+                },
+                "questions": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/handlers.QuestionDTO"
+                    }
+                },
+                "stats": {
+                    "$ref": "#/definitions/handlers.EventStatsSummaryDTO"
                 }
             }
         },
@@ -2238,6 +2884,15 @@ const docTemplate = `{
                 },
                 "feedback": {
                     "$ref": "#/definitions/handlers.FeedbackDTO"
+                },
+                "leaderboard": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/db.LeaderboardEntry"
+                    }
+                },
+                "me": {
+                    "$ref": "#/definitions/handlers.MeDTO"
                 },
                 "qa": {
                     "type": "array",
@@ -2267,6 +2922,40 @@ const docTemplate = `{
                 },
                 "votes": {
                     "type": "integer"
+                }
+            }
+        },
+        "handlers.recapSendResultDTO": {
+            "type": "object",
+            "properties": {
+                "email": {
+                    "type": "string"
+                },
+                "error": {
+                    "type": "string"
+                },
+                "ok": {
+                    "type": "boolean"
+                }
+            }
+        },
+        "handlers.resultsEventDTO": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "event_date": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
                 }
             }
         }

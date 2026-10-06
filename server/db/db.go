@@ -48,17 +48,20 @@ type Session struct {
 }
 
 type Event struct {
-	ID             int64
-	Code           string
-	RoomCode       string
-	Name           string
-	Description    string
-	EventDate      string
-	Status         string
-	FeedbackOpen   bool
-	CreatedAt      time.Time
-	QuestionCount  int
-	PendingQACount int
+	ID               int64
+	Code             string
+	RoomCode         string
+	Name             string
+	Description      string
+	EventDate        string
+	Status           string
+	FeedbackOpen     bool
+	ShowPodium       bool
+	QASlowModeS      int
+	ResultsPublished bool
+	CreatedAt        time.Time
+	QuestionCount    int
+	PendingQACount   int
 }
 
 type Presentation struct {
@@ -117,17 +120,20 @@ type Question struct {
 	DurationSec  int
 	AutoClose    bool
 	AutoReveal   bool
+	TimeLimitS   int
 }
 
 type QAQuestion struct {
-	ID        int64
-	EventID   int64
-	Body      string
-	Author    string
-	Status    string
-	Votes     int
-	Voted     bool
-	CreatedAt time.Time
+	ID            int64
+	EventID       int64
+	Body          string
+	Author        string
+	ParticipantID int64
+	Flagged       bool
+	Status        string
+	Votes         int
+	Voted         bool
+	CreatedAt     time.Time
 }
 
 type AnalyticsSettings struct {
@@ -142,6 +148,34 @@ type OTelSettings struct {
 	Endpoint    string
 	ServiceName string
 	Headers     string
+}
+
+// FilterSettings is the global blocked-word content filter configuration.
+// Action is "flag" (store the item as flagged for review) or "reject" (refuse
+// the submission). Words is the raw, newline/comma separated list.
+type FilterSettings struct {
+	Enabled bool
+	Words   string
+	Action  string
+}
+
+// RecapSettings is the admin-configured host recipient list for recap emails.
+// Emails is the raw, newline/comma separated list.
+type RecapSettings struct {
+	Emails string
+}
+
+// RecapSubscription is one attendee email opt-in for an event, joined with the
+// participant's display identity for the admin list.
+type RecapSubscription struct {
+	ID            int64
+	EventID       int64
+	ParticipantID int64
+	Email         string
+	CreatedAt     time.Time
+	Name          string
+	Emoji         string
+	Color         string
 }
 
 type Participant struct {
@@ -160,6 +194,7 @@ type Answer struct {
 	QuestionID    int64
 	ParticipantID int64
 	Value         string
+	Status        string
 	CreatedAt     time.Time
 	IsCorrect     *bool
 	PointsAwarded int
@@ -222,6 +257,9 @@ func migrate() error {
 			event_date TEXT DEFAULT '',
 			status TEXT NOT NULL DEFAULT 'open',
 			feedback_open INTEGER NOT NULL DEFAULT 0,
+			show_podium INTEGER NOT NULL DEFAULT 0,
+			qa_slow_mode_s INTEGER NOT NULL DEFAULT 0,
+			results_published INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS presentations (
@@ -246,6 +284,7 @@ func migrate() error {
 			is_feedback INTEGER NOT NULL DEFAULT 0,
 			media_url TEXT NOT NULL DEFAULT '',
 			media_type TEXT NOT NULL DEFAULT '',
+			time_limit_s INTEGER NOT NULL DEFAULT 0,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 		CREATE TABLE IF NOT EXISTS participants (
@@ -259,6 +298,7 @@ func migrate() error {
 			question_id INTEGER NOT NULL,
 			participant_id INTEGER NOT NULL,
 			value TEXT NOT NULL,
+			status TEXT NOT NULL DEFAULT 'visible',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			UNIQUE(question_id, participant_id)
 		);
@@ -267,6 +307,8 @@ func migrate() error {
 			event_id INTEGER NOT NULL,
 			body TEXT NOT NULL,
 			author TEXT NOT NULL DEFAULT '',
+			participant_id INTEGER NOT NULL DEFAULT 0,
+			flagged INTEGER NOT NULL DEFAULT 0,
 			status TEXT NOT NULL DEFAULT 'pending',
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
@@ -275,6 +317,14 @@ func migrate() error {
 			participant_id INTEGER NOT NULL,
 			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 			PRIMARY KEY(qa_id, participant_id)
+		);
+		CREATE TABLE IF NOT EXISTS recap_subscriptions (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			event_id INTEGER NOT NULL,
+			participant_id INTEGER NOT NULL,
+			email TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(event_id, participant_id)
 		);
 		CREATE TABLE IF NOT EXISTS settings (
 			id INTEGER PRIMARY KEY CHECK(id=1),
@@ -285,6 +335,10 @@ func migrate() error {
 			otel_endpoint TEXT NOT NULL DEFAULT '',
 			otel_service_name TEXT NOT NULL DEFAULT '',
 			otel_headers TEXT NOT NULL DEFAULT '',
+			filter_enabled INTEGER NOT NULL DEFAULT 0,
+			filter_words TEXT NOT NULL DEFAULT '',
+			filter_action TEXT NOT NULL DEFAULT 'flag',
+			recap_emails TEXT NOT NULL DEFAULT '',
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 		);
 	`)
@@ -341,6 +395,9 @@ func migrate() error {
 	if err := ensureColumn("events", "room_code", "room_code TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
+	if err := ensureColumn("events", "show_podium", "show_podium INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	// Short, human-friendly join codes are unique when present but optional, so
 	// the constraint is a partial index rather than a UNIQUE column.
 	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_events_room_code ON events(room_code) WHERE room_code <> ''"); err != nil {
@@ -354,6 +411,7 @@ func migrate() error {
 		{"correct_index", "correct_index INTEGER"},
 		{"points_base", "points_base INTEGER NOT NULL DEFAULT 100"},
 		{"activated_at", "activated_at INTEGER"},
+		{"time_limit_s", "time_limit_s INTEGER NOT NULL DEFAULT 0"},
 	} {
 		if err := ensureColumn("questions", col.name, col.ddl); err != nil {
 			return err
@@ -385,6 +443,41 @@ func migrate() error {
 		{"last_seen", "last_seen INTEGER"},
 	} {
 		if err := ensureColumn("participants", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	// moderation migrations
+	for _, col := range []struct{ name, ddl string }{
+		{"status", "status TEXT NOT NULL DEFAULT 'visible'"},
+	} {
+		if err := ensureColumn("answers", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"participant_id", "participant_id INTEGER NOT NULL DEFAULT 0"},
+		{"flagged", "flagged INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := ensureColumn("qa_questions", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
+	if err := ensureColumn("events", "qa_slow_mode_s", "qa_slow_mode_s INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	// recap migrations
+	if err := ensureColumn("events", "results_published", "results_published INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	if err := ensureColumn("settings", "recap_emails", "recap_emails TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"filter_enabled", "filter_enabled INTEGER NOT NULL DEFAULT 0"},
+		{"filter_words", "filter_words TEXT NOT NULL DEFAULT ''"},
+		{"filter_action", "filter_action TEXT NOT NULL DEFAULT 'flag'"},
+	} {
+		if err := ensureColumn("settings", col.name, col.ddl); err != nil {
 			return err
 		}
 	}
@@ -547,6 +640,25 @@ func CountUsers() (int, error) {
 	return n, err
 }
 
+// ListUserEmails returns the stored emails of all users, newest first,
+// skipping empty addresses. Used to resolve recap host recipients.
+func ListUserEmails() ([]string, error) {
+	rows, err := DB.Query("SELECT email FROM users WHERE email <> '' ORDER BY id ASC")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		out = append(out, email)
+	}
+	return out, rows.Err()
+}
+
 func CreateUser(username, passwordHash, role string) (int64, error) {
 	if role == "" {
 		role = "admin"
@@ -644,12 +756,18 @@ func DeleteExpiredSessions() error {
 func scanEventRow(row *sql.Row) (*Event, error) {
 	var e Event
 	var fo int
+	var sp int
+	var sm int
+	var rp int
 	var ca string
-	err := row.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
+	err := row.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca)
 	if err != nil {
 		return nil, err
 	}
 	e.FeedbackOpen = fo == 1
+	e.ShowPodium = sp == 1
+	e.QASlowModeS = sm
+	e.ResultsPublished = rp == 1
 	e.CreatedAt = parseTimePragmatic(ca)
 	// populate counts
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=?", e.ID).Scan(&e.QuestionCount)
@@ -660,12 +778,18 @@ func scanEventRow(row *sql.Row) (*Event, error) {
 func scanEventRows(rows *sql.Rows) (*Event, error) {
 	var e Event
 	var fo int
+	var sp int
+	var sm int
+	var rp int
 	var ca string
-	err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca)
+	err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca)
 	if err != nil {
 		return nil, err
 	}
 	e.FeedbackOpen = fo == 1
+	e.ShowPodium = sp == 1
+	e.QASlowModeS = sm
+	e.ResultsPublished = rp == 1
 	e.CreatedAt = parseTimePragmatic(ca)
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=?", e.ID).Scan(&e.QuestionCount)
 	_ = DB.QueryRow("SELECT COUNT(*) FROM qa_questions WHERE event_id=? AND status='pending'", e.ID).Scan(&e.PendingQACount)
@@ -682,7 +806,7 @@ func CreateEvent(name, code, description, eventDate string) (*Event, error) {
 }
 
 func ListEvents() ([]Event, error) {
-	rows, err := DB.Query("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
+	rows, err := DB.Query("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -691,11 +815,17 @@ func ListEvents() ([]Event, error) {
 	for rows.Next() {
 		var e Event
 		var fo int
+		var sp int
+		var sm int
+		var rp int
 		var ca string
-		if err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
+		if err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
 			return nil, err
 		}
 		e.FeedbackOpen = fo == 1
+		e.ShowPodium = sp == 1
+		e.QASlowModeS = sm
+		e.ResultsPublished = rp == 1
 		e.CreatedAt = parseTimePragmatic(ca)
 		out = append(out, e)
 	}
@@ -703,12 +833,12 @@ func ListEvents() ([]Event, error) {
 }
 
 func GetEventByID(id int64) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE id=?", id)
 	return scanEventRow(row)
 }
 
 func GetEventByCode(code string) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE code=?", code)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE code=?", code)
 	e, err := scanEventRow(row)
 	if err != nil {
 		return nil, err
@@ -723,7 +853,7 @@ func GetEventByRoomCode(code string) (*Event, error) {
 	if rc == "" {
 		return nil, sql.ErrNoRows
 	}
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE room_code=?", rc)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE room_code=?", rc)
 	return scanEventRow(row)
 }
 
@@ -745,11 +875,14 @@ func SetEventRoomCode(id int64, code string) error {
 
 func UpdateEvent(id int64, fields map[string]any) (*Event, error) {
 	allowed := map[string]string{
-		"name":          "name",
-		"description":   "description",
-		"event_date":    "event_date",
-		"status":        "status",
-		"feedback_open": "feedback_open",
+		"name":              "name",
+		"description":       "description",
+		"event_date":        "event_date",
+		"status":            "status",
+		"feedback_open":     "feedback_open",
+		"show_podium":       "show_podium",
+		"qa_slow_mode_s":    "qa_slow_mode_s",
+		"results_published": "results_published",
 	}
 	var sets []string
 	var args []any
@@ -759,7 +892,7 @@ func UpdateEvent(id int64, fields map[string]any) (*Event, error) {
 			continue
 		}
 		sets = append(sets, col+"=?")
-		if col == "feedback_open" {
+		if col == "feedback_open" || col == "show_podium" || col == "results_published" {
 			switch val := v.(type) {
 			case bool:
 				args = append(args, btoi(val))
@@ -782,6 +915,11 @@ func UpdateEvent(id int64, fields map[string]any) (*Event, error) {
 		}
 	}
 	return GetEventByID(id)
+}
+
+// SetResultsPublished toggles the public results page for an event.
+func SetResultsPublished(eventID int64, published bool) (*Event, error) {
+	return UpdateEvent(eventID, map[string]any{"results_published": published})
 }
 
 func DeleteEvent(id int64) error {
@@ -852,9 +990,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	var sr, fb int
 	var ci, aa sql.NullInt64
 	var pb sql.NullInt64
-	var dur sql.NullInt64
+	var dur, tl sql.NullInt64
 	var ac, ar sql.NullInt64
-	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar)
+	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl)
 	if err != nil {
 		return nil, err
 	}
@@ -888,6 +1026,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	}
 	if ar.Valid {
 		q.AutoReveal = ar.Int64 != 0
+	}
+	if tl.Valid {
+		q.TimeLimitS = int(tl.Int64)
 	}
 	return &q, nil
 }
@@ -910,9 +1051,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	var sr, fb int
 	var ci, aa sql.NullInt64
 	var pb sql.NullInt64
-	var dur sql.NullInt64
+	var dur, tl sql.NullInt64
 	var ac, ar sql.NullInt64
-	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar)
+	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl)
 	if err != nil {
 		return nil, err
 	}
@@ -947,6 +1088,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	if ar.Valid {
 		q.AutoReveal = ar.Int64 != 0
 	}
+	if tl.Valid {
+		q.TimeLimitS = int(tl.Int64)
+	}
 	fillQuestionStats(&q)
 	return &q, nil
 }
@@ -968,7 +1112,7 @@ func CreateQuestion(eventID int64, kind, mode, prompt string, options []string, 
 }
 
 func ListQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -991,7 +1135,7 @@ func ListQuestions(eventID int64) ([]Question, error) {
 }
 
 func ListFeedbackQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1014,7 +1158,7 @@ func ListFeedbackQuestions(eventID int64) ([]Question, error) {
 }
 
 func GetQuestion(id int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE id=?", id)
 	return scanQuestionRow(row)
 }
 
@@ -1036,6 +1180,7 @@ func UpdateQuestion(id int64, fields map[string]any) (*Question, error) {
 		"duration_sec":  "duration_sec",
 		"auto_close":    "auto_close",
 		"auto_reveal":   "auto_reveal",
+		"time_limit_s":  "time_limit_s",
 	}
 	var sets []string
 	var args []any
@@ -1108,7 +1253,7 @@ func ActivateQuestion(eventID, questionID int64, durationOverride *int) error {
 	if exists == 0 {
 		return fmt.Errorf("question not found")
 	}
-	_, err = tx.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='live'", eventID)
+	_, err = tx.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status IN ('live','locked','revealed')", eventID)
 	if err != nil {
 		return err
 	}
@@ -1126,6 +1271,11 @@ func ActivateQuestion(eventID, questionID int64, durationOverride *int) error {
 	if err != nil {
 		return err
 	}
+	// A new question always replaces the podium screen.
+	_, err = tx.Exec("UPDATE events SET show_podium=0 WHERE id=?", eventID)
+	if err != nil {
+		return err
+	}
 	return tx.Commit()
 }
 
@@ -1135,7 +1285,7 @@ func SetQuestionShowResults(qid int64, show bool) error {
 }
 
 func ListDueQuestions(nowMs int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
 	if err != nil {
 		return nil, err
 	}
@@ -1225,12 +1375,57 @@ func CloseQuestion(eventID, questionID int64) error {
 }
 
 func GetActiveQuestion(eventID int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal FROM questions WHERE event_id=? AND status='live' LIMIT 1", eventID)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE event_id=? AND status IN ('live','locked','revealed') ORDER BY CASE status WHEN 'live' THEN 0 WHEN 'locked' THEN 1 ELSE 2 END, activated_at DESC, id DESC LIMIT 1", eventID)
 	q, err := scanQuestionRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
 	return q, err
+}
+
+// LockExpiredQuestions moves every live, timed question whose deadline has
+// passed into the locked phase. It returns how many questions changed so
+// callers can broadcast only real transitions.
+func LockExpiredQuestions(eventID, nowMs int64) (int64, error) {
+	res, err := DB.Exec("UPDATE questions SET status='locked' WHERE event_id=? AND status='live' AND time_limit_s > 0 AND activated_at IS NOT NULL AND activated_at + time_limit_s*1000 <= ?", eventID, nowMs)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	return n, nil
+}
+
+// LockQuestionIfExpired locks a single question when its deadline has passed.
+// It is idempotent: a second call after the transition reports false.
+func LockQuestionIfExpired(eventID, questionID, nowMs int64) (bool, error) {
+	res, err := DB.Exec("UPDATE questions SET status='locked' WHERE id=? AND event_id=? AND status='live' AND time_limit_s > 0 AND activated_at IS NOT NULL AND activated_at + time_limit_s*1000 <= ?", questionID, eventID, nowMs)
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// RevealQuestion moves a live or locked question into the revealed phase and
+// publishes its results. Revealing an already-revealed question is a no-op.
+func RevealQuestion(eventID, questionID int64) error {
+	res, err := DB.Exec("UPDATE questions SET status='revealed', show_results=1 WHERE id=? AND event_id=? AND status IN ('live','locked','revealed')", questionID, eventID)
+	if err != nil {
+		return err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		var status string
+		err := DB.QueryRow("SELECT status FROM questions WHERE id=? AND event_id=?", questionID, eventID).Scan(&status)
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("question not found")
+		}
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("question cannot be revealed from status %q", status)
+	}
+	return nil
 }
 
 // ValidQuestionKind reports whether kind is a supported question type.
@@ -1367,7 +1562,7 @@ func computeQuestionStats(questionID int64) (*QuestionStats, error) {
 	_ = json.Unmarshal([]byte(optsStr), &opts)
 
 	stats := &QuestionStats{}
-	if err := DB.QueryRow("SELECT COUNT(DISTINCT participant_id) FROM answers WHERE question_id=?", questionID).Scan(&stats.Respondents); err != nil {
+	if err := DB.QueryRow("SELECT COUNT(DISTINCT participant_id) FROM answers WHERE question_id=? AND status='visible'", questionID).Scan(&stats.Respondents); err != nil {
 		return nil, err
 	}
 
@@ -1380,7 +1575,7 @@ func computeQuestionStats(questionID int64) (*QuestionStats, error) {
 		return npsStats(questionID, stats)
 	}
 
-	rows, err := DB.Query("SELECT value, COUNT(*) as cnt FROM answers WHERE question_id=? GROUP BY value ORDER BY cnt DESC LIMIT 100", questionID)
+	rows, err := DB.Query("SELECT value, COUNT(*) as cnt FROM answers WHERE question_id=? AND status='visible' GROUP BY value ORDER BY cnt DESC LIMIT 100", questionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1430,7 +1625,7 @@ func computeQuestionStats(questionID int64) (*QuestionStats, error) {
 // multiStats counts how many respondents selected each option. Total is the
 // number of ballots, so bar percentages read as "% of respondents".
 func multiStats(questionID int64, opts []string, stats *QuestionStats) (*QuestionStats, error) {
-	rows, err := DB.Query("SELECT value FROM answers WHERE question_id=?", questionID)
+	rows, err := DB.Query("SELECT value FROM answers WHERE question_id=? AND status='visible'", questionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1462,7 +1657,7 @@ func multiStats(questionID int64, opts []string, stats *QuestionStats) (*Questio
 // rankingStats computes Borda points (n-rank, best rank = 1) and the average
 // rank per option, ordered by score descending.
 func rankingStats(questionID int64, opts []string, stats *QuestionStats) (*QuestionStats, error) {
-	rows, err := DB.Query("SELECT value FROM answers WHERE question_id=?", questionID)
+	rows, err := DB.Query("SELECT value FROM answers WHERE question_id=? AND status='visible'", questionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1535,7 +1730,7 @@ func rankResult(label string, score, rankSum float64, count int) Result {
 
 // npsStats returns the 0..10 distribution plus the net promoter score.
 func npsStats(questionID int64, stats *QuestionStats) (*QuestionStats, error) {
-	rows, err := DB.Query("SELECT value, COUNT(*) FROM answers WHERE question_id=? GROUP BY value", questionID)
+	rows, err := DB.Query("SELECT value, COUNT(*) FROM answers WHERE question_id=? AND status='visible' GROUP BY value", questionID)
 	if err != nil {
 		return nil, err
 	}
@@ -1601,7 +1796,7 @@ func GetAnswer(questionID, participantID int64) (*Answer, error) {
 	var pa sql.NullInt64
 	var em sql.NullInt64
 	var cu sql.NullString
-	err := DB.QueryRow("SELECT id, question_id, participant_id, value, created_at, is_correct, points_awarded, elapsed_ms, client_uuid FROM answers WHERE question_id=? AND participant_id=?", questionID, participantID).Scan(&a.ID, &a.QuestionID, &a.ParticipantID, &a.Value, &ca, &ic, &pa, &em, &cu)
+	err := DB.QueryRow("SELECT id, question_id, participant_id, value, status, created_at, is_correct, points_awarded, elapsed_ms, client_uuid FROM answers WHERE question_id=? AND participant_id=?", questionID, participantID).Scan(&a.ID, &a.QuestionID, &a.ParticipantID, &a.Value, &a.Status, &ca, &ic, &pa, &em, &cu)
 	if err != nil {
 		return nil, err
 	}
@@ -1633,6 +1828,16 @@ func CountAnswers(questionID int64) (int, error) {
 // UpsertAnswerWithScoring inserts or updates an answer with scoring and optional client_uuid dedup.
 // Returns is_correct, points_awarded, total_points.
 func UpsertAnswerWithScoring(questionID, participantID int64, value string, clientUUID string) (bool, int, int, error) {
+	return UpsertAnswerWithScoringStatus(questionID, participantID, value, clientUUID, "visible")
+}
+
+// UpsertAnswerWithScoringStatus is UpsertAnswerWithScoring with an explicit
+// moderation status ("visible", "flagged" or "hidden"). Flagged answers are
+// stored and scored but excluded from public aggregates until approved.
+func UpsertAnswerWithScoringStatus(questionID, participantID int64, value string, clientUUID, status string) (bool, int, int, error) {
+	if status == "" {
+		status = "visible"
+	}
 	if clientUUID != "" {
 		var exists int
 		err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE client_uuid=?", clientUUID).Scan(&exists)
@@ -1724,7 +1929,7 @@ func UpsertAnswerWithScoring(questionID, participantID int64, value string, clie
 	} else {
 		cuParam = nil
 	}
-	_, err = DB.Exec(`INSERT INTO answers (question_id, participant_id, value, is_correct, points_awarded, elapsed_ms, client_uuid) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET value=excluded.value, is_correct=excluded.is_correct, points_awarded=excluded.points_awarded, elapsed_ms=excluded.elapsed_ms, client_uuid=COALESCE(excluded.client_uuid, answers.client_uuid), created_at=CURRENT_TIMESTAMP`, questionID, participantID, value, icParam, pointsParam, elapsedParam, cuParam)
+	_, err = DB.Exec(`INSERT INTO answers (question_id, participant_id, value, status, is_correct, points_awarded, elapsed_ms, client_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET value=excluded.value, status=excluded.status, is_correct=excluded.is_correct, points_awarded=excluded.points_awarded, elapsed_ms=excluded.elapsed_ms, client_uuid=COALESCE(excluded.client_uuid, answers.client_uuid), created_at=CURRENT_TIMESTAMP`, questionID, participantID, value, status, icParam, pointsParam, elapsedParam, cuParam)
 	if err != nil {
 		return false, 0, 0, err
 	}
@@ -1736,7 +1941,7 @@ func UpsertAnswerWithScoring(questionID, participantID int64, value string, clie
 
 func GetParticipantTotalPoints(participantID int64) (int, error) {
 	var n sql.NullInt64
-	err := DB.QueryRow("SELECT SUM(points_awarded) FROM answers WHERE participant_id=?", participantID).Scan(&n)
+	err := DB.QueryRow("SELECT SUM(points_awarded) FROM answers WHERE participant_id=? AND status='visible'", participantID).Scan(&n)
 	if err != nil {
 		return 0, err
 	}
@@ -1822,7 +2027,13 @@ func GetParticipantByID(id int64) (*Participant, error) {
 // qa
 
 func CreateQA(eventID int64, body, author string) (*QAQuestion, error) {
-	res, err := DB.Exec("INSERT INTO qa_questions (event_id, body, author) VALUES (?, ?, ?)", eventID, body, author)
+	return CreateQAWithParticipant(eventID, body, author, 0, false)
+}
+
+// CreateQAWithParticipant stores a Q&A question together with the submitting
+// participant and the content-filter verdict.
+func CreateQAWithParticipant(eventID int64, body, author string, participantID int64, flagged bool) (*QAQuestion, error) {
+	res, err := DB.Exec("INSERT INTO qa_questions (event_id, body, author, participant_id, flagged) VALUES (?, ?, ?, ?, ?)", eventID, body, author, participantID, btoi(flagged))
 	if err != nil {
 		return nil, err
 	}
@@ -1835,10 +2046,10 @@ func ListQA(eventID int64, statuses ...string) ([]QAQuestion, error) {
 	var err error
 	if len(statuses) == 0 {
 		rows, err = DB.Query(`
-			SELECT q.id, q.event_id, q.body, q.author, q.status, q.created_at, COUNT(v.qa_id) as votes
+			SELECT q.id, q.event_id, q.body, q.author, q.participant_id, q.flagged, q.status, q.created_at, COUNT(v.qa_id) as votes
 			FROM qa_questions q LEFT JOIN qa_votes v ON v.qa_id=q.id
 			WHERE q.event_id=?
-			GROUP BY q.id ORDER BY votes DESC, q.created_at ASC`, eventID)
+			GROUP BY q.id ORDER BY q.flagged DESC, votes DESC, q.created_at ASC`, eventID)
 	} else {
 		ph := strings.Repeat("?,", len(statuses))
 		ph = ph[:len(ph)-1]
@@ -1847,10 +2058,10 @@ func ListQA(eventID int64, statuses ...string) ([]QAQuestion, error) {
 			args = append(args, s)
 		}
 		query := fmt.Sprintf(`
-			SELECT q.id, q.event_id, q.body, q.author, q.status, q.created_at, COUNT(v.qa_id) as votes
+			SELECT q.id, q.event_id, q.body, q.author, q.participant_id, q.flagged, q.status, q.created_at, COUNT(v.qa_id) as votes
 			FROM qa_questions q LEFT JOIN qa_votes v ON v.qa_id=q.id
 			WHERE q.event_id=? AND q.status IN (%s)
-			GROUP BY q.id ORDER BY votes DESC, q.created_at ASC`, ph)
+			GROUP BY q.id ORDER BY q.flagged DESC, votes DESC, q.created_at ASC`, ph)
 		rows, err = DB.Query(query, args...)
 	}
 	if err != nil {
@@ -1861,9 +2072,11 @@ func ListQA(eventID int64, statuses ...string) ([]QAQuestion, error) {
 	for rows.Next() {
 		var q QAQuestion
 		var ca string
-		if err := rows.Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.Status, &ca, &q.Votes); err != nil {
+		var flagged int
+		if err := rows.Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.ParticipantID, &flagged, &q.Status, &ca, &q.Votes); err != nil {
 			return nil, err
 		}
+		q.Flagged = flagged == 1
 		q.CreatedAt = parseTimePragmatic(ca)
 		out = append(out, q)
 	}
@@ -1872,11 +2085,11 @@ func ListQA(eventID int64, statuses ...string) ([]QAQuestion, error) {
 
 func ListQAForParticipant(eventID, participantID int64) ([]QAQuestion, error) {
 	rows, err := DB.Query(`
-		SELECT q.id, q.event_id, q.body, q.author, q.status, q.created_at, COUNT(v.qa_id) as votes,
+		SELECT q.id, q.event_id, q.body, q.author, q.participant_id, q.flagged, q.status, q.created_at, COUNT(v.qa_id) as votes,
 		       CASE WHEN EXISTS(SELECT 1 FROM qa_votes WHERE qa_id=q.id AND participant_id=?) THEN 1 ELSE 0 END as voted
 		FROM qa_questions q LEFT JOIN qa_votes v ON v.qa_id=q.id
 		WHERE q.event_id=? AND q.status='approved'
-		GROUP BY q.id ORDER BY votes DESC, q.created_at ASC`, participantID, eventID)
+		GROUP BY q.id ORDER BY q.flagged DESC, votes DESC, q.created_at ASC`, participantID, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1886,9 +2099,11 @@ func ListQAForParticipant(eventID, participantID int64) ([]QAQuestion, error) {
 		var q QAQuestion
 		var ca string
 		var voted int
-		if err := rows.Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.Status, &ca, &q.Votes, &voted); err != nil {
+		var flagged int
+		if err := rows.Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.ParticipantID, &flagged, &q.Status, &ca, &q.Votes, &voted); err != nil {
 			return nil, err
 		}
+		q.Flagged = flagged == 1
 		q.CreatedAt = parseTimePragmatic(ca)
 		q.Voted = voted == 1
 		out = append(out, q)
@@ -1899,13 +2114,15 @@ func ListQAForParticipant(eventID, participantID int64) ([]QAQuestion, error) {
 func GetQA(id int64) (*QAQuestion, error) {
 	var q QAQuestion
 	var ca string
+	var flagged int
 	err := DB.QueryRow(`
-		SELECT q.id, q.event_id, q.body, q.author, q.status, q.created_at, COUNT(v.qa_id) as votes
+		SELECT q.id, q.event_id, q.body, q.author, q.participant_id, q.flagged, q.status, q.created_at, COUNT(v.qa_id) as votes
 		FROM qa_questions q LEFT JOIN qa_votes v ON v.qa_id=q.id
-		WHERE q.id=? GROUP BY q.id`, id).Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.Status, &ca, &q.Votes)
+		WHERE q.id=? GROUP BY q.id`, id).Scan(&q.ID, &q.EventID, &q.Body, &q.Author, &q.ParticipantID, &flagged, &q.Status, &ca, &q.Votes)
 	if err != nil {
 		return nil, err
 	}
+	q.Flagged = flagged == 1
 	q.CreatedAt = parseTimePragmatic(ca)
 	return &q, nil
 }
@@ -1949,6 +2166,97 @@ func CountPendingQA(eventID int64) (int, error) {
 	return n, err
 }
 
+// LastQASubmissionSeconds returns how many seconds ago the participant last
+// submitted a Q&A question for the event. Slow mode uses the stored submission
+// time, so reconnects and restarts do not reset the interval.
+func LastQASubmissionSeconds(eventID, participantID int64) (int, bool, error) {
+	var elapsed sql.NullInt64
+	err := DB.QueryRow(`
+		SELECT strftime('%s','now') - strftime('%s', created_at)
+		FROM qa_questions
+		WHERE event_id=? AND participant_id=?
+		ORDER BY created_at DESC, id DESC LIMIT 1`, eventID, participantID).Scan(&elapsed)
+	if err == sql.ErrNoRows {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	return int(elapsed.Int64), true, nil
+}
+
+// answer moderation
+
+// ModerationAnswer is one stored answer as shown in the admin moderation queue.
+type ModerationAnswer struct {
+	ID            int64
+	QuestionID    int64
+	Prompt        string
+	Kind          string
+	Value         string
+	Status        string
+	ParticipantID int64
+	Name          string
+	Emoji         string
+	Color         string
+	CreatedAt     time.Time
+}
+
+// ListAnswersForModeration returns stored answers for an event, optionally
+// filtered by visibility status and question. Flagged answers sort first.
+func ListAnswersForModeration(eventID int64, status string, questionID int64) ([]ModerationAnswer, error) {
+	query := `SELECT a.id, a.question_id, q.prompt, q.kind, a.value, a.status, a.participant_id,
+		COALESCE(NULLIF(p.display_name,''),'Anonymous'), COALESCE(NULLIF(p.emoji,''),'🙂'), COALESCE(NULLIF(p.color,''),'#6366F1'), a.created_at
+		FROM answers a
+		JOIN questions q ON q.id=a.question_id
+		LEFT JOIN participants p ON p.id=a.participant_id
+		WHERE q.event_id=?`
+	args := []any{eventID}
+	if status != "" {
+		query += " AND a.status=?"
+		args = append(args, status)
+	}
+	if questionID > 0 {
+		query += " AND a.question_id=?"
+		args = append(args, questionID)
+	}
+	query += " ORDER BY CASE a.status WHEN 'flagged' THEN 0 WHEN 'visible' THEN 1 ELSE 2 END, a.created_at DESC, a.id DESC"
+	rows, err := DB.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []ModerationAnswer{}
+	for rows.Next() {
+		var a ModerationAnswer
+		var ca string
+		if err := rows.Scan(&a.ID, &a.QuestionID, &a.Prompt, &a.Kind, &a.Value, &a.Status, &a.ParticipantID, &a.Name, &a.Emoji, &a.Color, &ca); err != nil {
+			return nil, err
+		}
+		a.CreatedAt = parseTimePragmatic(ca)
+		out = append(out, a)
+	}
+	return out, rows.Err()
+}
+
+// UpdateAnswerStatus changes the visibility of an answer, scoped to the event
+// so cross-event ids are refused. Returns the owning question id.
+func UpdateAnswerStatus(eventID, answerID int64, status string) (int64, error) {
+	res, err := DB.Exec(`UPDATE answers SET status=? WHERE id=? AND question_id IN (SELECT id FROM questions WHERE event_id=?)`, status, answerID, eventID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if n == 0 {
+		return 0, sql.ErrNoRows
+	}
+	var qid int64
+	if err := DB.QueryRow("SELECT question_id FROM answers WHERE id=?", answerID).Scan(&qid); err != nil {
+		return 0, err
+	}
+	return qid, nil
+}
+
 // leaderboard
 
 type LeaderboardEntry struct {
@@ -1982,7 +2290,7 @@ func GetLeaderboard(eventID int64) ([]LeaderboardEntry, error) {
 		FROM answers a
 		JOIN questions q ON q.id=a.question_id
 		JOIN participants p ON p.id=a.participant_id
-		WHERE q.event_id=? AND a.participant_id IS NOT NULL
+		WHERE q.event_id=? AND a.participant_id IS NOT NULL AND a.status='visible'
 		GROUP BY a.participant_id
 		ORDER BY pts DESC, p.id ASC
 		LIMIT 10`, eventID)
@@ -2216,8 +2524,8 @@ func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
 		return 0, err
 	}
 	newID, _ := res.LastInsertId()
-	_, err = tx.Exec(`INSERT INTO questions (event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, activated_at)
-		SELECT ?, kind, mode, prompt, options, position, 'draft', 0, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, NULL FROM questions WHERE event_id=?`, newID, sourceID)
+	_, err = tx.Exec(`INSERT INTO questions (event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, activated_at)
+		SELECT ?, kind, mode, prompt, options, position, 'draft', 0, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, NULL FROM questions WHERE event_id=?`, newID, sourceID)
 	if err != nil {
 		return 0, err
 	}
@@ -2225,6 +2533,130 @@ func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
 		return 0, err
 	}
 	return newID, nil
+}
+
+// GetFilterSettings returns the global content-filter configuration.
+func GetFilterSettings() (*FilterSettings, error) {
+	var s FilterSettings
+	var en int
+	err := DB.QueryRow("SELECT filter_enabled, filter_words, filter_action FROM settings WHERE id=1").Scan(&en, &s.Words, &s.Action)
+	if err != nil {
+		return nil, err
+	}
+	s.Enabled = en == 1
+	if s.Action == "" {
+		s.Action = "flag"
+	}
+	return &s, nil
+}
+
+// UpdateFilterSettings stores the global content-filter configuration.
+func UpdateFilterSettings(enabled bool, words, action string) error {
+	_, err := DB.Exec("UPDATE settings SET filter_enabled=?, filter_words=?, filter_action=?, updated_at=CURRENT_TIMESTAMP WHERE id=1", btoi(enabled), words, action)
+	return err
+}
+
+// GetRecapSettings returns the admin-configured host recap recipient list.
+func GetRecapSettings() (*RecapSettings, error) {
+	var s RecapSettings
+	err := DB.QueryRow("SELECT recap_emails FROM settings WHERE id=1").Scan(&s.Emails)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// UpdateRecapSettings stores the admin-configured host recap recipient list.
+func UpdateRecapSettings(s RecapSettings) error {
+	_, err := DB.Exec("UPDATE settings SET recap_emails=?, updated_at=CURRENT_TIMESTAMP WHERE id=1", s.Emails)
+	return err
+}
+
+// recap subscriptions
+
+// SubscribeRecap stores or updates the recap opt-in for one participant.
+func SubscribeRecap(eventID, participantID int64, email string) error {
+	_, err := DB.Exec(`INSERT INTO recap_subscriptions (event_id, participant_id, email) VALUES (?, ?, ?)
+		ON CONFLICT(event_id, participant_id) DO UPDATE SET email=excluded.email`, eventID, participantID, email)
+	return err
+}
+
+// UnsubscribeRecap removes a participant's recap opt-in for an event.
+func UnsubscribeRecap(eventID, participantID int64) error {
+	_, err := DB.Exec("DELETE FROM recap_subscriptions WHERE event_id=? AND participant_id=?", eventID, participantID)
+	return err
+}
+
+// GetRecapSubscription returns the participant's opted-in email for an event.
+func GetRecapSubscription(eventID, participantID int64) (string, bool, error) {
+	var email string
+	err := DB.QueryRow("SELECT email FROM recap_subscriptions WHERE event_id=? AND participant_id=?", eventID, participantID).Scan(&email)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return email, true, nil
+}
+
+// ListRecapEmails returns the opted-in addresses for an event, in opt-in order.
+func ListRecapEmails(eventID int64) ([]string, error) {
+	rows, err := DB.Query("SELECT email FROM recap_subscriptions WHERE event_id=? ORDER BY created_at ASC, id ASC", eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var email string
+		if err := rows.Scan(&email); err != nil {
+			return nil, err
+		}
+		out = append(out, email)
+	}
+	return out, rows.Err()
+}
+
+// ListRecapSubscriptions returns an event's opt-ins with participant display
+// identity for the admin recap view.
+func ListRecapSubscriptions(eventID int64) ([]RecapSubscription, error) {
+	rows, err := DB.Query(`SELECT s.id, s.event_id, s.participant_id, s.email, s.created_at,
+			COALESCE(p.display_name, 'Anonymous'), COALESCE(p.emoji, '🙂'), COALESCE(p.color, '#6366F1')
+		FROM recap_subscriptions s
+		LEFT JOIN participants p ON p.id = s.participant_id
+		WHERE s.event_id=? ORDER BY s.created_at ASC, s.id ASC`, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []RecapSubscription
+	for rows.Next() {
+		var s RecapSubscription
+		var ca string
+		if err := rows.Scan(&s.ID, &s.EventID, &s.ParticipantID, &s.Email, &ca, &s.Name, &s.Emoji, &s.Color); err != nil {
+			return nil, err
+		}
+		s.CreatedAt = parseTimePragmatic(ca)
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// DeleteRecapSubscription removes one opt-in by id, scoped to the event.
+func DeleteRecapSubscription(eventID, id int64) error {
+	res, err := DB.Exec("DELETE FROM recap_subscriptions WHERE id=? AND event_id=?", id, eventID)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
 }
 
 // password reset tokens

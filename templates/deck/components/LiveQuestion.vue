@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useLiveRoom } from '../composables/useLiveRoom'
 
 /**
@@ -20,15 +20,37 @@ const props = withDefaults(defineProps<{
   showResults: true,
 })
 
-const { active, connected, configured, staticMode, mediaUrl, answerResult, remainingSec } = useLiveRoom({
+const { active, connected, configured, staticMode, mediaUrl, answerResult, remainingSec, deadlineAt } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
 })
 
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+onMounted(() => { clockTimer = setInterval(() => { nowMs.value = Date.now() }, 250) })
+onUnmounted(() => { if (clockTimer) clearInterval(clockTimer); clockTimer = null })
+
 const isImage = computed(() => (active.value?.media_type || '').startsWith('image/'))
 const isVideo = computed(() => (active.value?.media_type || '').startsWith('video/'))
-const showBars = computed(() => props.showResults && !!active.value?.show_results)
+const revealVisible = computed(() => {
+  const a = active.value
+  if (!a) return false
+  if (a.status === 'locked') return false
+  return a.status === 'revealed' || !!a.show_results
+})
+const isLocked = computed(() => {
+  const a = active.value
+  if (!a) return false
+  if (a.status === 'locked') return true
+  return a.status === 'live' && deadlineAt.value !== null && nowMs.value >= deadlineAt.value
+})
+const remaining = computed<number | null>(() => {
+  const d = deadlineAt.value
+  if (d === null || active.value?.status !== 'live') return null
+  return Math.max(0, Math.ceil((d - nowMs.value) / 1000))
+})
+const showBars = computed(() => props.showResults && revealVisible.value)
 
 const correctIndex = computed(() => {
   const v = (active.value as any)?.correct_index
@@ -100,6 +122,8 @@ function isCorrectRow(label: string, idx: number): boolean {
             <span class="live-q-timer">{{ expired ? '0s' : countdownLabel }}</span>
           </div>
         </div>
+        <span v-else-if="remaining !== null" class="live-q-timer">⏱ {{ remaining }}s</span>
+        <span v-else-if="active.status === 'locked'" class="live-q-timer locked">⏱ locked</span>
       </div>
 
       <img
@@ -143,6 +167,7 @@ function isCorrectRow(label: string, idx: number): boolean {
           </template>
         </div>
       </div>
+      <div v-else-if="isLocked" class="live-q-locked">Time's up — answers are locked. Waiting for the reveal…</div>
       <div v-else-if="showResults" class="live-q-hidden" :class="{ dimmed: expired }">Results hidden</div>
     </template>
   </div>
@@ -213,6 +238,28 @@ function isCorrectRow(label: string, idx: number): boolean {
   border-radius: 8px;
   padding: 6px 8px;
   margin-bottom: 10px;
+}
+.live-q-head { display: flex; align-items: flex-start; gap: 10px; }
+.live-q-head .live-q-prompt { flex: 1; }
+.live-q-timer {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  border-radius: 999px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+.live-q-timer.locked { color: #f59e0b; }
+.live-q-locked {
+  font-size: 13px;
+  color: #fbbf24;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.25);
+  border-radius: 10px;
+  padding: 9px 12px;
 }
 .live-q-media {
   max-width: 100%;

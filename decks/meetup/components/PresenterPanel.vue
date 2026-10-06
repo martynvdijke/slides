@@ -67,6 +67,10 @@ async function api(path: string, init: RequestInit = {}): Promise<any> {
 const open = ref(props.open)
 watch(() => props.open, (v) => { open.value = v })
 
+// ── countdown clock ──
+const nowMs = ref(Date.now())
+let clockTimer: ReturnType<typeof setInterval> | null = null
+
 function onKeydown(e: KeyboardEvent) {
   if (!props.hotkey) return
   const target = e.target as HTMLElement | null
@@ -78,12 +82,18 @@ function onKeydown(e: KeyboardEvent) {
 onMounted(() => {
   if (staticMode.value) return
   window.addEventListener('keydown', onKeydown)
+  clockTimer = setInterval(() => { nowMs.value = Date.now() }, 250)
   void checkAuth()
   startSlideWatcher()
 })
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   stopSlideWatcher()
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onKeydown)
+  if (clockTimer) clearInterval(clockTimer)
+  clockTimer = null
 })
 
 // ── auth ──
@@ -146,6 +156,7 @@ const prompt = ref('')
 const optionsText = ref('')
 const showResults = ref(true)
 const isFeedback = ref(false)
+const timeLimitS = ref<number | ''>('')
 const mediaUrlVal = ref('')
 const mediaTypeVal = ref('')
 const mediaFile = ref<File | null>(null)
@@ -217,6 +228,22 @@ const previewSrc = computed(() => {
   return trimSlash(baseUrl.value) + (mediaUrlVal.value.startsWith('/') ? mediaUrlVal.value : '/' + mediaUrlVal.value)
 })
 
+// ── countdown ──
+const activeDeadline = computed<number | null>(() => {
+  const a = active.value
+  if (!a) return null
+  if (typeof a.deadline_at === 'number' && a.deadline_at > 0) return a.deadline_at
+  if (typeof a.time_limit_s === 'number' && a.time_limit_s > 0 && typeof a.activated_at === 'number' && a.activated_at > 0) {
+    return a.activated_at + a.time_limit_s * 1000
+  }
+  return null
+})
+const activeRemaining = computed<number | null>(() => {
+  const d = activeDeadline.value
+  if (d === null) return null
+  return Math.max(0, Math.ceil((d - nowMs.value) / 1000))
+})
+
 function onFile(e: Event) {
   const f = (e.target as HTMLInputElement).files?.[0] || null
   mediaFile.value = f
@@ -267,6 +294,7 @@ async function submit(activate: boolean) {
         options: parsedOptions.value,
         is_feedback: isFeedback.value,
         show_results: showResults.value,
+        time_limit_s: typeof timeLimitS.value === 'number' && timeLimitS.value > 0 ? Math.floor(timeLimitS.value) : 0,
         media_url: media.url,
         media_type: media.media_type,
         duration_sec: durationSec.value,
@@ -285,6 +313,7 @@ async function submit(activate: boolean) {
     void fetchQueue()
     prompt.value = ''
     optionsText.value = ''
+    timeLimitS.value = ''
     clearMedia()
   } catch (e: any) {
     error.value = e?.message || 'Failed to create question'
@@ -419,6 +448,39 @@ function stopSlideWatcher() {
 
 watch(authed, (v) => { if (v) maybeSendSlide() })
 watch(open, (v) => { if (v && authed.value) maybeSendSlide() })
+
+async function revealActive() {
+  const id = active.value?.id
+  if (!id || !eventId.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    await api('/api/admin/events/' + eventId.value + '/questions/' + id + '/reveal', { method: 'POST' })
+    message.value = 'Correct answer revealed.'
+  } catch (e: any) {
+    error.value = e?.message || 'Failed to reveal question'
+  } finally {
+    busy.value = false
+  }
+}
+
+async function togglePodium() {
+  if (!eventId.value) return
+  const show = !liveEvent.value?.show_podium
+  error.value = ''
+  busy.value = true
+  try {
+    await api('/api/admin/events/' + eventId.value + '/podium', {
+      method: 'POST',
+      body: JSON.stringify({ show }),
+    })
+    message.value = show ? 'Podium shown.' : 'Podium hidden.'
+  } catch (e: any) {
+    error.value = e?.message || 'Failed to update podium'
+  } finally {
+    busy.value = false
+  }
+}
 </script>
 
 <template>
@@ -465,6 +527,11 @@ watch(open, (v) => { if (v && authed.value) maybeSendSlide() })
 
         <input v-if="needsOptions" v-model="optionsText" class="pp-input" placeholder="Options, comma-separated" />
 
+        <div class="pp-row">
+          <label class="pp-check" for="pp-timelimit">Time limit (s, 0 = untimed)</label>
+          <input id="pp-timelimit" v-model.number="timeLimitS" type="number" min="0" max="3600" step="5" class="pp-input pp-input-sm pp-time" placeholder="0" />
+        </div>
+
         <div class="pp-media">
           <input ref="fileInput" type="file" accept="image/jpeg,image/png,image/gif,image/webp,image/avif,video/mp4,video/webm" @change="onFile" />
           <input v-model="mediaUrlVal" class="pp-input" placeholder="…or paste an image/video URL" />
@@ -476,14 +543,18 @@ watch(open, (v) => { if (v && authed.value) maybeSendSlide() })
         <div class="pp-actions">
           <button class="pp-btn primary" type="button" :disabled="busy" @click="submit(true)">Ask now</button>
           <button class="pp-btn" type="button" :disabled="busy" @click="submit(false)">Save draft</button>
+          <button v-if="active && (active.status === 'live' || active.status === 'locked')" class="pp-btn" type="button" :disabled="busy" @click="revealActive">Reveal</button>
           <button v-if="active" class="pp-btn danger" type="button" :disabled="busy" @click="closeActive">Close current</button>
           <button class="pp-btn next-btn" type="button" :disabled="nextBusy || !queueLength" :title="queueLength ? queueLength + ' in queue' : 'Queue empty'" @click="nextQuestion">
             Next <span v-if="queueLength" class="pp-badge">{{ queueLength }}</span>
           </button>
+          <button class="pp-btn" type="button" :disabled="busy || !eventId" @click="togglePodium">{{ liveEvent?.show_podium ? 'Hide podium' : 'Show podium' }}</button>
         </div>
         <div v-if="!queueLength" class="pp-hint">Queue empty — save a draft first.</div>
         <div class="pp-active" v-if="active">
-          <span class="pp-live-dot"></span> live: {{ active.prompt }} · {{ active.total }} {{ active.total === 1 ? 'answer' : 'answers' }}
+          <span class="pp-live-dot" :class="{ locked: active.status !== 'live' }"></span> {{ active.status }}: {{ active.prompt }} · {{ active.total }} {{ active.total === 1 ? 'answer' : 'answers' }}
+          <span v-if="activeRemaining !== null && active.status === 'live'" class="pp-countdown">⏱ {{ activeRemaining }}s</span>
+          <span v-else-if="active.status === 'locked'" class="pp-countdown">⏱ locked</span>
         </div>
 
         <div v-if="isScorableActive" class="pp-score">
@@ -618,6 +689,9 @@ watch(open, (v) => { if (v && authed.value) maybeSendSlide() })
   background: #ef4444;
   margin-right: 6px;
 }
+.pp-live-dot.locked { background: #f59e0b; }
+.pp-countdown { font-family: 'JetBrains Mono', ui-monospace, monospace; color: #fbbf24; margin-left: 6px; }
+.pp-time { max-width: 90px; }
 .pp-msg { color: #4ade80; font-size: 12px; }
 .pp-err { color: #fca5a5; font-size: 12px; }
 .pp-signout { align-self: flex-start; }

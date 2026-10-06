@@ -113,7 +113,7 @@
       state.user=j.user; if(els.meInfo) els.meInfo.textContent=j.user.username+' · '+j.user.role;
       showGate('app'); return loadEvents();
     }).then(function(){
-      loadBranding(); loadAnalytics(); loadOtel(); loadEmail(); loadWebhooks();
+      loadBranding(); loadAnalytics(); loadOtel(); loadEmail(); loadWebhooks(); loadFilter(); loadRecapSettings();
     }).catch(function(err){
       if(err==='setup') return;
       if(err && err.code===401){ showGate('login'); return; }
@@ -129,7 +129,7 @@
     navBtns.forEach(function(b){ var on=b.getAttribute('data-view')===name; b.classList.toggle('active', on); if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
     panels.forEach(function(p){ p.classList.toggle('hidden', p.getAttribute('data-panel')!==name); });
     if(name==='questions' && state.selectedId) loadQuestions(state.selectedId);
-    if(name==='qa' && state.selectedId) loadQA(state.selectedId);
+    if(name==='qa' && state.selectedId){ loadQA(state.selectedId); loadModeration(state.selectedId); }
     if(name==='slides' && state.selectedId) loadSlides(state.selectedId);
     if(name==='results' && state.selectedId) loadResults(state.selectedId);
     if(name==='leaderboard' && state.selectedId) loadLeaderboard(state.selectedId);
@@ -226,6 +226,9 @@
       document.getElementById('es-date').value=ev.event_date||'';
       document.getElementById('es-status').value=ev.status||'open';
       document.getElementById('es-feedback').checked=!!ev.feedback_open;
+      document.getElementById('es-slowmode').value=ev.qa_slow_mode_s||0;
+      document.getElementById('es-publish').checked=!!ev.results_published;
+      loadRecapSubs(id); resetRecapPreview();
     }
   }
   function updateSelectedBar(){
@@ -234,6 +237,7 @@
     els.selectedBar.classList.remove('hidden');
     els.selName.textContent=ev.name;
     els.selMeta.textContent=ev.code+(ev.room_code?' · room '+ev.room_code:'')+' · '+ev.status+' · '+(ev.event_date||'no date');
+    syncPodiumButton(ev);
     document.getElementById('sel-live').href='/live/'+encodeURIComponent(ev.code);
     document.getElementById('sel-aud').href='/e/'+encodeURIComponent(ev.code);
     document.getElementById('sel-join').href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):'');
@@ -251,6 +255,33 @@
     window.location.href='/api/admin/events/'+state.selectedId+'/export.csv';
   });
 
+  // Podium screen toggle (lives on the selected-event bar).
+  document.getElementById('btn-podium').addEventListener('click', function(){
+    if(!state.selectedId) return;
+    var show=this.getAttribute('data-show')!=='0';
+    api('/api/admin/events/'+state.selectedId+'/podium',{method:'POST', body:JSON.stringify({show:show})}).then(function(ev){
+      toast(show?'Podium shown':'Podium hidden');
+      var cur=state.events.find(function(e){return e.id===state.selectedId});
+      if(cur && ev) cur.show_podium=!!ev.show_podium;
+      updateSelectedBar();
+    }).catch(function(err){ toast(err.message||'Podium update failed','err'); });
+  });
+  function syncPodiumButton(ev){
+    var b=document.getElementById('btn-podium'); if(!b) return;
+    b.textContent=(ev&&ev.show_podium)?'Hide podium':'Show podium';
+    b.setAttribute('data-show',(ev&&ev.show_podium)?'0':'1');
+  }
+  // Live countdowns for timed questions in the admin list.
+  setInterval(function(){
+    var nodes=document.querySelectorAll('[data-countdown]');
+    for(var i=0;i<nodes.length;i++){
+      var dl=parseInt(nodes[i].getAttribute('data-countdown'),10);
+      if(isNaN(dl)) continue;
+      var left=Math.max(0,Math.ceil((dl-Date.now())/1000));
+      nodes[i].textContent='⏱ '+left+'s';
+    }
+  },250);
+
   // event settings
   document.getElementById('form-event-settings').addEventListener('submit', function(e){
     e.preventDefault();
@@ -260,7 +291,9 @@
       description: document.getElementById('es-desc').value.trim(),
       event_date: document.getElementById('es-date').value.trim(),
       status: document.getElementById('es-status').value,
-      feedback_open: document.getElementById('es-feedback').checked
+      feedback_open: document.getElementById('es-feedback').checked,
+      qa_slow_mode_s: Math.max(0, Math.min(3600, parseInt(document.getElementById('es-slowmode').value,10)||0)),
+      results_published: document.getElementById('es-publish').checked
     };
     api('/api/admin/events/'+state.selectedId,{method:'PATCH', body:JSON.stringify(payload)}).then(function(){ toast('Event saved'); loadEvents(); }).catch(function(err){ toast(err.message||'Save failed','err'); });
   });
@@ -375,12 +408,14 @@
       payload.auto_close = 0;
       payload.auto_reveal = 0;
     }
+    var tl=parseInt(document.getElementById('aq-timelimit').value,10);
+    payload.time_limit_s = (!isNaN(tl)&&tl>0)? tl : 0;
     if(kind==='poll'||kind==='yesno'){
       var cv=aqCorrect.value;
       if(cv==='') payload.correct_index=null; else payload.correct_index=parseInt(cv,10);
       var pb=parseInt(aqPoints.value,10); if(!isNaN(pb)&&pb>0) payload.points_base=pb; else payload.points_base=100;
     }
-    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; aqPoints.value='100'; if(aqDuration) aqDuration.value='0'; if(aqAutoReveal) aqAutoReveal.checked=false; resetQuestionMedia(); syncScoringControls(); syncTimingWrap(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
+    api('/api/admin/events/'+state.selectedId+'/questions',{method:'POST', body:JSON.stringify(payload)}).then(function(){ toast('Question added'); document.getElementById('form-add-question').reset(); document.getElementById('aq-show').checked=true; document.getElementById('aq-timelimit').value='0'; aqPoints.value='100'; if(aqDuration) aqDuration.value='0'; if(aqAutoReveal) aqAutoReveal.checked=false; resetQuestionMedia(); syncScoringControls(); syncTimingWrap(); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Add failed','err'); });
   });
 
   // --- queue helpers ---
@@ -479,7 +514,7 @@
       var left=document.createElement('div'); left.style.flex='1';
       var prompt=document.createElement('div'); prompt.style.fontWeight='700'; prompt.style.letterSpacing='-.02em'; prompt.textContent=q.prompt;
       var meta=document.createElement('div'); meta.style.color='var(--muted)'; meta.style.fontSize='.82rem'; meta.style.marginTop='4px';
-      meta.textContent = q.kind+' · '+q.mode + (q.is_feedback?' · feedback':'') + ' · '+q.status + (q.show_results?' · results visible':' · results hidden') + (q.options && q.options.length ? ' · '+q.options.join(', '):'') + (q.respondents? ' · '+q.respondents+' respondents':'') + (q.media_url? ' · '+q.media_type:'');
+      meta.textContent = q.kind+' · '+q.mode + (q.is_feedback?' · feedback':'') + ' · '+q.status + (q.time_limit_s>0?' · ⏱ '+q.time_limit_s+'s':'') + (q.show_results?' · results visible':' · results hidden') + (q.options && q.options.length ? ' · '+q.options.join(', '):'') + (q.respondents? ' · '+q.respondents+' respondents':'') + (q.media_url? ' · '+q.media_type:'');
       left.appendChild(prompt); left.appendChild(meta);
       // correct badge
       var correctLabel=null;
@@ -506,10 +541,14 @@
         var tChip0=document.createElement('span'); tChip0.className='pill'; tChip0.style.marginTop='6px'; tChip0.style.display='inline-block'; tChip0.style.opacity='.55'; tChip0.style.marginLeft='6px'; tChip0.textContent='⏱ untimed';
         left.appendChild(tChip0);
       }
+      if(q.status==='live' && q.deadline_at){
+        var cd=document.createElement('span'); cd.className='pill'; cd.style.marginTop='6px'; cd.style.display='inline-block'; cd.setAttribute('data-countdown',String(q.deadline_at)); cd.textContent='⏱ …';
+        left.appendChild(cd);
+      }
       var badge=document.createElement('span'); badge.className='badge '+(q.status==='live'?'open':''); badge.textContent=q.status;
       top.appendChild(left); top.appendChild(badge);
       var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
-      if(q.status!=='live'){
+      if(q.status==='draft'||q.status==='closed'){
         var bAct=document.createElement('button'); bAct.className='btn btn-primary btn-small'; bAct.type='button'; bAct.textContent='Activate';
         bAct.addEventListener('click', function(){
           var overrideBody=null;
@@ -530,7 +569,12 @@
         });
         actions.appendChild(bAct);
       }
-      if(q.status==='live'){
+      if(q.status==='live'||q.status==='locked'){
+        var bReveal=document.createElement('button'); bReveal.className='btn btn-primary btn-small'; bReveal.type='button'; bReveal.textContent='Reveal';
+        bReveal.addEventListener('click', function(){ api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/reveal',{method:'POST'}).then(function(){ toast('Revealed'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Reveal failed','err'); }); });
+        actions.appendChild(bReveal);
+      }
+      if(q.status==='live'||q.status==='locked'||q.status==='revealed'){
         var bClose=document.createElement('button'); bClose.className='btn btn-ghost btn-small'; bClose.type='button'; bClose.textContent='Close';
         bClose.addEventListener('click', function(){ api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/close',{method:'POST'}).then(function(){ toast('Closed'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Close failed','err'); }); });
         actions.appendChild(bClose);
@@ -551,6 +595,13 @@
       var bSave=document.createElement('button'); bSave.className='btn btn-ghost btn-small'; bSave.type='button'; bSave.textContent='Save';
       bSave.addEventListener('click', function(){ api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify({prompt:inp.value.trim()})}).then(function(){ toast('Saved'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); }); });
       editWrap.appendChild(inp); editWrap.appendChild(bSave);
+      var tlInp=document.createElement('input'); tlInp.className='input'; tlInp.type='number'; tlInp.min='0'; tlInp.max='3600'; tlInp.step='5'; tlInp.style.width='110px'; tlInp.value=String(q.time_limit_s||0); tlInp.setAttribute('aria-label','Time limit (seconds)'); tlInp.title='Time limit (seconds)';
+      var bTl=document.createElement('button'); bTl.className='btn btn-ghost btn-small'; bTl.type='button'; bTl.textContent='Save timer';
+      bTl.addEventListener('click', function(){
+        var v=parseInt(tlInp.value,10); if(isNaN(v)||v<0) v=0; if(v>3600) v=3600;
+        api('/api/admin/events/'+state.selectedId+'/questions/'+q.id,{method:'PATCH', body:JSON.stringify({time_limit_s:v})}).then(function(){ toast(v>0?('Timer set to '+v+'s'):'Timer removed'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Save failed','err'); });
+      });
+      editWrap.appendChild(tlInp); editWrap.appendChild(bTl);
       // scoring edit for poll/yesno
       if(q.kind==='poll'||q.kind==='yesno'){
         var scoreWrap=document.createElement('div'); scoreWrap.style.display='flex'; scoreWrap.style.gap='8px'; scoreWrap.style.marginTop='8px'; scoreWrap.style.flexWrap='wrap'; scoreWrap.style.alignItems='center';
@@ -679,6 +730,7 @@
       var votes=document.createElement('span'); votes.textContent='· '+q.votes+' votes';
       var badge=document.createElement('span'); badge.className='pill'; badge.textContent=q.status;
       meta.appendChild(author); meta.appendChild(votes); meta.appendChild(badge);
+      if(q.flagged){ var fb=document.createElement('span'); fb.className='pill'; fb.textContent='⚑ flagged'; fb.style.color='#FBBF24'; meta.appendChild(fb); }
       var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
       ['approved','hidden','answered'].forEach(function(s){
         var b=document.createElement('button'); b.className='btn btn-ghost btn-small'; b.type='button'; b.textContent=s;
@@ -690,6 +742,40 @@
       bDel.addEventListener('click', function(){ if(!confirm('Delete?')) return; api('/api/admin/events/'+state.selectedId+'/qa/'+q.id,{method:'DELETE'}).then(function(){ toast('Deleted'); loadQA(state.selectedId); }).catch(function(err){ toast(err.message||'Delete failed','err'); }); });
       actions.appendChild(bDel);
       card.appendChild(body); card.appendChild(meta); card.appendChild(actions); root.appendChild(card);
+    });
+  }
+
+  // answer moderation
+  document.getElementById('btn-refresh-moderation').addEventListener('click', function(){ if(state.selectedId) loadModeration(state.selectedId); });
+  document.getElementById('mod-status').addEventListener('change', function(){ if(state.selectedId) loadModeration(state.selectedId); });
+  function loadModeration(id){
+    var status=document.getElementById('mod-status').value;
+    var qs=status?('?status='+encodeURIComponent(status)):'';
+    api('/api/admin/events/'+id+'/answers'+qs).then(function(list){ renderModeration(Array.isArray(list)?list:[]); }).catch(function(){ document.getElementById('moderation-list').textContent='Could not load answers.'; });
+  }
+  function renderModeration(list){
+    var root=document.getElementById('moderation-list'); root.textContent='';
+    if(!list.length){ var e=document.createElement('div'); e.className='glass card-pad'; e.style.color='var(--muted)'; e.textContent='No answers in this state.'; root.appendChild(e); return; }
+    list.forEach(function(a){
+      var card=document.createElement('div'); card.className='glass qa-item';
+      var value=document.createElement('div'); value.className='qa-body'; value.textContent=a.value;
+      var prompt=document.createElement('div'); prompt.style.color='var(--muted)'; prompt.style.fontSize='.82rem'; prompt.textContent=a.prompt+' · '+a.kind;
+      var meta=document.createElement('div'); meta.className='qa-meta';
+      var who=document.createElement('strong'); who.textContent=(a.emoji||'🙂')+' '+(a.name||'Anonymous');
+      var badge=document.createElement('span'); badge.className='pill'; badge.textContent=a.status;
+      if(a.status==='flagged'){ badge.style.background='rgba(251,191,36,.18)'; badge.style.color='#FBBF24'; }
+      meta.appendChild(who); meta.appendChild(badge);
+      var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
+      function act(label,status,color){
+        var b=document.createElement('button'); b.className='btn btn-ghost btn-small'; b.type='button'; b.textContent=label; if(color) b.style.color=color;
+        b.addEventListener('click', function(){
+          api('/api/admin/events/'+state.selectedId+'/answers/'+a.id,{method:'PATCH', body:JSON.stringify({status:status})}).then(function(){ toast('Answer '+status); loadModeration(state.selectedId); loadResults(state.selectedId); }).catch(function(err){ toast(err.message||'Update failed','err'); });
+        });
+        actions.appendChild(b);
+      }
+      if(a.status!=='visible') act('Approve','visible');
+      if(a.status!=='hidden') act('Hide','hidden','#F87171');
+      card.appendChild(value); card.appendChild(prompt); card.appendChild(meta); card.appendChild(actions); root.appendChild(card);
     });
   }
 
@@ -1221,6 +1307,78 @@
         resEl.classList.remove('hidden');
       }
     });
+  });
+
+  // content filter settings
+  function loadFilter(){
+    api('/api/admin/settings/filter').then(function(j){
+      document.getElementById('cf-enabled').checked=!!j.enabled;
+      document.getElementById('cf-words').value=j.words||'';
+      document.getElementById('cf-action').value=j.action||'flag';
+    }).catch(function(){});
+  }
+  var formFilter=document.getElementById('form-filter');
+  if(formFilter) formFilter.addEventListener('submit', function(e){
+    e.preventDefault();
+    var payload={ enabled: document.getElementById('cf-enabled').checked, words: document.getElementById('cf-words').value, action: document.getElementById('cf-action').value };
+    api('/api/admin/settings/filter',{method:'PUT', body:JSON.stringify(payload)}).then(function(){ toast('Filter saved'); }).catch(function(err){ toast(err.message||'Failed','err'); });
+  });
+
+  // recap settings + per-event send
+  function loadRecapSettings(){
+    api('/api/admin/settings/recap').then(function(j){
+      document.getElementById('rc-emails').value=j.emails||'';
+    }).catch(function(){});
+  }
+  var formRecap=document.getElementById('form-recap');
+  if(formRecap) formRecap.addEventListener('submit', function(e){
+    e.preventDefault();
+    api('/api/admin/settings/recap',{method:'PUT', body:JSON.stringify({emails: document.getElementById('rc-emails').value})}).then(function(){ toast('Recipients saved'); }).catch(function(err){ toast(err.message||'Failed','err'); });
+  });
+  function resetRecapPreview(){
+    var pre=document.getElementById('rc-preview'); if(pre){ pre.classList.add('hidden'); pre.textContent=''; }
+    var meta=document.getElementById('rc-preview-meta'); if(meta) meta.textContent='';
+    var send=document.getElementById('rc-send-status'); if(send) send.textContent='';
+  }
+  function loadRecapSubs(id){
+    var root=document.getElementById('recap-subs'); if(!root) return;
+    if(!id){ root.textContent='Select an event to see subscriptions.'; return; }
+    root.textContent='Loading…';
+    api('/api/admin/events/'+id+'/recap').then(function(j){
+      var list=(j&&j.subscriptions)||[];
+      root.textContent='';
+      if(!list.length){ root.textContent='No attendee opt-ins yet.'; return; }
+      list.forEach(function(s){
+        var row=document.createElement('div'); row.className='inline gap-2'; row.style.justifyContent='space-between';
+        var who=document.createElement('span');
+        who.textContent=(s.emoji||'🙂')+' '+(s.name||'Anonymous')+' — '+s.email;
+        var rm=document.createElement('button'); rm.className='btn btn-ghost btn-small'; rm.type='button'; rm.textContent='Remove';
+        rm.addEventListener('click', function(){
+          api('/api/admin/events/'+id+'/recap/'+s.id,{method:'DELETE'}).then(function(){ toast('Subscription removed'); loadRecapSubs(id); }).catch(function(err){ toast(err.message||'Remove failed','err'); });
+        });
+        row.appendChild(who); row.appendChild(rm); root.appendChild(row);
+      });
+    }).catch(function(){ root.textContent='Could not load subscriptions.'; });
+  }
+  document.getElementById('btn-refresh-recap-subs').addEventListener('click', function(){ if(state.selectedId) loadRecapSubs(state.selectedId); });
+  document.getElementById('btn-recap-preview').addEventListener('click', function(){
+    if(!state.selectedId) return toast('Select an event first','err');
+    var pre=document.getElementById('rc-preview'); var meta=document.getElementById('rc-preview-meta');
+    meta.textContent='Building preview…';
+    api('/api/admin/events/'+state.selectedId+'/recap/preview').then(function(j){
+      pre.classList.remove('hidden'); pre.textContent='Subject: '+j.subject+'\n\n'+j.body;
+      meta.textContent='Recipients: '+j.recipients+(j.skipped?(' · skipped '+j.skipped):'')+(j.truncated?(' · capped at '+j.cap):'');
+    }).catch(function(err){ meta.textContent=err.message||'Preview failed'; });
+  });
+  document.getElementById('btn-recap-send').addEventListener('click', function(){
+    if(!state.selectedId) return toast('Select an event first','err');
+    var btn=this; var st=document.getElementById('rc-send-status');
+    if(!confirm('Send the recap email to all recipients now?')) return;
+    btn.disabled=true; st.textContent='Sending…';
+    api('/api/admin/events/'+state.selectedId+'/recap/send',{method:'POST', body:JSON.stringify({})}).then(function(j){
+      st.textContent='Sent '+j.sent+' · failed '+j.failed+' · skipped '+j.skipped+(j.truncated?(' · capped at '+j.cap):'');
+      toast(j.failed?('Recap sent with '+j.failed+' failure(s)'):'Recap sent');
+    }).catch(function(err){ st.textContent=''; toast(err.message||'Send failed','err'); }).finally(function(){ btn.disabled=false; });
   });
 
   // branding / analytics / otel

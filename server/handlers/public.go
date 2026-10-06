@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"slides/db"
 	"slides/qr"
@@ -32,47 +33,99 @@ func writeServiceErr(w http.ResponseWriter, err error) {
 		jsonError(w, he.msg, he.status)
 		return
 	}
+	var se *slowModeError
+	if errors.As(err, &se) {
+		writeJSON(w, http.StatusTooManyRequests, map[string]any{"error": se.Error(), "retry_after_s": se.RetryAfterS})
+		return
+	}
 	jsonError(w, err.Error(), http.StatusInternalServerError)
 }
 
 // submitAnswer validates and stores an answer, then notifies live subscribers.
 func submitAnswer(ev *db.Event, pid, questionID int64, raw string) error {
-	_, _, _, err := submitAnswerWithMeta(ev, pid, questionID, raw, "")
+	_, err := submitAnswerWithMeta(ev, pid, questionID, raw, "")
 	return err
 }
 
-func submitAnswerWithMeta(ev *db.Event, pid, questionID int64, raw string, clientUUID string) (bool, int, int, error) {
+// answerMeta carries the outcome of an answer submission. Disclose reports
+// whether correctness and awarded points may be revealed to the participant;
+// scoring itself always happens at submit time so speed still matters. Status
+// is the stored visibility: "visible" or "flagged" by the content filter.
+type answerMeta struct {
+	IsCorrect bool
+	Points    int
+	Total     int
+	Disclose  bool
+	Status    string
+}
+
+func submitAnswerWithMeta(ev *db.Event, pid, questionID int64, raw string, clientUUID string) (answerMeta, error) {
+	var out answerMeta
 	if questionID == 0 {
-		return false, 0, 0, badRequest("question_id is required")
+		return out, badRequest("question_id is required")
 	}
 	q, err := db.GetQuestion(questionID)
 	if err != nil || q == nil {
-		return false, 0, 0, notFound("question not found")
+		return out, notFound("question not found")
 	}
 	if q.EventID != ev.ID {
-		return false, 0, 0, notFound("question not found")
+		return out, notFound("question not found")
 	}
 	if q.Status != "live" && !q.IsFeedback {
-		return false, 0, 0, badRequest("question is not live")
+		switch q.Status {
+		case "locked":
+			return out, badRequest("question is locked")
+		case "revealed":
+			return out, badRequest("question is closed")
+		default:
+			return out, badRequest("question is not live")
+		}
+	}
+	if q.Status == "live" && q.TimeLimitS > 0 && q.ActivatedAt != nil {
+		nowMs := time.Now().UnixMilli()
+		if nowMs >= *q.ActivatedAt+int64(q.TimeLimitS)*1000 {
+			// Lazy fallback when the scheduled auto-lock did not run: reconcile
+			// the phase, then reject the late answer.
+			if locked, err := db.LockQuestionIfExpired(ev.ID, q.ID, nowMs); err == nil && locked {
+				BroadcastEvent(ev.ID)
+			}
+			return out, badRequest("time is up")
+		}
 	}
 	val, err := db.ValidateAnswer(q.Kind, q.Options, raw)
 	if err != nil {
-		return false, 0, 0, badRequest(err.Error())
+		return out, badRequest(err.Error())
 	}
 	if pid == 0 {
-		return false, 0, 0, badRequest("could not identify participant")
+		return out, badRequest("could not identify participant")
 	}
-	isCorrect, pts, total, err := db.UpsertAnswerWithScoring(q.ID, pid, val, clientUUID)
+	// Content filter: flagged answers are stored but excluded from public
+	// aggregates until a host approves them; rejected ones are not stored.
+	status := "visible"
+	if fc := loadFilterConfig(); fc.matches(val) {
+		if fc.Action == "reject" {
+			return out, badRequest("answer rejected by the content filter")
+		}
+		status = "flagged"
+	}
+	isCorrect, pts, total, err := db.UpsertAnswerWithScoringStatus(q.ID, pid, val, clientUUID, status)
 	if err != nil {
-		return false, 0, 0, internal("could not save answer")
+		return out, internal("could not save answer")
 	}
 	db.InvalidateLeaderboard(ev.ID)
 	BroadcastEvent(ev.ID)
-	return isCorrect, pts, total, nil
+	return answerMeta{
+		IsCorrect: isCorrect,
+		Points:    pts,
+		Total:     total,
+		Disclose:  status == "visible" && (q.ShowResults || q.Status == "revealed"),
+		Status:    status,
+	}, nil
 }
 
-// createQA trims and stores a moderated Q&A question.
-func createQA(ev *db.Event, body, author string) (*db.QAQuestion, error) {
+// createQA trims and stores a moderated Q&A question, enforcing the per-event
+// per-participant slow mode and applying the content filter.
+func createQA(ev *db.Event, body, author string, participantID int64) (*db.QAQuestion, error) {
 	body = strings.TrimSpace(body)
 	if body == "" {
 		return nil, badRequest("body is required")
@@ -84,7 +137,17 @@ func createQA(ev *db.Event, body, author string) (*db.QAQuestion, error) {
 	if len([]rune(author)) > 80 {
 		author = string([]rune(author)[:80])
 	}
-	qa, err := db.CreateQA(ev.ID, body, author)
+	if wait := slowModeWait(ev, participantID); wait > 0 {
+		return nil, &slowModeError{RetryAfterS: wait}
+	}
+	flagged := false
+	if fc := loadFilterConfig(); fc.matches(body) {
+		if fc.Action == "reject" {
+			return nil, badRequest("question rejected by the content filter")
+		}
+		flagged = true
+	}
+	qa, err := db.CreateQAWithParticipant(ev.ID, body, author, participantID, flagged)
 	if err != nil {
 		return nil, internal("could not create question")
 	}
@@ -187,12 +250,20 @@ func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	pid := participantID(w, r, ev.ID)
-	isCorrect, pts, total, err := submitAnswerWithMeta(ev, pid, req.QuestionID, req.Value, req.ClientUUID)
+	meta, err := submitAnswerWithMeta(ev, pid, req.QuestionID, req.Value, req.ClientUUID)
 	if err != nil {
 		writeServiceErr(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "is_correct": isCorrect, "points_awarded": pts, "total_points": total})
+	resp := map[string]any{"ok": true, "total_points": meta.Total}
+	if meta.Disclose {
+		resp["is_correct"] = meta.IsCorrect
+		resp["points_awarded"] = meta.Points
+	}
+	if meta.Status == "flagged" {
+		resp["flagged"] = true
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // ListPublicQA lists approved Q&A for the event.
@@ -255,7 +326,8 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	qa, err := createQA(ev, req.Body, req.Author)
+	pid := participantID(w, r, ev.ID)
+	qa, err := createQA(ev, req.Body, req.Author, pid)
 	if err != nil {
 		writeServiceErr(w, err)
 		return
@@ -265,7 +337,11 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 		body = string([]rune(body)[:200])
 	}
 	webhook.Notify(ev.Code, "qa.created", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "qa_id": qa.ID, "body": body})
-	writeJSON(w, http.StatusOK, map[string]any{"id": qa.ID, "status": "pending"})
+	resp := map[string]any{"id": qa.ID, "status": "pending"}
+	if qa.Flagged {
+		resp["flagged"] = true
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 // VoteQA toggles a vote for a Q&A question.

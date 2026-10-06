@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -247,6 +249,31 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 			fields["feedback_open"] = b
 		}
 	}
+	if v, ok := raw["qa_slow_mode_s"]; ok {
+		var n int
+		if err := json.Unmarshal(v, &n); err != nil || n < 0 {
+			jsonError(w, "invalid qa_slow_mode_s", http.StatusBadRequest)
+			return
+		}
+		if n > 3600 {
+			n = 3600
+		}
+		fields["qa_slow_mode_s"] = n
+	}
+	if v, ok := raw["results_published"]; ok {
+		var b bool
+		if err := json.Unmarshal(v, &b); err != nil {
+			var n int
+			if err2 := json.Unmarshal(v, &n); err2 == nil {
+				fields["results_published"] = n != 0
+			} else {
+				jsonError(w, "invalid results_published", http.StatusBadRequest)
+				return
+			}
+		} else {
+			fields["results_published"] = b
+		}
+	}
 	// code handling
 	var newCode string
 	var codeProvided bool
@@ -284,6 +311,85 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	if s, ok := fields["status"]; ok && s == "closed" {
 		webhook.Notify(ev.Code, "event.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "event_id": ev.ID})
 	}
+}
+
+// AdminListAnswers lists stored answers for moderation, optionally filtered by
+// visibility status and question. Flagged answers sort first.
+func AdminListAnswers(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	if id == 0 {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	if _, err := db.GetEventByID(id); err != nil {
+		jsonError(w, "not found", http.StatusNotFound)
+		return
+	}
+	status := strings.TrimSpace(r.URL.Query().Get("status"))
+	switch status {
+	case "", "visible", "flagged", "hidden":
+	default:
+		jsonError(w, "invalid status", http.StatusBadRequest)
+		return
+	}
+	var questionID int64
+	if raw := r.URL.Query().Get("question_id"); raw != "" {
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || n <= 0 {
+			jsonError(w, "invalid question_id", http.StatusBadRequest)
+			return
+		}
+		questionID = n
+	}
+	rows, err := db.ListAnswersForModeration(id, status, questionID)
+	if err != nil {
+		jsonError(w, "failed to list answers", http.StatusInternalServerError)
+		return
+	}
+	out := make([]ModerationAnswerDTO, 0, len(rows))
+	for _, a := range rows {
+		out = append(out, moderationAnswerDTO(a))
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// AdminUpdateAnswer changes an answer's visibility: visible (approve or
+// restore), flagged (send back to review) or hidden (withhold).
+func AdminUpdateAnswer(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	aid := pathID(r, "aid")
+	if id == 0 || aid == 0 {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	var req struct {
+		Status string `json:"status"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		jsonError(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	req.Status = strings.TrimSpace(req.Status)
+	switch req.Status {
+	case "visible", "flagged", "hidden":
+	default:
+		jsonError(w, "invalid status", http.StatusBadRequest)
+		return
+	}
+	qid, err := db.UpdateAnswerStatus(id, aid, req.Status)
+	if err == sql.ErrNoRows {
+		jsonError(w, "answer not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		jsonError(w, "failed to update answer", http.StatusInternalServerError)
+		return
+	}
+	// Aggregates, leaderboard and live clients must all pick up the change.
+	db.InvalidateQuestionStats(qid)
+	db.InvalidateLeaderboard(id)
+	BroadcastEvent(id)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "status": req.Status})
 }
 
 // AdminDeleteEvent deletes an event.
@@ -447,6 +553,7 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 		DurationSec  *int      `json:"duration_sec"`
 		AutoClose    *flexBool `json:"auto_close"`
 		AutoReveal   *flexBool `json:"auto_reveal"`
+		TimeLimitS   *int      `json:"time_limit_s"`
 	}
 	if err := decodeJSON(r, &body); err != nil {
 		jsonError(w, "invalid json", http.StatusBadRequest)
@@ -461,6 +568,10 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	body.Prompt = strings.TrimSpace(body.Prompt)
 	if body.Prompt == "" {
 		jsonError(w, "prompt is required", http.StatusBadRequest)
+		return
+	}
+	if body.TimeLimitS != nil && *body.TimeLimitS < 0 {
+		jsonError(w, "time_limit_s must be a non-negative integer", http.StatusBadRequest)
 		return
 	}
 	// trim options
@@ -523,6 +634,10 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.PointsBase != nil {
 		_, _ = db.UpdateQuestion(q.ID, map[string]any{"points_base": *body.PointsBase})
+		q, _ = db.GetQuestion(q.ID)
+	}
+	if body.TimeLimitS != nil {
+		_, _ = db.UpdateQuestion(q.ID, map[string]any{"time_limit_s": *body.TimeLimitS})
 		q, _ = db.GetQuestion(q.ID)
 	}
 	writeJSON(w, http.StatusOK, questionDTO(*q, true))
@@ -596,8 +711,16 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 			fields["position"] = n
 		case "status":
 			var s string
-			_ = json.Unmarshal(v, &s)
-			fields["status"] = strings.TrimSpace(s)
+			if err := json.Unmarshal(v, &s); err != nil {
+				jsonError(w, "status must be a string", http.StatusBadRequest)
+				return
+			}
+			s = strings.TrimSpace(s)
+			if !validQuestionStatus(s) {
+				jsonError(w, "invalid status", http.StatusBadRequest)
+				return
+			}
+			fields["status"] = s
 		case "show_results":
 			var b bool
 			if err := json.Unmarshal(v, &b); err == nil {
@@ -663,6 +786,13 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 				_ = json.Unmarshal(v, &n)
 				fields["auto_reveal"] = n != 0
 			}
+		case "time_limit_s":
+			var n int
+			if err := json.Unmarshal(v, &n); err != nil || n < 0 {
+				jsonError(w, "time_limit_s must be a non-negative integer", http.StatusBadRequest)
+				return
+			}
+			fields["time_limit_s"] = n
 		}
 	}
 	effKind := q.Kind
@@ -698,8 +828,24 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to update", http.StatusInternalServerError)
 		return
 	}
+	_, hasStatus := fields["status"]
+	_, hasLimit := fields["time_limit_s"]
+	if hasStatus || hasLimit {
+		// Re-arm the auto-lock when the lifecycle or the limit changed.
+		scheduleAutoLock(updated)
+	}
 	writeJSON(w, http.StatusOK, questionDTO(*updated, true))
 	BroadcastEvent(eid)
+}
+
+// validQuestionStatus reports whether s is a supported question lifecycle
+// status. locked and revealed are the quiz phase additions.
+func validQuestionStatus(s string) bool {
+	switch s {
+	case "draft", "live", "locked", "revealed", "closed":
+		return true
+	}
+	return false
 }
 
 // questionMediaTypes maps accepted media MIME types to stored extension and kind.
@@ -880,12 +1026,15 @@ func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to activate", http.StatusBadRequest)
 		return
 	}
-	BroadcastEvent(eid)
 	// webhook trigger question.activated
 	if ev, _ := db.GetEventByID(eid); ev != nil {
 		webhook.Notify(ev.Code, "question.activated", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": qid})
 	}
 	q, err := db.GetQuestion(qid)
+	if err == nil && q != nil {
+		scheduleAutoLock(q)
+	}
+	BroadcastEvent(eid)
 	if err != nil || q == nil {
 		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
 		return
@@ -960,6 +1109,7 @@ func AdminCloseQuestion(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to close", http.StatusBadRequest)
 		return
 	}
+	cancelAutoLock(qid)
 	BroadcastEvent(eid)
 	if ev, _ := db.GetEventByID(eid); ev != nil {
 		webhook.Notify(ev.Code, "question.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": qid})
@@ -970,6 +1120,62 @@ func AdminCloseQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, questionDTO(*q, true))
+}
+
+// AdminRevealQuestion reveals a locked (or still-live) question: it locks the
+// question first if needed, publishes results and broadcasts the change.
+// @Summary  Reveal question
+// @Tags     admin
+// @Produce  json
+// @Security CookieAuth
+// @Param    id path int true "event id"
+// @Param    qid path int true "question id"
+// @Success  200 {object} QuestionDTO
+// @Router   /api/admin/events/{id}/questions/{qid}/reveal [post]
+func AdminRevealQuestion(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
+	qid := pathID(r, "qid")
+	if err := db.RevealQuestion(eid, qid); err != nil {
+		jsonError(w, "failed to reveal", http.StatusBadRequest)
+		return
+	}
+	cancelAutoLock(qid)
+	BroadcastEvent(eid)
+	q, err := db.GetQuestion(qid)
+	if err != nil || q == nil {
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, questionDTO(*q, true))
+}
+
+// AdminSetPodium shows or hides the podium screen for an event.
+// @Summary  Toggle podium
+// @Tags     admin
+// @Accept   json
+// @Produce  json
+// @Security CookieAuth
+// @Param    id path int true "event id"
+// @Param    body body map[string]any true "podium toggle"
+// @Success  200 {object} EventDTO
+// @Router   /api/admin/events/{id}/podium [post]
+func AdminSetPodium(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
+	var body struct {
+		Show *bool `json:"show"`
+	}
+	if err := decodeJSON(r, &body); err != nil || body.Show == nil {
+		jsonError(w, "show is required", http.StatusBadRequest)
+		return
+	}
+	ev, err := db.UpdateEvent(eid, map[string]any{"show_podium": *body.Show})
+	if err != nil || ev == nil {
+		jsonError(w, "failed to update podium", http.StatusInternalServerError)
+		return
+	}
+	BroadcastEvent(eid)
+	brand, _ := db.GetBranding()
+	writeJSON(w, http.StatusOK, eventDTO(ev, brand))
 }
 
 // AdminListQA lists Q&A.
@@ -1296,6 +1502,60 @@ func AdminUpdateAnalyticsSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s, _ := db.GetAnalyticsSettings()
 	writeJSON(w, http.StatusOK, analyticsDTO(s))
+}
+
+// FilterSettingsDTO is the admin view of the global content filter.
+type FilterSettingsDTO struct {
+	Enabled bool   `json:"enabled"`
+	Words   string `json:"words"`
+	Action  string `json:"action"`
+}
+
+// AdminGetFilterSettings gets the content filter configuration.
+// @Summary  Get content filter settings
+// @Tags     admin
+// @Produce  json
+// @Security CookieAuth
+// @Success  200 {object} FilterSettingsDTO
+// @Router   /api/admin/settings/filter [get]
+func AdminGetFilterSettings(w http.ResponseWriter, r *http.Request) {
+	s, err := db.GetFilterSettings()
+	if err != nil {
+		jsonError(w, "failed to load settings", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, FilterSettingsDTO{Enabled: s.Enabled, Words: s.Words, Action: s.Action})
+}
+
+// AdminUpdateFilterSettings updates the content filter configuration. Action
+// must be "flag" (store for review) or "reject" (refuse the submission).
+// @Summary  Update content filter settings
+// @Tags     admin
+// @Accept   json
+// @Produce  json
+// @Security CookieAuth
+// @Param    body body FilterSettingsDTO true "filter payload"
+// @Success  200 {object} FilterSettingsDTO
+// @Router   /api/admin/settings/filter [put]
+func AdminUpdateFilterSettings(w http.ResponseWriter, r *http.Request) {
+	var body FilterSettingsDTO
+	if err := decodeJSON(r, &body); err != nil {
+		jsonError(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	action := strings.TrimSpace(body.Action)
+	if action == "" {
+		action = "flag"
+	}
+	if action != "flag" && action != "reject" {
+		jsonError(w, "invalid action", http.StatusBadRequest)
+		return
+	}
+	if err := db.UpdateFilterSettings(body.Enabled, body.Words, action); err != nil {
+		jsonError(w, "failed to update", http.StatusInternalServerError)
+		return
+	}
+	writeJSON(w, http.StatusOK, FilterSettingsDTO{Enabled: body.Enabled, Words: body.Words, Action: action})
 }
 
 // AdminGetBranding gets branding.

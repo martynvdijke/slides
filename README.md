@@ -88,6 +88,7 @@ Every deck copied from the template already has:
 | `<LiveQa :limit="5" />` | Top upvoted approved audience questions |
 | `<LiveQr />` | Back-compat card combining join + question |
 | `<PresenterPanel />` | Presenter overlay: sign in, write a question, attach a photo/video, ask or close it live |
+| `<Podium />` | Quiz podium: top three scorers, shown while the host has it toggled on |
 
 Point them at a room with a prop (`room="AB2C3"` or `event="my-event-code"`),
 or leave them empty and set the build-time variables:
@@ -125,20 +126,101 @@ works as a static presentation.
 
 ### Presenter panel
 
-`<PresenterPanel />` lets you drive the room from inside the slides: press `p`
-to toggle it (or add the `fab` prop for a corner button, or embed
-`<PresenterPanel :open="true" />` on a presenter-only slide). It signs in to the
-backend, writes a prompt, picks or uploads an **image/video**, and asks or closes
-the question live.
+`<PresenterPanel />` turns the deck itself into the presenter console, so you
+can **ask and close live questions without leaving the slides**:
 
-```md
-<PresenterPanel room="AB2C3" fab />
-```
+1. Add the component once per deck (it renders as an overlay, not a slide):
 
-In the all-in-one container this is same-origin and uses the admin session
-cookie. On GitHub Pages the deck is cross-origin, so the backend must allowlist
-the Pages origin — set `CORS_ORIGINS` (and `COOKIE_SAMESITE=none` with
+   ```md
+   <PresenterPanel room="AB2C3" fab />
+   ```
+
+2. Open it with the `p` hotkey, the corner ▶ button (`fab`), or pin it on a
+   presenter-only slide with `<PresenterPanel :open="true" />`.
+3. Sign in with a local admin account, or reuse the admin session already active
+   in the same-origin container (including one created through
+   [OIDC login](#oidc-login)).
+4. Pick the **kind** — poll, multi-select, ranking, yes/no, rating, NPS, open
+   text or word cloud — write the prompt, and for the choice kinds add
+   comma-separated options.
+5. Optionally attach an **image or video** to the prompt (upload a file or paste
+   a URL); the audience sees it with the question.
+6. **Ask now** pushes the question live to every audience device, **Save draft**
+   stores it for later, **Reveal** publishes the correct answer and results, and
+   **Close current** ends the active question. A per-question **time limit**
+   (0 = untimed) locks answers automatically when it expires. The `show results`
+   checkbox controls whether the audience tally is shown, and `feedback` routes
+   the question to the post-event feedback form.
+7. **Show podium** swaps the projector and audience screens to the quiz
+   leaderboard; asking the next question hides it again.
+
+The panel header shows the resolved room and the live answer count. In the
+all-in-one container this is same-origin and uses the admin session cookie. On
+GitHub Pages the deck is cross-origin, so the backend must allowlist the Pages
+origin — set `CORS_ORIGINS` (and `COOKIE_SAMESITE=none` with
 `COOKIE_SECURE=true` over HTTPS).
+
+### Quiz game loop
+
+Scored poll and yes/no questions can run as a timed round. Set a **time limit**
+in the presenter panel (or `time_limit_s` through the API) and the audience and
+projector count down to a server-computed deadline that survives reconnects.
+When time runs out the question **locks**: answers are rejected and results stay
+hidden. The host then **reveals** the correct answer (presenter panel or admin
+console), which also publishes the tally and each participant's result. Points
+are scored on submission but only disclosed at reveal — unless `show results`
+is on, which keeps the legacy instant feedback. **Show podium** puts the top
+three scorers on the projector and audience app; activating any question clears
+it.
+
+### Audience questions (Q&A)
+
+Audience members ask from their phones, not from the deck: scan the
+`<LiveJoin />` QR (or open the join page and enter the room code), switch to the
+**Q&A** tab, and submit a question with an optional name. The backend queues it
+for moderation; an admin approves, hides or marks it answered in `/admin`.
+Approved questions can be upvoted, `<LiveQa :limit="5" />` mirrors the top-voted
+ones on a slide, and `<LiveQuestion />` shows the active prompt with its live
+results.
+
+### Moderation & safety
+
+The **Content filter** card in `/admin` → Settings holds a global, opt-in word
+list. Words are matched case-insensitively on whole tokens (so `badword` catches
+`Badword!` but not `badminton`) across open-text and word-cloud answers and Q&A
+bodies; names are never filtered. The action chooses what happens on a match:
+**flag for review** (default) stores the submission with a `flagged` status and
+tells the author it is under review, while **reject** refuses it outright and
+stores nothing.
+
+Flagged and hidden answers stay out of live results, the projector, exports and
+the leaderboard until they are approved. The **Answer moderation** queue in the
+Q&A panel lists flagged answers first — with the prompt, the answer and the
+submitter's display identity — and lets the host approve or hide each one; every
+change refreshes the connected clients immediately. Q&A rows flagged by the
+filter are sorted first and badged in the normal moderation list.
+
+Each event can also set a **Q&A slow mode** (seconds per participant, 0 = off).
+Within the interval a participant's next question is rejected with a retry hint,
+and the audience app disables the form and shows a live countdown. The interval
+is measured from stored submissions, so it survives reconnects and restarts.
+
+### Post-event recap
+
+Turn on **Publish results page** in the event settings to open a public
+`/results/{code}` page. It renders the participation stats, every question's
+aggregate (including NPS and word clouds), the approved/answered Q&A and the
+leaderboard — never participant identities — and carries a `noindex` directive.
+While publishing is off the page and its API return 404. Hidden or flagged
+answers and pending Q&A stay out of it.
+
+Attendees can opt in to a recap email from the audience app; the address is
+stored per event and participant and can be removed by the attendee or the host.
+The **Recap** card in `/admin` → Settings keeps the host recipient list, shows
+the per-event opt-ins, renders a plain-text preview and sends the recap (event
+summary, participation, headline results, top scores, Q&A highlights and a link
+to the results page) through the configured SMTP server, with a per-recipient
+report and a 200-recipient cap per send.
 
 ## Run the backend
 
@@ -154,7 +236,8 @@ event gets a stable `code` (used in URLs) and a **5-character room code**
 (case-insensitive, unambiguous alphabet) that you show on the slide. Audience
 members scan the QR or open `/join` and type the room code.
 
-The audience app is at `/e/{code}`, the projector view at `/live/{code}`.
+The audience app is at `/e/{code}`, the projector view at `/live/{code}`, and
+the public (opt-in) results page at `/results/{code}`.
 
 ### What the backend does
 
@@ -162,9 +245,19 @@ The audience app is at `/e/{code}`, the projector view at `/live/{code}`.
   state/results; clients send answers, Q&A and votes).
 - **Question kinds**: poll, multi-select, ranking, yes/no, rating, NPS, open
   text and word cloud, each with an optional **image or video prompt**.
+- **Quiz game loop**: per-question time limits with auto-lock, host reveal and a
+  top-3 podium, with correctness disclosed only at reveal unless results are
+  shown.
 - **Q&A** with upvoting and moderation, **feedback** forms, **presentations**
   upload, **Word clouds**, **CSV export**.
-- **OIDC login** (Authelia-compatible) alongside local accounts.
+- **Moderation & safety**: opt-in whole-word content filter (flag or reject) on
+  free-text answers and Q&A, a flagged-first answer moderation queue with
+  approve/hide, and a per-event Q&A slow mode with a client countdown.
+- **Post-event recap**: a gated public results page (`/results/{code}`),
+  attendee email opt-ins per event, and a plain-text recap email with preview,
+  recipient union/dedupe and per-recipient send reporting.
+- **OIDC login** (Authelia-compatible) alongside local accounts — see
+  [OIDC login](#oidc-login).
 - **Umami analytics** and **OpenTelemetry** tracing/metrics/logs.
 - **Health probe** at `GET /healthz` (used by the compose healthcheck).
 
@@ -191,6 +284,52 @@ The audience app is at `/e/{code}`, the projector view at `/live/{code}`.
 Umami and OTel can also be configured in the admin panel; environment
 variables take precedence for OTel.
 
+### OIDC login
+
+Admins can sign in through any OIDC provider that publishes discovery
+(`/.well-known/openid-configuration`) — Authelia, Keycloak, Authentik, Okta,
+Entra ID and friends — either alongside local accounts or instead of them.
+
+1. Register a **confidential** client with the provider and set its redirect URI
+   to `<PUBLIC_BASE_URL>/api/auth/oidc/callback`.
+2. Set the environment variables and restart the server (uncomment them in
+   [`.env.example`](./.env.example) for the compose stack):
+
+   ```bash
+   OIDC_ENABLED=true
+   OIDC_ISSUER_URL=https://auth.example.com
+   OIDC_CLIENT_ID=slides
+   OIDC_CLIENT_SECRET=change-me
+   OIDC_REDIRECT_URL=https://slides.example.com/api/auth/oidc/callback
+   OIDC_SCOPES="openid email profile groups"
+   OIDC_ADMIN_EMAILS=you@example.com,teammate@example.com   # optional
+   ```
+
+   OIDC is only active when `OIDC_ENABLED` is true **and** the issuer, client id
+   and client secret are all set.
+3. `/admin` now shows a **Sign in with OIDC** button next to the local form, on
+   both the first-run setup screen and the returning login screen.
+
+Who gets an account:
+
+- **First user ever** — while the `users` table is empty, the first OIDC sign-in
+  is provisioned as `admin`, so you can bootstrap the server entirely through
+  SSO.
+- **Known users** — emails that already exist in `users` are signed in and keep
+  their role.
+- **Allowlisted emails** — unknown identities whose email is listed in
+  `OIDC_ADMIN_EMAILS` (comma-separated, case-insensitive) are provisioned as
+  admin.
+- **Everyone else** — rejected and redirected to
+  `/admin?oidc_error=unknown_user`; no account is created.
+
+The identity is taken from the `email` claim, falling back to
+`preferred_username` and then `sub`. The callback verifies the ID token and the
+anti-forgery `state` cookie, and issues the same session cookie as a local login
+(cleared by `GET /api/auth/oidc/logout`). Once signed in on the all-in-one
+container, the in-slide [presenter panel](#presenter-panel) reuses that session
+automatically.
+
 ### Storage model
 
 SQLite runs in **WAL mode** with a busy timeout. Answers go through a single
@@ -209,7 +348,13 @@ go test ./...
 
 Covers the room-code lifecycle, credentialed CORS, admin auth, question media
 upload and the full setup → login → create media question → activate →
-audience answer → live result flow over `httptest` + a real WebSocket.
+audience answer → live result flow over `httptest` + a real WebSocket, plus the
+quiz lifecycle: time-limit validation, auto-lock idempotency and recovery,
+reveal gating, deferred scoring disclosure and podium clearing, plus moderation:
+filter matching edge cases, flag/reject flows, aggregate exclusion and slow-mode
+boundaries with reconnect persistence, plus the post-event recap: the publish
+gate and results shape, subscription validation/dedupe, recipient resolution,
+preview never sending, and send reporting with a fake mailer.
 
 **End-to-end** (Playwright, boots the built Go server against a temp database):
 
@@ -220,8 +365,17 @@ npm run test:e2e
 
 The suite drives a browser through admin setup/login, creating an event, joining
 with a room code, answering a poll and rendering an image question, plus the
-built deck and QR endpoint. `e2e/start-server.mjs` builds the Go binary and
-serves `dist/` on `127.0.0.1:4173` (override with `E2E_PORT`).
+built deck and QR endpoint. It also walks the timed quiz loop end to end
+(countdown → auto-lock → reveal → podium), the untimed instant-feedback
+regression, and audience moderation (a flagged answer hidden from results then
+approved, and slow mode rejecting a rapid question with a countdown). The recap
+spec publishes an event and opens its results page, then opts an attendee in and
+asserts the delivered email through a fake SMTP inbox started by
+`e2e/start-server.mjs`.
+`e2e/start-server.mjs` builds the Go binary and serves `dist/` on
+`127.0.0.1:4173` (override with `E2E_PORT`), and starts a fake SMTP server whose
+inbox is exposed for assertions on port `E2E_PORT + 1` (override with
+`E2E_MAIL_PORT`).
 
 ## GitHub Pages
 

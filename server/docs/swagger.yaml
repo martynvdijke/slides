@@ -1,5 +1,18 @@
 basePath: /
 definitions:
+  db.LeaderboardEntry:
+    properties:
+      color:
+        type: string
+      emoji:
+        type: string
+      name:
+        type: string
+      points:
+        type: integer
+      rank:
+        type: integer
+    type: object
   db.Result:
     properties:
       avg_rank:
@@ -23,6 +36,8 @@ definitions:
     type: object
   handlers.AnswerRequest:
     properties:
+      client_uuid:
+        type: string
       question_id:
         type: integer
       value:
@@ -48,8 +63,16 @@ definitions:
         type: string
       pending_qa_count:
         type: integer
+      qa_slow_mode_s:
+        type: integer
       question_count:
         type: integer
+      results_published:
+        type: boolean
+      room_code:
+        type: string
+      show_podium:
+        type: boolean
       status:
         type: string
     type: object
@@ -104,6 +127,15 @@ definitions:
           $ref: '#/definitions/handlers.QuestionDTO'
         type: array
     type: object
+  handlers.FilterSettingsDTO:
+    properties:
+      action:
+        type: string
+      enabled:
+        type: boolean
+      words:
+        type: string
+    type: object
   handlers.GlobalStatsDTO:
     properties:
       events:
@@ -112,6 +144,19 @@ definitions:
         type: array
       totals:
         $ref: '#/definitions/handlers.StatsTotalsDTO'
+    type: object
+  handlers.MeDTO:
+    properties:
+      color:
+        type: string
+      emoji:
+        type: string
+      name:
+        type: string
+      recap_email:
+        type: string
+      recap_subscribed:
+        type: boolean
     type: object
   handlers.MediaDTO:
     properties:
@@ -177,6 +222,8 @@ definitions:
         type: string
       created_at:
         type: string
+      flagged:
+        type: boolean
       id:
         type: integer
       status:
@@ -195,10 +242,16 @@ definitions:
     type: object
   handlers.QuestionDTO:
     properties:
+      activated_at:
+        type: integer
       answered:
         type: boolean
+      correct_index:
+        type: integer
       created_at:
         type: string
+      deadline_at:
+        type: integer
       event_id:
         type: integer
       id:
@@ -215,12 +268,18 @@ definitions:
         type: string
       my_answer:
         type: string
+      my_correct:
+        type: boolean
+      my_points:
+        type: integer
       nps:
         type: integer
       options:
         items:
           type: string
         type: array
+      points_base:
+        type: integer
       position:
         type: integer
       prompt:
@@ -235,8 +294,68 @@ definitions:
         type: boolean
       status:
         type: string
+      time_limit_s:
+        type: integer
       total:
         type: integer
+    type: object
+  handlers.RecapPreviewDTO:
+    properties:
+      body:
+        type: string
+      cap:
+        type: integer
+      recipients:
+        items:
+          type: string
+        type: array
+      skipped:
+        type: integer
+      subject:
+        type: string
+      truncated:
+        type: boolean
+    type: object
+  handlers.RecapSendDTO:
+    properties:
+      cap:
+        type: integer
+      failed:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/handlers.recapSendResultDTO'
+        type: array
+      sent:
+        type: integer
+      skipped:
+        type: integer
+      truncated:
+        type: boolean
+    type: object
+  handlers.RecapSettingsDTO:
+    properties:
+      emails:
+        type: string
+    type: object
+  handlers.ResultsDTO:
+    properties:
+      event:
+        $ref: '#/definitions/handlers.resultsEventDTO'
+      leaderboard:
+        items:
+          $ref: '#/definitions/db.LeaderboardEntry'
+        type: array
+      qa:
+        items:
+          $ref: '#/definitions/handlers.QADTO'
+        type: array
+      questions:
+        items:
+          $ref: '#/definitions/handlers.QuestionDTO'
+        type: array
+      stats:
+        $ref: '#/definitions/handlers.EventStatsSummaryDTO'
     type: object
   handlers.StateDTO:
     properties:
@@ -246,6 +365,12 @@ definitions:
         $ref: '#/definitions/handlers.EventDTO'
       feedback:
         $ref: '#/definitions/handlers.FeedbackDTO'
+      leaderboard:
+        items:
+          $ref: '#/definitions/db.LeaderboardEntry'
+        type: array
+      me:
+        $ref: '#/definitions/handlers.MeDTO'
       qa:
         items:
           $ref: '#/definitions/handlers.QADTO'
@@ -265,6 +390,28 @@ definitions:
         type: integer
       votes:
         type: integer
+    type: object
+  handlers.recapSendResultDTO:
+    properties:
+      email:
+        type: string
+      error:
+        type: string
+      ok:
+        type: boolean
+    type: object
+  handlers.resultsEventDTO:
+    properties:
+      code:
+        type: string
+      description:
+        type: string
+      event_date:
+        type: string
+      name:
+        type: string
+      status:
+        type: string
     type: object
 info:
   contact: {}
@@ -390,6 +537,35 @@ paths:
       security:
       - CookieAuth: []
       summary: Export CSV
+      tags:
+      - admin
+  /api/admin/events/{id}/podium:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: podium toggle
+        in: body
+        name: body
+        required: true
+        schema:
+          additionalProperties: true
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.EventDTO'
+      security:
+      - CookieAuth: []
+      summary: Toggle podium
       tags:
       - admin
   /api/admin/events/{id}/presentations:
@@ -701,6 +877,31 @@ paths:
       summary: Close question
       tags:
       - admin
+  /api/admin/events/{id}/questions/{qid}/reveal:
+    post:
+      parameters:
+      - description: event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: question id
+        in: path
+        name: qid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.QuestionDTO'
+      security:
+      - CookieAuth: []
+      summary: Reveal question
+      tags:
+      - admin
   /api/admin/events/{id}/questions/media:
     post:
       consumes:
@@ -728,6 +929,123 @@ paths:
       summary: Upload question media
       tags:
       - admin
+  /api/admin/events/{id}/recap:
+    get:
+      parameters:
+      - description: Event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: List recap subscriptions
+      tags:
+      - admin
+  /api/admin/events/{id}/recap/{sid}:
+    delete:
+      parameters:
+      - description: Event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Subscription id
+        in: path
+        name: sid
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Remove a recap subscription
+      tags:
+      - admin
+  /api/admin/events/{id}/recap/preview:
+    get:
+      parameters:
+      - description: Event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RecapPreviewDTO'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Preview the event recap
+      tags:
+      - admin
+  /api/admin/events/{id}/recap/send:
+    post:
+      parameters:
+      - description: Event id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RecapSendDTO'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      security:
+      - CookieAuth: []
+      summary: Send the event recap
+      tags:
+      - admin
   /api/admin/events/{id}/stats:
     get:
       parameters:
@@ -752,32 +1070,6 @@ paths:
       security:
       - CookieAuth: []
       summary: Event statistics
-      tags:
-      - admin
-  /api/admin/events/{id}/stats/stream:
-    get:
-      parameters:
-      - description: Event ID
-        in: path
-        name: id
-        required: true
-        type: integer
-      produces:
-      - text/event-stream
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/handlers.EventStatsDTO'
-        "500":
-          description: Internal Server Error
-          schema:
-            additionalProperties:
-              type: string
-            type: object
-      security:
-      - CookieAuth: []
-      summary: Stream event statistics
       tags:
       - admin
   /api/admin/otel/status:
@@ -873,6 +1165,42 @@ paths:
       summary: Update branding
       tags:
       - admin
+  /api/admin/settings/filter:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FilterSettingsDTO'
+      security:
+      - CookieAuth: []
+      summary: Get content filter settings
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: filter payload
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.FilterSettingsDTO'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.FilterSettingsDTO'
+      security:
+      - CookieAuth: []
+      summary: Update content filter settings
+      tags:
+      - admin
   /api/admin/settings/otel:
     get:
       produces:
@@ -919,6 +1247,35 @@ paths:
       security:
       - CookieAuth: []
       summary: Update OTel settings
+      tags:
+      - admin
+  /api/admin/settings/recap:
+    get:
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RecapSettingsDTO'
+      security:
+      - CookieAuth: []
+      summary: Get recap settings
+      tags:
+      - admin
+    put:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.RecapSettingsDTO'
+      security:
+      - CookieAuth: []
+      summary: Update recap settings
       tags:
       - admin
   /api/admin/stats:
@@ -1306,6 +1663,88 @@ paths:
       summary: Get event QR code
       tags:
       - public
+  /api/events/{code}/recap/subscribe:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Event code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Subscribe to the event recap
+      tags:
+      - public
+  /api/events/{code}/recap/unsubscribe:
+    post:
+      parameters:
+      - description: Event code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Unsubscribe from the event recap
+      tags:
+      - public
+  /api/events/{code}/results:
+    get:
+      parameters:
+      - description: Event code
+        in: path
+        name: code
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handlers.ResultsDTO'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Public event results
+      tags:
+      - public
   /api/events/{code}/state:
     get:
       parameters:
@@ -1330,30 +1769,29 @@ paths:
       summary: Get event state
       tags:
       - public
-  /api/events/{code}/stream:
+  /api/join/{room}:
     get:
-      description: 'Server-sent events stream of personalized state. Each message
-        is `event: state` with JSON StateDTO.'
       parameters:
-      - description: Event code
+      - description: Room code
         in: path
-        name: code
+        name: room
         required: true
         type: string
       produces:
-      - text/event-stream
+      - application/json
       responses:
         "200":
-          description: text/event-stream
+          description: OK
           schema:
-            type: string
+            additionalProperties: true
+            type: object
         "404":
           description: Not Found
           schema:
             additionalProperties:
               type: string
             type: object
-      summary: Stream event state
+      summary: Resolve room code
       tags:
       - public
   /api/settings/analytics:

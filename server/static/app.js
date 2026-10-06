@@ -157,6 +157,31 @@
     countdownTimer=setInterval(tickCountdown, 1000);
   }
 
+  // --- quiz phases ---
+  function canReveal(a){
+    if(!a) return false;
+    if(a.status==='locked') return false;
+    return a.status==='revealed' || !!a.show_results;
+  }
+  function deadlineMs(a){
+    if(!a) return null;
+    if(a.deadline_at) return a.deadline_at;
+    if(a.time_limit_s>0 && a.activated_at) return a.activated_at + a.time_limit_s*1000;
+    return null;
+  }
+  function isLocked(a){
+    if(!a) return false;
+    if(a.status==='locked') return true;
+    var dl=deadlineMs(a);
+    return a.status==='live' && dl!==null && Date.now()>=dl;
+  }
+  function correctLabel(a){
+    if(!a || a.correct_index===null || a.correct_index===undefined) return null;
+    if(a.kind==='poll'){ var opts=a.options||[]; return opts[a.correct_index]||null; }
+    if(a.kind==='yesno') return a.correct_index===0 ? 'yes' : 'no';
+    return null;
+  }
+
   // --- helpers ---
   function vibrate(pat){ try{ if(navigator.vibrate) navigator.vibrate(pat); }catch(e){} }
   function genUUID(){ try{ if(window.crypto && crypto.randomUUID) return crypto.randomUUID(); }catch(e){} return 'qt-'+Date.now()+'-'+Math.random().toString(36).slice(2,9); }
@@ -261,6 +286,59 @@
     if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
     var qaAuthor=document.getElementById('qa-author');
     if(qaAuthor) qaAuthor.placeholder=identity.name||'Anonymous';
+    applyRecap(me);
+  }
+
+  // --- recap email opt-in ---
+  function applyRecap(me){
+    var form=document.getElementById('recap-form');
+    if(!form) return;
+    var email=document.getElementById('recap-email');
+    var remove=document.getElementById('recap-remove');
+    var status=document.getElementById('recap-status');
+    var subscribed=!!(me && me.recap_subscribed);
+    if(email && me && me.recap_email && document.activeElement!==email) email.value=me.recap_email;
+    form.classList.toggle('hidden', subscribed);
+    if(remove) remove.classList.toggle('hidden', !subscribed);
+    if(status) status.textContent = subscribed ? 'Recap will be emailed to '+(me.recap_email||'your address')+'.' : '';
+  }
+
+  var recapForm=document.getElementById('recap-form');
+  if(recapForm){
+    recapForm.addEventListener('submit', function(e){
+      e.preventDefault();
+      var input=document.getElementById('recap-email');
+      var email=input.value.trim();
+      if(!email){ toast('Enter an email address','err'); return; }
+      var btn=recapForm.querySelector('button[type="submit"]');
+      btn.disabled=true; btn.textContent='Saving\u2026';
+      fetch('/api/events/'+encodeURIComponent(code)+'/recap/subscribe',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:email})}).then(function(r){
+        return r.json().catch(function(){ return {}; }).then(function(j){
+          if(!r.ok) throw new Error(j.error||'Could not save your email');
+          return j;
+        });
+      }).then(function(j){
+        applyRecap({recap_subscribed:true, recap_email:j.email||email});
+        toast('Recap email saved'); vibrate(40);
+      }).catch(function(err){
+        toast(err.message||'Could not save your email','err');
+      }).finally(function(){
+        btn.disabled=false; btn.textContent='Email me the recap';
+      });
+    });
+    var removeBtn=document.getElementById('recap-remove');
+    if(removeBtn) removeBtn.addEventListener('click', function(){
+      removeBtn.disabled=true;
+      fetch('/api/events/'+encodeURIComponent(code)+'/recap/unsubscribe',{method:'POST',credentials:'same-origin'}).then(function(r){
+        if(!r.ok) throw new Error('Could not unsubscribe');
+        return r.json().catch(function(){ return {}; });
+      }).then(function(){
+        applyRecap({recap_subscribed:false});
+        toast('Unsubscribed \u2014 you will not get the recap'); vibrate(40);
+      }).catch(function(err){
+        toast(err.message||'Could not unsubscribe','err');
+      }).finally(function(){ removeBtn.disabled=false; });
+    });
   }
 
   // --- offline queue ---
@@ -433,10 +511,11 @@
       card.appendChild(w); return;
     }
     renderMedia(card, active);
+    var locked=isLocked(active);
     var prompt=document.createElement('h2'); prompt.className='prompt'; prompt.textContent=active.prompt; card.appendChild(prompt);
     var meta=document.createElement('div'); meta.style.cssText='display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:8px';
-    var pill=document.createElement('span'); pill.className='pill'; pill.textContent=active.kind;
-    var total=document.createElement('span'); total.style.color='var(--muted)'; total.style.fontSize='.84rem'; total.textContent= active.show_results ? (active.total+' responses') : 'Responses hidden until host reveals';
+    var pill=document.createElement('span'); pill.className='pill'; pill.textContent= locked ? 'locked' : active.kind;
+    var total=document.createElement('span'); total.style.color='var(--muted)'; total.style.fontSize='.84rem'; total.textContent= locked ? 'Answers locked' : (canReveal(active) ? (active.total+' responses') : 'Responses hidden until host reveals');
     meta.appendChild(pill); meta.appendChild(total);
     // points badge
     if(active.points_base){
@@ -475,34 +554,31 @@
         else { cb.textContent='Not correct this time'; cb.style.background='rgba(244,63,94,.14)'; }
         card.appendChild(cb);
       }
-    }
-
-    // highlight correct answer when revealed
-    function isCorrectOption(opt, idx){
-      if(!active.show_results || active.correct_index===null || active.correct_index===undefined) return false;
-      if(active.kind==='poll'){
-        return idx===active.correct_index;
+      if(locked){
+        var lockNote=document.createElement('div'); lockNote.className='pill'; lockNote.style.marginTop='8px'; lockNote.textContent='⏱ Answers locked — waiting for the reveal…';
+        card.appendChild(lockNote);
       }
-      if(active.kind==='yesno'){
-        var vs=['yes','no']; return vs[active.correct_index]===opt.toLowerCase();
-      }
-      return false;
+    } else if(locked){
+      var lou=document.createElement('div'); lou.className='waiting'; lou.style.minHeight='120px'; lou.style.marginTop='12px';
+      var lh=document.createElement('h3'); lh.textContent="Time's up — answers are locked"; lh.style.fontSize='1.1rem';
+      var lp=document.createElement('p'); lp.textContent='Wait for the host to reveal the results.';
+      lou.appendChild(lh); lou.appendChild(lp); card.appendChild(lou);
     }
 
     if(active.kind==='poll'){
       var opts=active.options||[];
-      if(!active.answered){
+      if(!active.answered && !locked){
         card.appendChild(buttonGrid(opts, 'option-btn', function(opt,b){ submitAnswer(active.id, opt, b); }));
       }
       renderBars(card, active);
-      if(active.show_results && active.correct_index!==null && active.correct_index!==undefined){
+      if(canReveal(active) && active.correct_index!==null && active.correct_index!==undefined){
         var hint=document.createElement('div'); hint.style.color='#6EE7B7'; hint.style.fontSize='.82rem'; hint.style.marginTop='8px';
         var correctOpt=opts[active.correct_index];
         if(correctOpt) hint.textContent='Correct: '+correctOpt;
         card.appendChild(hint);
       }
     } else if(active.kind==='rating'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var stars=document.createElement('div'); stars.className='stars'; stars.style.marginTop='16px'; stars.setAttribute('role','group'); stars.setAttribute('aria-label','Rating 1 to 5');
         for(var i=1;i<=5;i++){
           (function(v){
@@ -515,12 +591,17 @@
       }
       renderBars(card, active);
     } else if(active.kind==='yesno'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         card.appendChild(buttonGrid(['Yes','No'], 'option-btn', function(opt,b){ submitAnswer(active.id, opt.toLowerCase(), b); }));
       }
       renderBars(card, active);
+      if(canReveal(active) && active.correct_index!==null && active.correct_index!==undefined){
+        var yh=document.createElement('div'); yh.style.color='#6EE7B7'; yh.style.fontSize='.82rem'; yh.style.marginTop='8px';
+        yh.textContent='Correct: '+(active.correct_index===0?'Yes':'No');
+        card.appendChild(yh);
+      }
     } else if(active.kind==='nps'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var nwrap=document.createElement('div'); nwrap.style.cssText='display:flex;flex-wrap:wrap;gap:8px;margin-top:16px';
         for(var n=0;n<=10;n++){
           (function(v){
@@ -532,13 +613,13 @@
         }
         card.appendChild(nwrap);
       }
-      if(active.show_results && active.nps!==null && active.nps!==undefined){
+      if(canReveal(active) && active.nps!==null && active.nps!==undefined){
         var npsBadge=document.createElement('div'); npsBadge.className='pill'; npsBadge.style.cssText='margin-top:14px;font-size:.95rem'; npsBadge.textContent='NPS '+active.nps;
         card.appendChild(npsBadge);
       }
       renderBars(card, active);
     } else if(active.kind==='multi'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var mform=document.createElement('form'); mform.style.cssText='display:grid;gap:10px;margin-top:16px';
         var boxes=[];
         (active.options||[]).forEach(function(opt){
@@ -559,7 +640,7 @@
       }
       renderBars(card, active);
     } else if(active.kind==='ranking'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var order=(active.options||[]).slice();
         var rform=document.createElement('form'); rform.style.cssText='display:grid;gap:12px;margin-top:16px';
         var rlist=document.createElement('div'); rlist.style.display='grid'; rlist.style.gap='8px';
@@ -585,7 +666,7 @@
       }
       renderRanking(card, active);
     } else if(active.kind==='open'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var form=document.createElement('form'); form.style.display='grid'; form.style.gap='10px'; form.style.marginTop='14px';
         var ta=document.createElement('textarea'); ta.className='textarea'; ta.placeholder='Type your answer…'; ta.required=true; ta.rows=3; ta.maxLength=500;
         var btn=document.createElement('button'); btn.className='btn btn-primary'; btn.type='submit'; btn.textContent='Submit';
@@ -596,9 +677,9 @@
         });
         card.appendChild(form);
       }
-      if(active.show_results) renderBars(card, active);
+      if(canReveal(active)) renderBars(card, active);
     } else if(active.kind==='wordcloud'){
-      if(!active.answered){
+      if(!active.answered && !locked){
         var form2=document.createElement('form'); form2.style.display='grid'; form2.style.gap='10px'; form2.style.marginTop='14px';
         var ta2=document.createElement('textarea'); ta2.className='textarea'; ta2.placeholder='One or two words…'; ta2.required=true; ta2.rows=2; ta2.maxLength=200;
         var b2=document.createElement('button'); b2.className='btn btn-primary'; b2.type='submit'; b2.textContent='Send';
@@ -607,24 +688,27 @@
         card.appendChild(form2);
       }
       renderWordCloud(card, active);
-      if(active.show_results) renderBars(card, active);
+      if(canReveal(active)) renderBars(card, active);
     }
   }
 
   function renderBars(container, active){
-    if(!active.show_results) return;
+    if(!canReveal(active)) return;
     var res=active.results||[];
     if(!res.length) return;
+    var cl=correctLabel(active);
     var max=Math.max.apply(null, res.map(function(r){return r.count})) || 1;
     var wrap=document.createElement('div'); wrap.className='results';
     res.forEach(function(r){
+      var isCorrect = cl!==null && String(r.label).toLowerCase()===cl.toLowerCase();
       var row=document.createElement('div'); row.className='result-row';
       var head=document.createElement('div'); head.className='result-head';
-      var lab=document.createElement('strong'); lab.textContent=r.label;
+      var lab=document.createElement('strong'); lab.textContent= isCorrect ? (r.label+' ✓') : r.label;
       var cnt=document.createElement('span'); cnt.textContent= r.count + ' · ' + (active.total ? Math.round(r.count/active.total*100)+'%' : '0%');
       head.appendChild(lab); head.appendChild(cnt);
       var track=document.createElement('div'); track.className='track';
       var fill=document.createElement('div'); fill.className='fill';
+      if(isCorrect){ lab.style.color='#6EE7B7'; fill.style.background='linear-gradient(135deg,#10B981,#22D3EE)'; }
       var pct = active.total ? (r.count/active.total*100) : (r.count/max*100);
       row.appendChild(head); track.appendChild(fill); row.appendChild(track); wrap.appendChild(row);
       requestAnimationFrame(function(){ fill.style.width = pct+'%'; });
@@ -633,7 +717,7 @@
   }
 
   function renderRanking(container, active){
-    if(!active.show_results) return;
+    if(!canReveal(active)) return;
     var res=active.results||[];
     if(!res.length) return;
     var max=Math.max.apply(null, res.map(function(r){return r.score||0}))||1;
@@ -653,7 +737,7 @@
   }
 
   function renderWordCloud(container, active){
-    if(!active.show_results) return;
+    if(!canReveal(active)) return;
     var res=active.results||[];
     if(!res.length) return;
     var cloud=document.createElement('div'); cloud.className='cloud'; cloud.style.marginTop='14px';
@@ -769,6 +853,49 @@
       list.appendChild(row);
     });
     card.appendChild(list);
+  }
+
+  function renderPodium(entries){
+    var card=document.getElementById('live-card');
+    if(!card) return;
+    card.textContent='';
+    var h=document.createElement('h2'); h.className='section-title'; h.textContent='🏆 Leaderboard'; card.appendChild(h);
+    var sub=document.createElement('p'); sub.className='section-sub'; sub.textContent='Top scores from this event.'; card.appendChild(sub);
+    entries=entries||[];
+    if(!entries.length){
+      var empty=document.createElement('div'); empty.style.cssText='color:var(--muted);margin-top:14px;font-size:.9rem'; empty.textContent='No scores yet — play a quiz to get on the podium!';
+      card.appendChild(empty); return;
+    }
+    var top=entries.slice(0,3), rest=entries.slice(3);
+    var order=[]; if(top[1]) order.push(top[1]); if(top[0]) order.push(top[0]); if(top[2]) order.push(top[2]);
+    var colors={1:'linear-gradient(180deg,#FBBF24,#B45309)',2:'linear-gradient(180deg,#D1D5DB,#6B7280)',3:'linear-gradient(180deg,#F59E0B,#92400E)'};
+    var heights={1:'120px',2:'92px',3:'72px'};
+    var meds={1:'🥇',2:'🥈',3:'🥉'};
+    var podium=document.createElement('div'); podium.style.cssText='display:flex;align-items:flex-end;justify-content:center;gap:10px;margin:20px 0 6px;flex-wrap:wrap';
+    order.forEach(function(e){
+      var rank=e.rank||0;
+      var col=document.createElement('div'); col.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;min-width:92px;flex:1;max-width:140px';
+      var em=document.createElement('div'); em.style.cssText='width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:22px;color:#fff;background:'+(e.color||'#6366F1'); em.textContent=e.emoji||'🙂';
+      var nm=document.createElement('div'); nm.style.cssText='font-weight:700;font-size:.86rem;text-align:center;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap'; nm.textContent=e.name||'Anonymous';
+      var block=document.createElement('div'); block.style.cssText='width:100%;height:'+(heights[rank]||'60px')+';border-radius:12px 12px 0 0;background:'+(colors[rank]||'rgba(255,255,255,.12)')+';display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px';
+      var md=document.createElement('div'); md.style.fontSize='1.15rem'; md.textContent=meds[rank]||('#'+rank);
+      var pt=document.createElement('div'); pt.style.cssText='font-weight:900;font-size:.95rem;color:#0B1020'; pt.textContent=(e.points||0)+' pts';
+      block.appendChild(md); block.appendChild(pt);
+      col.appendChild(em); col.appendChild(nm); col.appendChild(block); podium.appendChild(col);
+    });
+    card.appendChild(podium);
+    if(rest.length){
+      var list=document.createElement('div'); list.style.cssText='display:grid;gap:8px;margin-top:12px';
+      rest.forEach(function(e){
+        var row=document.createElement('div'); row.className='lb-row';
+        var rank=document.createElement('div'); rank.className='lb-rank'; rank.textContent='#'+(e.rank||0);
+        var avatar=document.createElement('div'); avatar.style.cssText='width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:16px;flex-shrink:0;color:#fff'; avatar.style.background=e.color||'#6366F1'; avatar.textContent=e.emoji||'🙂';
+        var nm=document.createElement('div'); nm.style.cssText='flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis'; nm.textContent=e.name||'Anonymous';
+        var pt=document.createElement('div'); pt.style.fontWeight='800'; pt.textContent=String(e.points||0);
+        row.appendChild(rank); row.appendChild(avatar); row.appendChild(nm); row.appendChild(pt); list.appendChild(row);
+      });
+      card.appendChild(list);
+    }
   }
 
   // Builds an input control for a question
@@ -1037,7 +1164,9 @@
         if(pa){
           delete pendingAnswers[m.id||m.question_id];
           // quiz feedback
-          if(typeof m.is_correct==='boolean'){
+          if(m.status==='flagged'){
+            toast('Answer sent — under review'); vibrate(40);
+          } else if(typeof m.is_correct==='boolean'){
             if(m.is_correct){ toast('Correct! +'+(m.points_awarded||0)+' pts'); showQuizBanner(true, m.points_awarded||0); vibrate([20,30,20]); }
             else { toast('Not this time'); showQuizBanner(false, 0); vibrate(40); }
           } else {
@@ -1052,7 +1181,7 @@
         return;
       }
       if(m.for==='qa'){
-        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; toast('Question submitted — awaiting approval'); vibrate(40); btn.disabled=false; btn.textContent='Submit question'; var qq2=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq2); }
+        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; toast(m.status==='flagged' ? 'Question submitted — under review' : 'Question submitted — awaiting approval'); vibrate(40); btn.disabled=false; btn.textContent='Submit question'; var qq2=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq2); }
         return;
       }
       if(m.for==='identity'){ return; }
@@ -1078,7 +1207,9 @@
         return;
       }
       if(m.for==='qa'){
-        if(pendingQA){ var b=pendingQA.btn; pendingQA=null; b.disabled=false; b.textContent='Submit question'; toast(m.error||'Could not submit question','err'); }
+        var hadQA=pendingQA; pendingQA=null;
+        if(m.retry_after_s){ startQACooldown(m.retry_after_s, m.error||'Slow mode is active — please wait'); return; }
+        if(hadQA){ var b=hadQA.btn; b.disabled=false; b.textContent='Submit question'; toast(m.error||'Could not submit question','err'); }
         return;
       }
       toast(m.error||'Error','err');
@@ -1105,7 +1236,9 @@
       if(!r.ok) throw new Error('answer failed');
       return r.json();
     }).then(function(j){
-      if(typeof j.is_correct==='boolean'){
+      if(j.flagged){
+        toast('Answer sent — under review'); vibrate(40);
+      } else if(typeof j.is_correct==='boolean'){
         if(j.is_correct){ toast('Correct! +'+(j.points_awarded||0)+' pts'); showQuizBanner(true, j.points_awarded||0); vibrate([20,30,20]); }
         else { toast('Not this time'); showQuizBanner(false,0); vibrate(40); }
       } else {
@@ -1126,6 +1259,30 @@
       var qq=loadQueue().filter(function(x){ return !(x.type==='vote' && x.id===q.id); });
       saveQueue(qq);
     }).catch(function(){ btn.disabled=false; toast('Could not vote','err'); });
+  }
+
+  // QA slow mode: keep the submit button disabled with a live countdown.
+  var qaCooldownTimer=null;
+  function startQACooldown(sec, msg){
+    var form=document.getElementById('qa-form');
+    if(!form) return;
+    var btn=form.querySelector('button[type="submit"]');
+    if(!btn) return;
+    if(qaCooldownTimer){ clearInterval(qaCooldownTimer); qaCooldownTimer=null; }
+    var remaining=Math.max(0, Math.round(sec||0));
+    if(msg) toast(msg,'err');
+    if(remaining<=0) return;
+    var tick=function(){
+      if(remaining<=0){
+        clearInterval(qaCooldownTimer); qaCooldownTimer=null;
+        btn.disabled=false; btn.textContent='Submit question';
+        return;
+      }
+      btn.disabled=true; btn.textContent='Wait '+remaining+'s\u2026';
+      remaining--;
+    };
+    tick();
+    qaCooldownTimer=setInterval(tick, 1000);
   }
 
   // QA submit
@@ -1151,14 +1308,21 @@
       }
       enqueue({type:'qa', body:body, author:author});
       fetch('/api/events/'+encodeURIComponent(code)+'/qa',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json'},body:JSON.stringify({body:body, author:author})}).then(function(r){
+        if(r.status===429){
+          return r.json().then(function(j){
+            saveQueue(loadQueue().filter(function(x){ return x.type!=='qa'; }));
+            startQACooldown(j.retry_after_s||0, j.error||'Slow mode is active — please wait');
+            throw {handled:true};
+          });
+        }
         if(!r.ok) throw new Error('qa failed');
         return r.json();
       }).then(function(j){
         document.getElementById('qa-body').value=''; document.getElementById('qa-author').value='';
-        toast(j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!'); vibrate(40);
+        toast(j.flagged ? 'Question submitted — under review' : (j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!')); vibrate(40);
         var qq=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq);
         fetchState();
-      }).catch(function(){ toast('Could not submit question','err'); }).finally(function(){ btn.disabled=false; btn.textContent='Submit question'; });
+      }).catch(function(err){ if(!(err&&err.handled)) toast('Could not submit question','err'); }).finally(function(){ if(!qaCooldownTimer){ btn.disabled=false; btn.textContent='Submit question'; } });
     });
   }
 
@@ -1166,7 +1330,11 @@
     if(!data) return;
     stateCache=data;
     if(data.event) renderEvent(data.event);
-    renderLive(data.active_question || null);
+    if(data.event && data.event.show_podium){
+      renderPodium(data.leaderboard || []);
+    } else {
+      renderLive(data.active_question || null);
+    }
     renderQA(data.qa || []);
     renderFeedback(data.feedback || {open:false, questions:[]}, data.event);
     renderLeaderboard(data.leaderboard || []);
@@ -1176,7 +1344,28 @@
     syncCountdown(data.active_question || null);
     var slide = data.current_slide || data.currentSlide || null;
     renderSlideIndicator(slide);
+    tickCountdown();
   }
+
+  var lastExpired=false;
+  function tickCountdown(){
+    var active=stateCache && stateCache.active_question;
+    var dl=deadlineMs(active);
+    var pill=document.getElementById('countdown-pill');
+    var visible = !!(active && dl && active.status!=='revealed' && active.status!=='closed' && !(stateCache.event && stateCache.event.show_podium));
+    if(pill){
+      if(!visible){ pill.classList.add('hidden'); }
+      else {
+        pill.classList.remove('hidden');
+        if(active.status==='locked') pill.textContent='⏱ Locked';
+        else pill.textContent='⏱ '+Math.ceil(Math.max(0, dl-Date.now())/1000)+'s';
+      }
+    }
+    var expired = !!(active && active.status==='live' && dl && Date.now()>=dl);
+    if(expired && !lastExpired && !(stateCache.event && stateCache.event.show_podium)){ renderLive(active); }
+    lastExpired=expired;
+  }
+  setInterval(tickCountdown, 250);
 
   function fetchState(){
     if(!code){ renderEvent(null); return Promise.resolve(); }

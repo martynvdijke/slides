@@ -42,10 +42,10 @@ func EventStats(eventID int64) (*StatsSummary, error) {
 	if s.Participants, err = countQuery("SELECT COUNT(*) FROM participants WHERE event_id=?", eventID); err != nil {
 		return nil, err
 	}
-	if s.Answered, err = countQuery("SELECT COUNT(DISTINCT a.participant_id) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=?", eventID); err != nil {
+	if s.Answered, err = countQuery("SELECT COUNT(DISTINCT a.participant_id) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=? AND a.status='visible'", eventID); err != nil {
 		return nil, err
 	}
-	if s.Answers, err = countQuery("SELECT COUNT(*) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=?", eventID); err != nil {
+	if s.Answers, err = countQuery("SELECT COUNT(*) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=? AND a.status='visible'", eventID); err != nil {
 		return nil, err
 	}
 	if s.Questions, err = countQuery("SELECT COUNT(*) FROM questions WHERE event_id=?", eventID); err != nil {
@@ -57,7 +57,7 @@ func EventStats(eventID int64) (*StatsSummary, error) {
 	if s.Votes, err = countQuery("SELECT COUNT(*) FROM qa_votes v JOIN qa_questions q ON q.id=v.qa_id WHERE q.event_id=?", eventID); err != nil {
 		return nil, err
 	}
-	if s.FeedbackAnswered, err = countQuery("SELECT COUNT(DISTINCT a.participant_id) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=? AND q.is_feedback=1", eventID); err != nil {
+	if s.FeedbackAnswered, err = countQuery("SELECT COUNT(DISTINCT a.participant_id) FROM answers a JOIN questions q ON q.id=a.question_id WHERE q.event_id=? AND q.is_feedback=1 AND a.status='visible'", eventID); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -72,7 +72,7 @@ func GlobalStats() (*TotalStats, []EventStatsSummary, error) {
 	}{
 		{&t.Events, "SELECT COUNT(*) FROM events"},
 		{&t.Participants, "SELECT COUNT(*) FROM participants"},
-		{&t.Answers, "SELECT COUNT(*) FROM answers"},
+		{&t.Answers, "SELECT COUNT(*) FROM answers WHERE status='visible'"},
 		{&t.Questions, "SELECT COUNT(*) FROM questions"},
 		{&t.QA, "SELECT COUNT(*) FROM qa_questions"},
 		{&t.Votes, "SELECT COUNT(*) FROM qa_votes"},

@@ -34,6 +34,10 @@ export interface LiveQuestion {
   total: number
   respondents: number
   show_results: boolean
+  status?: string
+  time_limit_s?: number
+  activated_at?: number | null
+  deadline_at?: number | null
   media_url?: string
   media_type?: string
   is_feedback?: boolean
@@ -56,6 +60,7 @@ export interface LiveEvent {
   name: string
   description?: string
   status?: string
+  show_podium?: boolean
 }
 
 interface QAItem {
@@ -225,7 +230,7 @@ class RoomClient {
                 this.answerResult.value = {
                   is_correct: aq.my_correct ?? null,
                   points_awarded: aq.my_points ?? 0,
-                  total_points: m.data?.me_total_points ?? this.answerResult.value?.total_points ?? 0,
+                  total_points: this.answerResult.value?.total_points ?? 0,
                 }
               }
             }
@@ -237,13 +242,13 @@ class RoomClient {
             }
           } else if (m.type === 'reactions' && Array.isArray(m.data)) {
             this.reactions.value = m.data as ReactionCount[]
-          } else if (m.type === 'result' && m.for === 'answer' && m.data) {
-            const d = m.data
-            if (typeof d.is_correct !== 'undefined' || typeof d.points_awarded !== 'undefined') {
+          } else if (m.type === 'result' && m.for === 'answer') {
+            // The server sends scoring fields at the top level of the frame.
+            if (typeof m.is_correct !== 'undefined' || typeof m.points_awarded !== 'undefined') {
               this.answerResult.value = {
-                is_correct: d.is_correct ?? null,
-                points_awarded: d.points_awarded ?? 0,
-                total_points: d.total_points ?? 0,
+                is_correct: m.is_correct ?? null,
+                points_awarded: m.points_awarded ?? 0,
+                total_points: m.total_points ?? 0,
               }
             }
           } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
@@ -428,6 +433,15 @@ export function useLiveRoom(options: {
   const configured = computed(() => !!resolvedCode.value)
   const event = computed<LiveEvent | null>(() => state.value?.event ?? null)
   const active = computed<LiveQuestion | null>(() => state.value?.active_question ?? null)
+  const deadlineAt = computed<number | null>(() => {
+    const a = active.value
+    if (!a) return null
+    if (typeof a.deadline_at === 'number' && a.deadline_at > 0) return a.deadline_at
+    if (typeof a.time_limit_s === 'number' && a.time_limit_s > 0 && typeof a.activated_at === 'number' && a.activated_at > 0) {
+      return a.activated_at + a.time_limit_s * 1000
+    }
+    return null
+  })
   const qa = computed<QAItem[]>(() => state.value?.qa ?? [])
   const roomCode = computed(() => event.value?.room_code || explicitRoom.value || '')
 
@@ -466,6 +480,7 @@ export function useLiveRoom(options: {
     resolveError,
     event,
     active,
+    deadlineAt,
     qa,
     roomCode,
     code,

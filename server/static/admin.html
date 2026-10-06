@@ -118,6 +118,7 @@
         <a id="sel-live" class="btn btn-ghost btn-small" href="#" target="_blank">Projector</a>
         <a id="sel-aud" class="btn btn-ghost btn-small" href="#" target="_blank">Audience</a>
         <a id="sel-join" class="btn btn-ghost btn-small" href="#" target="_blank">Join code</a>
+        <button class="btn btn-ghost btn-small" type="button" id="btn-podium" data-show="1">Show podium</button>
         <button class="btn btn-ghost btn-small" type="button" id="btn-export">Export CSV</button>
         <button class="btn btn-ghost btn-small" type="button" id="btn-delete-event" style="color:#F87171;border-color:rgba(248,113,113,.3)">Delete</button>
       </div>
@@ -155,6 +156,7 @@
             <div class="field"><label for="aq-duration">Timer</label><select id="aq-duration" class="select"><option value="0">Untimed</option><option value="5">5s</option><option value="10">10s</option><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option><option value="120">120s</option><option value="180">180s</option></select></div>
             <label class="inline gap-2 cursor-pointer" style="align-self:end;padding-bottom:8px"><input type="checkbox" id="aq-auto-reveal"> <span class="text-[0.88rem]">Auto-reveal results</span></label>
           </div>
+          <div class="field"><label for="aq-timelimit">Time limit (seconds — 0 = untimed)</label><input id="aq-timelimit" class="input" type="number" min="0" max="3600" step="5" value="0" placeholder="0"></div>
           <div class="form-row cols2">
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-feedback"> <span class="text-[0.88rem]">Is feedback</span></label>
             <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-show" checked> <span class="text-[0.88rem]">Show results</span></label>
@@ -176,6 +178,20 @@
     <!-- QA panel -->
     <section data-panel="qa" class="hidden" aria-labelledby="qa-title">
       <div class="admin-top"><div><h2 id="qa-title" class="section-title">Q&amp;A Moderation</h2><p class="section-sub">Approve, hide, mark answered or delete.</p></div><button class="btn btn-ghost btn-small" type="button" id="btn-refresh-qa">Refresh</button></div>
+      <div class="glass card-pad mb-4">
+        <h3 class="section-title text-[1rem]">Answer moderation</h3>
+        <p class="section-sub">Answers caught by the content filter or hidden by you. Flagged answers stay out of live results, exports and the leaderboard until approved.</p>
+        <div class="inline gap-2 mt-3">
+          <select id="mod-status" class="select" style="max-width:180px">
+            <option value="flagged">Flagged</option>
+            <option value="hidden">Hidden</option>
+            <option value="visible">Visible</option>
+            <option value="">All</option>
+          </select>
+          <button class="btn btn-ghost btn-small" type="button" id="btn-refresh-moderation">Refresh</button>
+        </div>
+        <div id="moderation-list" class="stack mt-3"></div>
+      </div>
       <div id="qa-list" class="stack"></div>
     </section>
 
@@ -259,6 +275,8 @@
             <div class="field"><label for="es-status">Status</label><select id="es-status" class="select"><option value="open">open</option><option value="closed">closed</option></select></div>
           </div>
           <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="es-feedback"> <span>Feedback open</span></label>
+          <div class="field"><label for="es-slowmode">Q&amp;A slow mode (seconds per participant — 0 = off)</label><input id="es-slowmode" class="input" type="number" min="0" max="3600" step="5" value="0" placeholder="0"></div>
+          <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="es-publish"> <span>Publish results page</span></label>
           <button class="btn btn-primary" type="submit">Save event</button>
         </form>
       </div>
@@ -322,6 +340,42 @@
           </div>
           <div id="wh-test-result" class="hidden glass card-pad" style="font-size:.82rem;white-space:pre-wrap;word-break:break-all;max-height:220px;overflow:auto"></div>
         </form>
+      </div>
+
+      <div class="glass card-pad mt-4">
+        <h3 class="section-title">Content filter</h3>
+        <p class="text-[#9AA0B8] text-[0.85rem] mt-1">Blocked words for open-text answers and Q&amp;A questions. Matching is case-insensitive and only hits whole words; phrases match consecutive words. Empty list = no filtering.</p>
+        <form id="form-filter" class="mt-3 grid gap-2.5">
+          <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="cf-enabled"> <span>Filter enabled</span></label>
+          <div class="field"><label for="cf-words">Blocked words (one per line or comma separated)</label><textarea id="cf-words" class="textarea" rows="4" placeholder="badword&#10;another phrase"></textarea></div>
+          <div class="field"><label for="cf-action">Action on match</label><select id="cf-action" class="select"><option value="flag">Flag for review</option><option value="reject">Reject submission</option></select></div>
+          <button class="btn btn-primary" type="submit">Save filter</button>
+        </form>
+      </div>
+
+      <div class="glass card-pad mt-4">
+        <h3 class="section-title">Recap</h3>
+        <p class="text-[#9AA0B8] text-[0.85rem] mt-1">Email a post-event summary. Attendees can opt in from the audience app; the list below is the host list that always receives the recap.</p>
+        <form id="form-recap" class="mt-3 grid gap-2.5">
+          <div class="field"><label for="rc-emails">Host recipients (one per line or comma separated)</label><textarea id="rc-emails" class="textarea" rows="3" placeholder="host@example.com&#10;team@example.com"></textarea></div>
+          <div class="inline gap-2">
+            <button class="btn btn-primary" type="submit">Save recipients</button>
+            <span id="rc-status" class="text-[#9AA0B8] text-[0.85rem]"></span>
+          </div>
+        </form>
+        <hr class="mt-4" style="border-color:rgba(255,255,255,.08)">
+        <div class="mt-3">
+          <h4 class="section-title text-[1rem]">Send for the selected event</h4>
+          <div class="inline gap-2 mt-2">
+            <button class="btn btn-ghost btn-small" type="button" id="btn-refresh-recap-subs">Refresh</button>
+            <button class="btn btn-ghost btn-small" type="button" id="btn-recap-preview">Preview</button>
+            <button class="btn btn-primary btn-small" type="button" id="btn-recap-send">Send recap</button>
+            <span id="rc-send-status" class="text-[#9AA0B8] text-[0.85rem]"></span>
+          </div>
+          <div id="recap-subs" class="grid gap-2 mt-3 text-[#9AA0B8] text-[0.9rem]">Select an event to see subscriptions.</div>
+          <div id="rc-preview-meta" class="text-[#9AA0B8] text-[0.85rem] mt-2"></div>
+          <pre id="rc-preview" class="glass card-pad mt-2 hidden" style="white-space:pre-wrap;font-size:.82rem;max-height:22rem;overflow:auto"></pre>
+        </div>
       </div>
 
       <div class="glass card-pad mt-4">
