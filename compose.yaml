@@ -24,6 +24,15 @@ services:
       DECKS_DIR: /app/dist
       # Absolute base used in QR codes — set this to the URL people reach you on.
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:6270}
+      # OIDC login (optional). Set OIDC_ENABLED=true plus issuer/client/secret
+      # in .env to sign admins in through Authelia, Keycloak, Authentik, etc.
+      OIDC_ENABLED: ${OIDC_ENABLED:-false}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_REDIRECT_URL: ${OIDC_REDIRECT_URL:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
+      OIDC_ADMIN_EMAILS: ${OIDC_ADMIN_EMAILS:-}
       # Empty disables OpenTelemetry. Point it at the collector (observability
       # profile) to start exporting: http://otel-collector:4318
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
