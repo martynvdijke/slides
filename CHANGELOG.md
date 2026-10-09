@@ -1,3 +1,5 @@
+## [1.13.2](https://github.com/martynvdijke/slides/compare/v1.13.1...v1.13.2) (2026-10-09)
+
 ## [1.13.1](https://github.com/martynvdijke/slides/compare/v1.13.0...v1.13.1) (2026-10-08)
 
 # [1.13.0](https://github.com/martynvdijke/slides/compare/v1.12.0...v1.13.0) (2026-10-06)
