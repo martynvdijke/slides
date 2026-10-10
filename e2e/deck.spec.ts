@@ -42,4 +42,15 @@ test.describe('slides deck', () => {
     expect(body.code).toBe(ev.code)
     expect(body.room_code).toBe(ev.room_code)
   })
+
+  test('advances when tapping the slide content', async ({ page }) => {
+    // Regression: Slidev's built-in handler only navigates when the
+    // pointerdown target is the empty #slide-container. Tapping/clicking the
+    // slide content must also advance (global-top.vue pointer handler fills
+    // that gap so the deck is usable on touch devices).
+    await page.goto('/feature-test/')
+    await expect(page).toHaveURL(/#\/1\b/)
+    await page.locator('#slide-content h1').first().click()
+    await expect(page).toHaveURL(/#\/2\b/)
+  })
 })
