@@ -1,3 +1,12 @@
+# [1.15.0](https://github.com/martynvdijke/slides/compare/v1.14.0...v1.15.0) (2026-10-10)
+
+
+### Features
+
+* **app:** waiting-room roster, feature-aware tabs, and admin deck controls ([e17e314](https://github.com/martynvdijke/slides/commit/e17e314f2ccc9002b7b0458f87ce689a58753419))
+* **deck:** per-deck feature flags and remote deck navigation ([150b26b](https://github.com/martynvdijke/slides/commit/150b26bd4989c6e35cde79a3b3998d909bc428f9))
+* **server:** waiting-room participant roster, admin deck control, and per-deck feature flags ([c07b003](https://github.com/martynvdijke/slides/commit/c07b00303521e89038c4f6a8842611205ed57a2a))
+
 # [1.14.0](https://github.com/martynvdijke/slides/compare/v1.13.3...v1.14.0) (2026-10-10)
 
 
