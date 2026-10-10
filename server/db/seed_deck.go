@@ -32,6 +32,7 @@ type SeedManifest struct {
 	EventCode string         `json:"event_code"`
 	EventName string         `json:"event_name"`
 	Questions []SeedQuestion `json:"questions"`
+	Features  []string       `json:"features"`
 }
 
 // SeedDeckQuestionsFromDir iterates immediate subdirectories of decksDir; for
@@ -80,6 +81,23 @@ func SeedDeckQuestionsFromDir(decksDir string) error {
 		if err != nil {
 			log.Printf("seed deck %s: SyncEventQuestions: %v", e.Name(), err)
 			continue
+		}
+		if m.Features != nil {
+			set := map[string]bool{}
+			for _, f := range m.Features {
+				set[f] = true
+			}
+			fields := map[string]any{
+				"feature_live":        set["live"],
+				"feature_qa":          set["qa"],
+				"feature_slides":      set["slides"],
+				"feature_feedback":    set["feedback"],
+				"feature_leaderboard": set["leaderboard"],
+			}
+			// coerce bool to int via UpdateEvent
+			if _, err := UpdateEvent(ev.ID, fields); err != nil {
+				log.Printf("seed deck %s: update features: %v", e.Name(), err)
+			}
 		}
 		log.Printf("seed deck %s: event=%s created=%d updated=%d", e.Name(), code, created, updated)
 	}

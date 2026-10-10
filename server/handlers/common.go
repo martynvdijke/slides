@@ -44,21 +44,26 @@ const userKey ctxKey = "user"
 // ── JSON DTOs: the contract the embedded frontend is built against ──
 
 type EventDTO struct {
-	ID               int64  `json:"id"`
-	Code             string `json:"code"`
-	RoomCode         string `json:"room_code"`
-	Name             string `json:"name"`
-	Description      string `json:"description"`
-	EventDate        string `json:"event_date"`
-	Status           string `json:"status"`
-	FeedbackOpen     bool   `json:"feedback_open"`
-	ShowPodium       bool   `json:"show_podium"`
-	QASlowModeS      int    `json:"qa_slow_mode_s"`
-	ResultsPublished bool   `json:"results_published"`
-	Brand            string `json:"brand"`
-	CreatedAt        string `json:"created_at,omitempty"`
-	QuestionCount    int    `json:"question_count"`
-	PendingQACount   int    `json:"pending_qa_count"`
+	ID                 int64  `json:"id"`
+	Code               string `json:"code"`
+	RoomCode           string `json:"room_code"`
+	Name               string `json:"name"`
+	Description        string `json:"description"`
+	EventDate          string `json:"event_date"`
+	Status             string `json:"status"`
+	FeedbackOpen       bool   `json:"feedback_open"`
+	ShowPodium         bool   `json:"show_podium"`
+	QASlowModeS        int    `json:"qa_slow_mode_s"`
+	ResultsPublished   bool   `json:"results_published"`
+	FeatureLive        bool   `json:"feature_live"`
+	FeatureQA          bool   `json:"feature_qa"`
+	FeatureSlides      bool   `json:"feature_slides"`
+	FeatureFeedback    bool   `json:"feature_feedback"`
+	FeatureLeaderboard bool   `json:"feature_leaderboard"`
+	Brand              string `json:"brand"`
+	CreatedAt          string `json:"created_at,omitempty"`
+	QuestionCount      int    `json:"question_count"`
+	PendingQACount     int    `json:"pending_qa_count"`
 }
 
 type QuestionDTO struct {
@@ -345,21 +350,26 @@ func BroadcastEvent(eventID int64) {
 
 func eventDTO(ev *db.Event, brand string) EventDTO {
 	return EventDTO{
-		ID:               ev.ID,
-		Code:             ev.Code,
-		RoomCode:         ev.RoomCode,
-		Name:             ev.Name,
-		Description:      ev.Description,
-		EventDate:        ev.EventDate,
-		Status:           ev.Status,
-		FeedbackOpen:     ev.FeedbackOpen,
-		ShowPodium:       ev.ShowPodium,
-		QASlowModeS:      ev.QASlowModeS,
-		ResultsPublished: ev.ResultsPublished,
-		Brand:            brand,
-		CreatedAt:        ev.CreatedAt.Format(time.RFC3339),
-		QuestionCount:    ev.QuestionCount,
-		PendingQACount:   ev.PendingQACount,
+		ID:                 ev.ID,
+		Code:               ev.Code,
+		RoomCode:           ev.RoomCode,
+		Name:               ev.Name,
+		Description:        ev.Description,
+		EventDate:          ev.EventDate,
+		Status:             ev.Status,
+		FeedbackOpen:       ev.FeedbackOpen,
+		ShowPodium:         ev.ShowPodium,
+		QASlowModeS:        ev.QASlowModeS,
+		ResultsPublished:   ev.ResultsPublished,
+		FeatureLive:        ev.FeatureLive,
+		FeatureQA:          ev.FeatureQA,
+		FeatureSlides:      ev.FeatureSlides,
+		FeatureFeedback:    ev.FeatureFeedback,
+		FeatureLeaderboard: ev.FeatureLeaderboard,
+		Brand:              brand,
+		CreatedAt:          ev.CreatedAt.Format(time.RFC3339),
+		QuestionCount:      ev.QuestionCount,
+		PendingQACount:     ev.PendingQACount,
 	}
 }
 

@@ -522,6 +522,37 @@ func ResolveRoom(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+func PublicListParticipants(w http.ResponseWriter, r *http.Request) {
+	ev, err := eventByCode(r)
+	if err != nil || ev == nil {
+		jsonError(w, "event not found", http.StatusNotFound)
+		return
+	}
+	parts, err := db.ListParticipants(ev.ID)
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	type dto struct {
+		Name  string `json:"name"`
+		Emoji string `json:"emoji"`
+		Color string `json:"color"`
+	}
+	out := make([]dto, 0, len(parts))
+	for _, p := range parts {
+		name := p.DisplayName
+		if name == "" {
+			name = "Anonymous"
+		}
+		emoji := p.Emoji
+		if emoji == "" {
+			emoji = "\U0001f642"
+		}
+		out = append(out, dto{Name: name, Emoji: emoji, Color: p.Color})
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(out), "participants": out})
+}
+
 func PublicGetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {

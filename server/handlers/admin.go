@@ -274,6 +274,22 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 			fields["results_published"] = b
 		}
 	}
+	for _, key := range []string{"feature_live", "feature_qa", "feature_slides", "feature_feedback", "feature_leaderboard"} {
+		if v, ok := raw[key]; ok {
+			var b bool
+			if err := json.Unmarshal(v, &b); err != nil {
+				var n int
+				if err2 := json.Unmarshal(v, &n); err2 == nil {
+					fields[key] = n != 0
+				} else {
+					jsonError(w, "invalid "+key, http.StatusBadRequest)
+					return
+				}
+			} else {
+				fields[key] = b
+			}
+		}
+	}
 	// code handling
 	var newCode string
 	var codeProvided bool
@@ -311,6 +327,82 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	if s, ok := fields["status"]; ok && s == "closed" {
 		webhook.Notify(ev.Code, "event.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "event_id": ev.ID})
 	}
+}
+
+func AdminListParticipants(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	ev, err := db.GetEventByID(id)
+	if err != nil || ev == nil {
+		jsonError(w, "event not found", http.StatusNotFound)
+		return
+	}
+	parts, err := db.ListParticipants(id)
+	if err != nil {
+		jsonError(w, "failed", http.StatusInternalServerError)
+		return
+	}
+	type dto struct {
+		ID        int64  `json:"id"`
+		Name      string `json:"name"`
+		Emoji     string `json:"emoji"`
+		Color     string `json:"color"`
+		LastSeen  int64  `json:"last_seen"`
+		CreatedAt string `json:"created_at"`
+	}
+	out := make([]dto, 0, len(parts))
+	for _, p := range parts {
+		out = append(out, dto{ID: p.ID, Name: p.DisplayName, Emoji: p.Emoji, Color: p.Color, LastSeen: p.LastSeen, CreatedAt: p.CreatedAt.Format("2006-01-02 15:04:05")})
+	}
+	_ = ev
+	writeJSON(w, http.StatusOK, map[string]any{"count": len(out), "participants": out})
+}
+
+func AdminSlideControl(w http.ResponseWriter, r *http.Request) {
+	id := pathID(r, "id")
+	ev, err := db.GetEventByID(id)
+	if err != nil || ev == nil {
+		jsonError(w, "event not found", http.StatusNotFound)
+		return
+	}
+	var body struct {
+		Index  *int   `json:"index"`
+		Action string `json:"action"`
+	}
+	if err := decodeJSON(r, &body); err != nil {
+		jsonError(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	var idx int
+	if body.Action != "" {
+		cur, _ := Broker.GetSlide(ev.Code)
+		switch body.Action {
+		case "next":
+			idx = cur.Index + 1
+		case "prev":
+			idx = cur.Index - 1
+		default:
+			jsonError(w, "invalid action", http.StatusBadRequest)
+			return
+		}
+	} else if body.Index != nil {
+		idx = *body.Index
+	} else {
+		jsonError(w, "index or action required", http.StatusBadRequest)
+		return
+	}
+	if idx < 1 {
+		idx = 1
+	}
+	cur, _ := Broker.GetSlide(ev.Code)
+	s := cur
+	s.Index = idx
+	if s.Total == 0 {
+		s.Total = cur.Total
+	}
+	Broker.SetSlide(ev.Code, s)
+	Broker.BroadcastSlide(ev.Code, s)
+	_ = Broker.BroadcastNav(ev.Code, idx)
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "index": idx})
 }
 
 // AdminListAnswers lists stored answers for moderation, optionally filtered by
