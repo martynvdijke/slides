@@ -1,3 +1,18 @@
+# [1.14.0](https://github.com/martynvdijke/slides/compare/v1.13.3...v1.14.0) (2026-10-10)
+
+
+### Bug Fixes
+
+* **entry:** stop force-redirecting signed-in users to the dashboard ([af52cc2](https://github.com/martynvdijke/slides/commit/af52cc20468f009c129363e16bec867bc7ae68a5))
+
+
+### Features
+
+* **app:** mobile polish for the attendee web app ([7e42751](https://github.com/martynvdijke/slides/commit/7e42751281c96bda76a19732d199f96f57c0a964))
+* **deck:** mobile-friendly slide layout on phones ([5b68317](https://github.com/martynvdijke/slides/commit/5b683171bf780a0be90a793057dc25f825dc5852))
+* **live:** connect feature-test deck to the container backend ([8966bd7](https://github.com/martynvdijke/slides/commit/8966bd72f715f41727fb0a46c55e001b8a565298))
+* **questions:** seed live questions from deck markdown on startup ([0b5aa88](https://github.com/martynvdijke/slides/commit/0b5aa8829f27a9c95e67cc7a3aae0eeb38323cb1))
+
 ## [1.13.3](https://github.com/martynvdijke/slides/compare/v1.13.2...v1.13.3) (2026-10-10)
 
 
