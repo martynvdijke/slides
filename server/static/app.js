@@ -28,6 +28,90 @@
   }
   var code=getCode();
   var stateCache=null;
+  // --- waiting-room roster (audience compact) ---
+  var participantsData={count:0, participants:[]};
+  function renderAudienceRoster(){
+    var c=document.getElementById('audience-roster');
+    if(!c) return;
+    c.textContent='';
+    var count=participantsData && typeof participantsData.count==='number' ? participantsData.count : (participantsData.participants?participantsData.participants.length:0);
+    var list=(participantsData && Array.isArray(participantsData.participants))?participantsData.participants:[];
+    var pill=document.createElement('div');
+    pill.id='audience-roster-count';
+    pill.className='pill live';
+    pill.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;font-weight:700;font-size:.82rem;background:linear-gradient(135deg,#22D3EE 0%,#6366F1 100%);color:#fff;border:none';
+    pill.textContent = count===0 ? 'No one has joined yet' : (count===1 ? '1 waiting' : count+' waiting');
+    c.appendChild(pill);
+    if(!list.length) return;
+    var chips=document.createElement('div'); chips.id='audience-roster-chips';
+    chips.style.cssText='display:flex;flex-wrap:wrap;gap:6px;margin-top:10px;max-height:160px;overflow:auto;padding:2px';
+    var cap=40;
+    var vis=list.slice(0,cap);
+    vis.forEach(function(p){
+      var chip=document.createElement('span');
+      chip.style.cssText='display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:999px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.10);font-weight:600;font-size:.80rem;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E8EAF4';
+      if(p.color){ chip.style.borderColor=p.color+'55'; chip.style.background=p.color+'14'; }
+      var em=document.createElement('span'); em.textContent=p.emoji||'🙂'; em.style.fontSize='0.95rem';
+      var nm=document.createElement('span'); nm.textContent=String(p.name||'Anonymous'); nm.style.overflow='hidden'; nm.style.textOverflow='ellipsis';
+      chip.appendChild(em); chip.appendChild(nm); chips.appendChild(chip);
+    });
+    c.appendChild(chips);
+    if(list.length>cap){
+      var more=document.createElement('div'); more.style.cssText='color:var(--muted);font-size:.78rem;margin-top:6px;font-weight:600'; more.textContent='+'+(list.length-cap)+' more';
+      c.appendChild(more);
+    }
+  }
+  function fetchParticipants(){
+    if(!code) return;
+    fetch('/api/events/'+encodeURIComponent(code)+'/participants',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){
+      participantsData={count:j.count||0, participants:Array.isArray(j.participants)?j.participants:[]};
+      renderAudienceRoster();
+    }).catch(function(){});
+  }
+  // --- feature gating ---
+  var FEATURE_MAP={feature_live:'live',feature_qa:'qa',feature_slides:'slides',feature_feedback:'feedback',feature_leaderboard:'leaderboard'};
+  function isFeatureEnabled(evt, featKey){
+    if(!evt || evt[featKey]===undefined || evt[featKey]===null) return true;
+    return !!evt[featKey];
+  }
+  function applyFeatureGating(evt){
+    if(!evt) return;
+    var hasAnyFlag = ['feature_live','feature_qa','feature_slides','feature_feedback','feature_leaderboard'].some(function(k){ return evt[k]!==undefined && evt[k]!==null; });
+    if(!hasAnyFlag) return;
+    var firstEnabled=null;
+    Object.keys(FEATURE_MAP).forEach(function(fk){
+      var tabName=FEATURE_MAP[fk];
+      var enabled=isFeatureEnabled(evt,fk);
+      var tabBtn=document.querySelector('.tab[data-tab="'+tabName+'"]');
+      var panel=document.getElementById('panel-'+tabName);
+      if(!enabled){
+        if(tabBtn){ tabBtn.style.display='none'; tabBtn.setAttribute('aria-hidden','true'); }
+        if(panel){ panel.classList.add('hidden'); panel.style.display='none'; }
+      } else {
+        if(!firstEnabled) firstEnabled=tabName;
+        if(tabBtn){ tabBtn.style.display=''; tabBtn.removeAttribute('aria-hidden'); }
+        if(panel){ panel.style.display=''; /* keep hidden state managed by selectTab */ }
+        // panel hidden will be controlled by selectTab; just ensure not forced hidden
+      }
+    });
+    // if currently selected tab is disabled, switch to first enabled
+    var cur=document.querySelector('.tab[aria-selected="true"]');
+    var curName=cur?cur.getAttribute('data-tab'):null;
+    var curEnabled=curName? isFeatureEnabled(evt, Object.keys(FEATURE_MAP).find(function(k){return FEATURE_MAP[k]===curName})):true;
+    if(curName && !curEnabled){
+      var target=firstEnabled;
+      // also check localStorage saved tab
+      try{
+        var saved=localStorage.getItem('meetup_tab');
+        if(saved && FEATURE_MAP[Object.keys(FEATURE_MAP).find(function(k){return FEATURE_MAP[k]===saved})]!==undefined){
+          // find fk for saved
+          var fkSaved=Object.keys(FEATURE_MAP).find(function(k){return FEATURE_MAP[k]===saved});
+          if(fkSaved && isFeatureEnabled(evt,fkSaved)) target=saved;
+        }
+      }catch(e){}
+      if(target) selectTab(target);
+    }
+  }
 
   // --- slide sync indicator ---
   function renderSlideIndicator(slide){
@@ -491,6 +575,7 @@
     var status = evt.status ? ' · '+(evt.status==='open'?'Open':'Closed') : '';
     d.textContent = (evt.description||'') + brand + date + status;
     document.title = esc(evt.name) + ' — Meetup';
+    try{ applyFeatureGating(evt); }catch(e){}
   }
 
   function renderMedia(container, q){
@@ -534,7 +619,9 @@
       var h=document.createElement('h3'); h.textContent='Waiting for the host…';
       var p=document.createElement('p'); p.textContent='The host will start a live question soon. Stay on this tab — it updates automatically.';
       w.appendChild(orb); w.appendChild(h); w.appendChild(p);
-      card.appendChild(w); return;
+      var roster=document.createElement('div'); roster.id='audience-roster'; roster.style.cssText='width:100%;display:flex;flex-direction:column;align-items:center;margin-top:12px';
+      w.appendChild(roster); card.appendChild(w); try{ renderAudienceRoster(); }catch(e){}
+      return;
     }
     renderMedia(card, active);
     var locked=isLocked(active);
@@ -1143,6 +1230,15 @@
   function wsSend(obj){ try{ ws.send(JSON.stringify(obj)); return true; }catch(e){ return false; } }
   function handleWsMessage(m){
     if(!m || !m.type) return;
+    if(m.type==='participants' && m.data){
+      participantsData={count:m.data.count||0, participants:Array.isArray(m.data.participants)?m.data.participants:[]};
+      renderAudienceRoster();
+      return;
+    }
+    if(m.type==='nav' && m.data && typeof m.data.index==='number'){
+      // deck remote nav sync — no audience action needed
+      return;
+    }
     if(m.type==='slide'){
       var sd=m.data || m;
       var slide={index: sd.index, total: sd.total, title: sd.title||''};
@@ -1432,5 +1528,6 @@
     // open SSE only after the first state fetch so the participant cookie is
     // set before the stream binds to an identity
     fetchState().then(connectStream, connectStream);
+    fetchParticipants();
   }
 })();

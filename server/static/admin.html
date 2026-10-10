@@ -118,10 +118,34 @@
         <a id="sel-live" class="btn btn-ghost btn-small" href="#" target="_blank">Projector</a>
         <a id="sel-aud" class="btn btn-ghost btn-small" href="#" target="_blank">Audience</a>
         <a id="sel-join" class="btn btn-ghost btn-small" href="#" target="_blank">Join code</a>
+        <a id="sel-deck" class="btn btn-ghost btn-small" href="#" target="_blank">Show deck</a>
+        <a id="sel-presenter" class="btn btn-ghost btn-small" href="#" target="_blank">Open deck</a>
         <button class="btn btn-ghost btn-small" type="button" id="btn-podium" data-show="1">Show podium</button>
         <button class="btn btn-ghost btn-small" type="button" id="btn-export">Export CSV</button>
         <button class="btn btn-ghost btn-small" type="button" id="btn-delete-event" style="color:#F87171;border-color:rgba(248,113,113,.3)">Delete</button>
       </div>
+    </div>
+
+    <!-- Deck remote controls -->
+    <div id="deck-controls" class="glass card-pad hidden mb-4" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="font-weight:700;letter-spacing:-.02em">Deck</div>
+      <button class="btn btn-ghost btn-small" type="button" id="btn-deck-prev" aria-label="Previous slide">Prev</button>
+      <button class="btn btn-ghost btn-small" type="button" id="btn-deck-next" aria-label="Next slide">Next</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input id="deck-goto-input" class="input" type="number" min="1" placeholder="Slide #" aria-label="Go to slide number" style="width:96px;height:36px">
+        <button class="btn btn-ghost btn-small" type="button" id="btn-deck-goto">Go to slide</button>
+      </div>
+      <span id="deck-controls-status" style="color:var(--muted);font-size:.82rem" aria-live="polite"></span>
+    </div>
+
+    <!-- Admin participants roster -->
+    <div id="admin-participants-panel" class="glass card-pad hidden mb-4">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+        <h3 class="section-title text-[1rem]" style="margin:0">Participants <span class="pill" id="admin-participants-count">0 waiting</span></h3>
+        <button class="btn btn-ghost btn-small" type="button" id="btn-toggle-participants" aria-expanded="true">Collapse</button>
+      </div>
+      <div id="admin-participants-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;max-height:220px;overflow:auto"></div>
+      <div id="admin-participants-empty" style="color:var(--muted);font-size:.85rem;margin-top:8px">No one has joined yet.</div>
     </div>
 
     <!-- Questions panel -->

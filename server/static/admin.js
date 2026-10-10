@@ -52,6 +52,74 @@
   };
 
   var state={ user:null, events:[], selectedId:null };
+  // --- admin participants roster ---
+  var adminParticipants={count:0, participants:[]};
+  function renderAdminParticipants(){
+    var panel=document.getElementById('admin-participants-panel');
+    var countEl=document.getElementById('admin-participants-count');
+    var listEl=document.getElementById('admin-participants-list');
+    var emptyEl=document.getElementById('admin-participants-empty');
+    if(!panel || !listEl || !countEl) return;
+    var count= typeof adminParticipants.count==='number' ? adminParticipants.count : (adminParticipants.participants?adminParticipants.participants.length:0);
+    var list=Array.isArray(adminParticipants.participants)?adminParticipants.participants:[];
+    countEl.textContent = count===0 ? '0 waiting' : (count===1 ? '1 waiting' : count+' waiting');
+    listEl.textContent='';
+    if(!list.length){
+      if(emptyEl) emptyEl.style.display='';
+      return;
+    }
+    if(emptyEl) emptyEl.style.display='none';
+    var cap=100;
+    var vis=list.slice(0,cap);
+    vis.forEach(function(p){
+      var chip=document.createElement('span');
+      chip.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.10);font-weight:600;font-size:.82rem;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E8EAF4';
+      if(p.color){ chip.style.borderColor=p.color+'55'; chip.style.background=p.color+'14'; }
+      var em=document.createElement('span'); em.textContent=p.emoji||'🙂';
+      var nm=document.createElement('span'); nm.textContent=String(p.name||'Anonymous'); nm.style.overflow='hidden'; nm.style.textOverflow='ellipsis';
+      chip.appendChild(em); chip.appendChild(nm); listEl.appendChild(chip);
+    });
+    if(list.length>cap){
+      var more=document.createElement('div'); more.style.cssText='color:var(--muted);font-size:.82rem;margin-top:6px;font-weight:600;width:100%'; more.textContent='+'+(list.length-cap)+' more';
+      listEl.appendChild(more);
+    }
+  }
+  function fetchAdminParticipants(id){
+    if(!id) return;
+    api('/api/admin/events/'+id+'/participants').then(function(j){
+      adminParticipants={count:j.count||0, participants:Array.isArray(j.participants)?j.participants:[]};
+      var panel=document.getElementById('admin-participants-panel');
+      if(panel) panel.classList.remove('hidden');
+      renderAdminParticipants();
+    }).catch(function(){});
+  }
+  // deck remote
+  var deckBusy=false;
+  function setDeckBusy(on){
+    deckBusy=!!on;
+    ['btn-deck-prev','btn-deck-next','btn-deck-goto'].forEach(function(id){
+      var el=document.getElementById(id); if(el) el.disabled=on;
+      if(el) el.style.opacity=on?'0.55':'';
+    });
+    var input=document.getElementById('deck-goto-input'); if(input) input.disabled=on;
+  }
+  function deckSlideRequest(body){
+    if(!state.selectedId) { toast('Select an event first','err'); return Promise.reject(new Error('no event')); }
+    setDeckBusy(true);
+    var status=document.getElementById('deck-controls-status');
+    if(status) status.textContent='Sending…';
+    return api('/api/admin/events/'+state.selectedId+'/slide',{method:'POST', body:JSON.stringify(body)}).then(function(j){
+      if(status) status.textContent='';
+      toast('Slide '+(j.index!==undefined? j.index : 'updated'));
+      return j;
+    }).catch(function(err){
+      if(status) status.textContent='';
+      var msg=(err.j && err.j.error) || err.message || 'Slide update failed';
+      toast(msg,'err');
+      if(status) status.textContent=msg;
+      throw err;
+    }).then(function(r){ setDeckBusy(false); return r; }, function(e){ setDeckBusy(false); throw e; });
+  }
 
   function showGate(which){
     els.gateSetup.classList.toggle('hidden', which!=='setup');
@@ -224,7 +292,7 @@
     updateSelectedBar();
     renderEvents(state.events);
     // load all panels data
-    loadQuestions(id); loadQA(id); loadSlides(id); loadResults(id);
+    loadQuestions(id); loadQA(id); loadSlides(id); loadResults(id); fetchAdminParticipants(id);
     // fill settings form
     var ev=state.events.find(function(e){return e.id===id});
     if(ev){
@@ -240,7 +308,12 @@
   }
   function updateSelectedBar(){
     var ev=state.events.find(function(e){return e.id===state.selectedId});
-    if(!ev){ els.selectedBar.classList.add('hidden'); return; }
+    if(!ev){
+      els.selectedBar.classList.add('hidden');
+      var dc=document.getElementById('deck-controls'); if(dc) dc.classList.add('hidden');
+      var ap=document.getElementById('admin-participants-panel'); if(ap) ap.classList.add('hidden');
+      return;
+    }
     els.selectedBar.classList.remove('hidden');
     els.selName.textContent=ev.name;
     els.selMeta.textContent=ev.code+(ev.room_code?' · room '+ev.room_code:'')+' · '+ev.status+' · '+(ev.event_date||'no date');
@@ -250,6 +323,12 @@
     document.getElementById('sel-join').href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):'');
     document.getElementById('link-live').href='/live/'+encodeURIComponent(ev.code);
     document.getElementById('link-audience').href='/e/'+encodeURIComponent(ev.code);
+    var deckUrl='/'+encodeURIComponent(ev.code)+'/#/1';
+    var presenterUrl='/'+encodeURIComponent(ev.code)+'/#/presenter/1';
+    var selDeck=document.getElementById('sel-deck'); if(selDeck) selDeck.href=deckUrl;
+    var selPresenter=document.getElementById('sel-presenter'); if(selPresenter) selPresenter.href=presenterUrl;
+    var dc2=document.getElementById('deck-controls'); if(dc2) dc2.classList.remove('hidden');
+    var ap2=document.getElementById('admin-participants-panel'); if(ap2) ap2.classList.remove('hidden');
   }
 
   document.getElementById('btn-delete-event').addEventListener('click', function(){
@@ -1453,6 +1532,33 @@
       renderOtelStatus(j);
       toast(j.restart_required?'OTel settings saved — restart the server to apply':'OTel settings saved');
     }).catch(function(err){ toast(err.message||'Failed','err'); });
+  });
+
+  // deck remote + participants toggle wiring
+  var btnPrev=document.getElementById('btn-deck-prev');
+  if(btnPrev) btnPrev.addEventListener('click', function(){ if(deckBusy) return; deckSlideRequest({action:'prev'}); });
+  var btnNext=document.getElementById('btn-deck-next');
+  if(btnNext) btnNext.addEventListener('click', function(){ if(deckBusy) return; deckSlideRequest({action:'next'}); });
+  var btnGoto=document.getElementById('btn-deck-goto');
+  if(btnGoto) btnGoto.addEventListener('click', function(){
+    if(deckBusy) return;
+    var inp=document.getElementById('deck-goto-input');
+    var v=parseInt(inp && inp.value,10);
+    if(!v || v<1){ toast('Enter a slide number ≥ 1','err'); return; }
+    deckSlideRequest({index: v});
+  });
+  var gotoInput=document.getElementById('deck-goto-input');
+  if(gotoInput) gotoInput.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); var b=document.getElementById('btn-deck-goto'); if(b) b.click(); }});
+  var btnToggleParts=document.getElementById('btn-toggle-participants');
+  if(btnToggleParts) btnToggleParts.addEventListener('click', function(){
+    var list=document.getElementById('admin-participants-list');
+    var empty=document.getElementById('admin-participants-empty');
+    if(!list) return;
+    var hidden=list.style.display==='none';
+    list.style.display= hidden ? '' : 'none';
+    if(empty) empty.style.display= hidden ? '' : 'none';
+    btnToggleParts.textContent= hidden ? 'Collapse' : 'Expand';
+    btnToggleParts.setAttribute('aria-expanded', hidden ? 'true':'false');
   });
 
   // initial boot
