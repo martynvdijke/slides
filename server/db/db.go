@@ -495,6 +495,9 @@ func migrate() error {
 			return err
 		}
 	}
+	if err := ensureColumn("questions", "seed_key", "seed_key TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -1468,6 +1471,18 @@ func RevealQuestion(eventID, questionID int64) error {
 		return fmt.Errorf("question cannot be revealed from status %q", status)
 	}
 	return nil
+}
+
+// SetQuestionSeedKey stores the stable seed key for a question.
+func SetQuestionSeedKey(id int64, key string) error {
+	_, err := DB.Exec("UPDATE questions SET seed_key=? WHERE id=?", key, id)
+	return err
+}
+
+// GetQuestionBySeedKey returns the question with the given seed key for the event.
+func GetQuestionBySeedKey(eventID int64, key string) (*Question, error) {
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s FROM questions WHERE event_id=? AND seed_key=?", eventID, key)
+	return scanQuestionRow(row)
 }
 
 // ValidQuestionKind reports whether kind is a supported question type.

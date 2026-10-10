@@ -1,0 +1,220 @@
+import { existsSync, readdirSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+import { join } from 'node:path'
+import { pathToFileURL } from 'node:url'
+
+let yaml
+try {
+  const mod = await import('js-yaml')
+  yaml = mod.default ?? mod
+} catch (e) {
+  console.error('Failed to resolve js-yaml. Ensure `npm ci` has been run and @slidev/cli is installed. Error:', e?.message ?? e)
+  process.exit(1)
+}
+
+const VALID_KINDS = new Set(['poll', 'multi', 'ranking', 'yesno', 'rating', 'nps', 'open', 'wordcloud'])
+const NEEDS_OPTIONS = new Set(['poll', 'multi', 'ranking'])
+const LIVE_QUESTION_RE = /<!--\s*live-question\s*\r?\n([\s\S]*?)-->/g
+
+export function parseFrontmatter(markdown) {
+  const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)
+  if (!match) return {}
+  const out = {}
+  for (const line of match[1].split(/\r?\n/)) {
+    const idx = line.indexOf(':')
+    if (idx < 0) continue
+    const key = line.slice(0, idx).trim()
+    let value = line.slice(idx + 1).trim()
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1)
+    }
+    out[key] = value
+  }
+  return out
+}
+
+function slugify(prompt) {
+  let slug = String(prompt).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-+/g, '-')
+  slug = slug.slice(0, 60).replace(/-+$/g, '')
+  return slug
+}
+
+/**
+ * Extract questions from markdown string.
+ * Duplicate id handling: suffix `-2`, `-3`, ... to make unique; warn on duplicates.
+ */
+export function extractQuestions(markdown) {
+  const questions = []
+  const seen = new Map() // id -> count
+  let index = 0 // 1-based overall block index
+
+  for (const match of markdown.matchAll(LIVE_QUESTION_RE)) {
+    index++
+    const body = match[1]
+    let data
+    try {
+      data = yaml.load(body) ?? {}
+    } catch (e) {
+      console.warn(`Skipping live-question block #${index}: YAML parse error: ${e.message}`)
+      continue
+    }
+    if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+      console.warn(`Skipping live-question block #${index}: YAML did not produce an object`)
+      continue
+    }
+
+    // prompt required
+    const prompt = data.prompt != null ? String(data.prompt).trim() : ''
+    if (!prompt) {
+      console.warn(`Skipping live-question block #${index}: missing or empty prompt`)
+      continue
+    }
+
+    // kind
+    let kind = data.kind != null ? String(data.kind).trim().toLowerCase() : 'poll'
+    if (!VALID_KINDS.has(kind)) {
+      console.warn(`live-question block #${index}: unknown kind "${kind}", defaulting to "poll"`)
+      kind = 'poll'
+    }
+
+    // options
+    let options = []
+    if (Array.isArray(data.options)) {
+      options = data.options.map(o => String(o))
+    } else if (data.options != null) {
+      // if options is not array but present, treat as invalid
+      options = []
+    }
+
+    if (NEEDS_OPTIONS.has(kind)) {
+      if (options.length < 2) {
+        console.warn(`Skipping live-question block #${index} (kind=${kind}): options required (>=2)`)
+        continue
+      }
+    } else {
+      // ignored/empty otherwise — always empty array
+      options = []
+    }
+
+    // correct -> correct_index
+    let correct_index = null
+    if (data.correct !== undefined && data.correct !== null && String(data.correct).trim() !== '') {
+      if (typeof data.correct === 'number' && Number.isInteger(data.correct)) {
+        correct_index = data.correct
+      } else if (typeof data.correct === 'string' && /^-?\d+$/.test(data.correct.trim())) {
+        correct_index = parseInt(data.correct.trim(), 10)
+      } else if (typeof data.correct === 'number') {
+        // non-integer number -> treat as integer truncation? Warn and keep int
+        correct_index = Math.trunc(data.correct)
+      } else {
+        // string match against options
+        const needle = String(data.correct).trim().toLowerCase()
+        const idx = options.findIndex(o => o.trim().toLowerCase() === needle)
+        if (idx >= 0) {
+          correct_index = idx
+        } else {
+          console.warn(`live-question block #${index}: correct value "${data.correct}" did not match any option, leaving null`)
+          correct_index = null
+        }
+      }
+    }
+
+    // id
+    let id
+    if (data.id != null && String(data.id).trim() !== '') {
+      id = String(data.id).trim()
+    } else {
+      const slug = slugify(prompt)
+      id = slug || `q${index}`
+    }
+
+    // deduplicate: suffix -2, -3 ...
+    if (seen.has(id)) {
+      const base = id
+      let suffix = 2
+      // Find next available suffix
+      while (seen.has(`${base}-${suffix}`)) suffix++
+      const newId = `${base}-${suffix}`
+      console.warn(`Duplicate id "${base}" at block #${index}, renaming to "${newId}"`)
+      seen.set(base, (seen.get(base) ?? 1) + 1)
+      seen.set(newId, 1)
+      id = newId
+    } else {
+      seen.set(id, 1)
+    }
+
+    const q = {
+      id,
+      kind,
+      mode: data.mode != null ? String(data.mode) : 'live',
+      prompt,
+      options,
+      correct_index,
+      points_base: data.points != null ? Number(data.points) : 100,
+      show_results: data.show_results != null ? Boolean(data.show_results) : true,
+      time_limit_s: data.time_limit_s != null ? Number(data.time_limit_s) : 0,
+      duration_sec: data.duration_sec != null ? Number(data.duration_sec) : 0,
+      media_url: data.media_url != null ? String(data.media_url) : '',
+      media_type: data.media_type != null ? String(data.media_type) : '',
+    }
+
+    // Normalize NaN fallbacks
+    if (Number.isNaN(q.points_base)) q.points_base = 100
+    if (Number.isNaN(q.time_limit_s)) q.time_limit_s = 0
+    if (Number.isNaN(q.duration_sec)) q.duration_sec = 0
+
+    questions.push(q)
+  }
+
+  return questions
+}
+
+export function main() {
+  const dist = 'dist'
+  if (!existsSync(dist)) {
+    console.warn('No dist/ found. Skipping question extraction (run `npm run build --workspaces` first).')
+    return
+  }
+
+  // Discover built decks: dist/<deck>/index.html exists — mirror build-index.mjs
+  const builtDecks = readdirSync(dist, { withFileTypes: true })
+    .filter(d => d.isDirectory() && existsSync(join(dist, d.name, 'index.html')))
+    .map(d => d.name)
+
+  if (builtDecks.length === 0) {
+    console.warn('No built decks found in dist/ (no dist/<deck>/index.html). No manifests written.')
+    return
+  }
+
+  for (const deck of builtDecks) {
+    const slidesPath = join('decks', deck, 'slides.md')
+    let markdown = ''
+    let frontmatter = {}
+    if (existsSync(slidesPath)) {
+      markdown = readFileSync(slidesPath, 'utf8')
+      frontmatter = parseFrontmatter(markdown)
+    } else {
+      console.warn(`Deck "${deck}" has no slides.md at ${slidesPath}; writing empty manifest`)
+    }
+
+    const questions = markdown ? extractQuestions(markdown) : []
+    const event_name = frontmatter.title || deck
+    const manifest = {
+      deck,
+      event_code: deck,
+      event_name,
+      questions,
+    }
+
+    const outPath = join(dist, deck, 'questions.json')
+    mkdirSync(join(dist, deck), { recursive: true })
+    writeFileSync(outPath, JSON.stringify(manifest, null, 2) + '\n')
+    console.log(`Deck "${deck}": ${questions.length} question(s) -> ${outPath}`)
+  }
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main()
+}

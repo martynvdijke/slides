@@ -68,6 +68,11 @@ func main() {
 			log.Printf("feature-test event present code=%s room=%s", ev.Code, ev.RoomCode)
 		}
 	}
+	if envTruthy("SEED_DECK_QUESTIONS") {
+		if err := db.SeedDeckQuestionsFromDir(decksDir); err != nil {
+			log.Printf("seed deck questions: %v", err)
+		}
+	}
 
 	mux := http.NewServeMux()
 

@@ -27,6 +27,17 @@ Scan the QR or use the room code to join.
   <LiveQuestion />
 </div>
 
+<!-- live-question
+id: stack-favourite
+kind: poll
+prompt: Which part of the stack do you want to dig into next?
+options:
+  - Kubernetes
+  - GitOps and CI/CD
+  - Platform engineering
+  - AI and GPUs
+-->
+
 ---
 
 # Join + question
@@ -38,6 +49,20 @@ Scan the QR or use the room code to join.
 # Top questions
 
 <LiveQa :limit="5" />
+
+<!-- live-question
+id: k8s-control-plane
+kind: multi
+prompt: Which of these are Kubernetes control-plane components?
+options:
+  - kube-apiserver
+  - etcd
+  - kubelet
+  - containerd
+correct: kube-apiserver
+points: 100
+time_limit_s: 30
+-->
 
 ---
 
@@ -56,6 +81,13 @@ Scan the QR or use the room code to join.
 # Reactions
 
 <LiveReactions />
+
+<!-- live-question
+id: event-rating
+kind: rating
+prompt: How useful was tonight's session?
+points: 0
+-->
 
 ---
 

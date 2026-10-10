@@ -115,6 +115,7 @@ const child = spawn(bin, [], {
     MEDIA_DIR: mediaDir,
     DECKS_DIR: distDir,
     SEED_FEATURE_TEST: '1',
+    SEED_DECK_QUESTIONS: '1',
     PUBLIC_BASE_URL: `http://127.0.0.1:${port}`,
     SMTP_HOST: '127.0.0.1',
     SMTP_PORT: String(smtpPort),

@@ -38,6 +38,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-slides}
       SEED_FEATURE_TEST: ${SEED_FEATURE_TEST:-1} # seeds deterministic feature-test event
+      SEED_DECK_QUESTIONS: ${SEED_DECK_QUESTIONS:-1}
     volumes:
       - slides-data:/data
     restart: unless-stopped

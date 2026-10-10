@@ -135,6 +135,40 @@ The components share one WebSocket per room and reconnect automatically. If the
 backend is unreachable they render the join card and wait, so the deck still
 works as a static presentation.
 
+### Questions defined in markdown
+
+You can define live/quiz questions directly in a deck's `slides.md` with an HTML comment block anywhere in the markdown — it renders nothing in the slides:
+
+```md
+<!-- live-question
+id: k8s-control-plane
+kind: multi
+prompt: Which of these are Kubernetes control-plane components?
+options:
+  - kube-apiserver
+  - etcd
+  - kubelet
+correct: 0
+points: 100
+time_limit_s: 30
+-->
+```
+
+Fields:
+
+- `id` — stable key for updates (optional, auto-generated if omitted).
+- `kind` — `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud`.
+- `prompt` — question text (required).
+- `options` — list of choices (requires ≥2 for `poll`/`multi`/`ranking`).
+- `correct` — correct answer as index (`0`-based) or exact option text.
+- `points` — maps to `points_base` (default `100`).
+- `mode` — `live` (default) or `feedback`.
+- `show_results` — whether to show the tally (default `true`).
+- `time_limit_s` / `duration_sec` — time limit in seconds.
+- `media_url` / `media_type` — optional image or video prompt.
+
+At build time each deck emits `dist/<deck>/questions.json`. On startup the Go server seeds those questions into the event whose `code` equals the deck name when `SEED_DECK_QUESTIONS` is truthy (the published image sets it to `1`). Re-imports on each container upgrade update existing questions in place rather than duplicating them. Markdown is the source of truth — edits to the deck are applied on the next start.
+
 ### Presenter panel
 
 `<PresenterPanel />` turns the deck itself into the presenter console, so you
