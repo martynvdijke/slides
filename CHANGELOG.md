@@ -1,3 +1,10 @@
+# [1.16.0](https://github.com/martynvdijke/slides/compare/v1.15.1...v1.16.0) (2026-10-10)
+
+
+### Features
+
+* **feature-test:** define all eight question kinds in the deck ([a20da91](https://github.com/martynvdijke/slides/commit/a20da91cf98c3fb971aeb14b6623f44a1edddfdb))
+
 ## [1.15.1](https://github.com/martynvdijke/slides/compare/v1.15.0...v1.15.1) (2026-10-10)
 
 
