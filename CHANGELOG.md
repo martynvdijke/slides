@@ -1,3 +1,10 @@
+## [1.13.3](https://github.com/martynvdijke/slides/compare/v1.13.2...v1.13.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* render in-slide live components and question media ([bf8fba0](https://github.com/martynvdijke/slides/commit/bf8fba0c36c17b35c400e8db5c85cdb55b2e4854))
+
 ## [1.13.2](https://github.com/martynvdijke/slides/compare/v1.13.1...v1.13.2) (2026-10-09)
 
 ## [1.13.1](https://github.com/martynvdijke/slides/compare/v1.13.0...v1.13.1) (2026-10-08)
