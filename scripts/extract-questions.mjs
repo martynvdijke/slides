@@ -15,11 +15,53 @@ const VALID_KINDS = new Set(['poll', 'multi', 'ranking', 'yesno', 'rating', 'nps
 const NEEDS_OPTIONS = new Set(['poll', 'multi', 'ranking'])
 const LIVE_QUESTION_RE = /<!--\s*live-question\s*\r?\n([\s\S]*?)-->/g
 
+export const CANONICAL_FEATURES = ['live', 'qa', 'slides', 'feedback', 'leaderboard']
+const KNOWN_FEATURES = new Set(CANONICAL_FEATURES)
+
+export function parseFeaturesValue(raw) {
+  let tokens = []
+  if (Array.isArray(raw)) {
+    tokens = raw.map(v => String(v).trim()).filter(Boolean)
+  } else if (typeof raw === 'string') {
+    let s = raw.trim()
+    if (s === '') return []
+    if (s.startsWith('[') && s.endsWith(']')) {
+      s = s.slice(1, -1).trim()
+      if (s === '') return []
+    }
+    // split by comma and/or whitespace
+    tokens = s.split(',').flatMap(part => part.trim().split(/\s+/)).filter(Boolean)
+    tokens = tokens.map(t => t.replace(/^["']|["']$/g, '').trim()).filter(Boolean)
+  } else if (raw == null) {
+    return []
+  } else {
+    tokens = String(raw).split(/[\s,]+/).filter(Boolean)
+  }
+  const normalized = tokens.map(t => String(t).trim().toLowerCase()).filter(Boolean)
+  const unknown = normalized.filter(t => !KNOWN_FEATURES.has(t))
+  if (unknown.length) console.warn(`Unknown features ignored: ${unknown.join(', ')}`)
+  const known = normalized.filter(t => KNOWN_FEATURES.has(t))
+  const set = new Set(known)
+  return CANONICAL_FEATURES.filter(f => set.has(f))
+}
+
+function isExplicitEmptyFeatures(raw) {
+  if (Array.isArray(raw)) return raw.length === 0
+  if (typeof raw === 'string') {
+    const s = raw.trim()
+    if (s === '') return true
+    if (s.startsWith('[') && s.endsWith(']') && s.slice(1, -1).trim() === '') return true
+  }
+  return false
+}
+
 export function parseFrontmatter(markdown) {
   const match = markdown.match(/^---\r?\n([\s\S]*?)\r?\n---/)
   if (!match) return {}
   const out = {}
-  for (const line of match[1].split(/\r?\n/)) {
+  const lines = match[1].split(/\r?\n/)
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     const idx = line.indexOf(':')
     if (idx < 0) continue
     const key = line.slice(0, idx).trim()
@@ -29,6 +71,44 @@ export function parseFrontmatter(markdown) {
       (value.startsWith("'") && value.endsWith("'"))
     ) {
       value = value.slice(1, -1)
+    }
+    // Handle YAML block list for features:  features:\n  - live\n  - qa
+    if (value === '' && key === 'features') {
+      const items = []
+      let j = i + 1
+      while (j < lines.length) {
+        const nl = lines[j]
+        const trimmed = nl.trim()
+        if (trimmed.startsWith('- ')) {
+          let item = trimmed.slice(2).trim()
+          if (
+            (item.startsWith('"') && item.endsWith('"')) ||
+            (item.startsWith("'") && item.endsWith("'"))
+          ) {
+            item = item.slice(1, -1)
+          }
+          // strip trailing bracket/comma noise
+          item = item.replace(/[,]/g, '').trim()
+          if (item) items.push(item)
+          j++
+        } else if (trimmed === '') {
+          j++
+        } else {
+          break
+        }
+      }
+      if (items.length > 0) {
+        out[key] = items
+        i = j - 1
+        continue
+      }
+      // empty block list -> explicit empty
+      if (j > i + 1) {
+        // we consumed at least one blank or dash check but found no items
+        // treat as explicit empty only if next non-empty line was not a key
+        // Actually if value === '' and no dash items found, keep as ''
+        // so isExplicitEmptyFeatures will detect it as explicit empty
+      }
     }
     out[key] = value
   }
@@ -206,6 +286,16 @@ export function main() {
       event_code: deck,
       event_name,
       questions,
+    }
+    if (Object.prototype.hasOwnProperty.call(frontmatter, 'features')) {
+      const raw = frontmatter.features
+      const parsed = parseFeaturesValue(raw)
+      if (parsed.length > 0 || isExplicitEmptyFeatures(raw)) {
+        manifest.features = parsed
+      } else if (parsed.length === 0) {
+        // filtered to empty due to unknown names only -> do not emit per spec
+        // (never emit empty unless explicitly empty)
+      }
     }
 
     const outPath = join(dist, deck, 'questions.json')

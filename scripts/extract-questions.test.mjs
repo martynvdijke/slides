@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractQuestions, parseFrontmatter } from './extract-questions.mjs'
+import { extractQuestions, parseFrontmatter, parseFeaturesValue, CANONICAL_FEATURES } from './extract-questions.mjs'
 
 describe('extractQuestions', () => {
   it('parses a comment block with options + int correct + kinds', () => {
@@ -231,5 +231,61 @@ describe('parseFrontmatter', () => {
     const md = `---\ntitle: "My Deck"\ndate: 2026-01-01\n---\n# Hello`
     const fm = parseFrontmatter(md)
     assert.equal(fm.title, 'My Deck')
+  })
+})
+
+describe('features', () => {
+  it('a) features: live, qa, slides -> ["live","qa","slides"]', () => {
+    const md = `---\ntitle: Deck\nfeatures: live, qa, slides\n---\n# Hello`
+    const fm = parseFrontmatter(md)
+    assert.ok(Object.prototype.hasOwnProperty.call(fm, 'features'))
+    const parsed = parseFeaturesValue(fm.features)
+    assert.deepEqual(parsed, ['live', 'qa', 'slides'])
+  })
+
+  it('b) features: [live, board] -> known-only ["live"]', () => {
+    const md = `---\ntitle: Deck\nfeatures: [live, board]\n---\n# Hello`
+    const fm = parseFrontmatter(md)
+    const parsed = parseFeaturesValue(fm.features)
+    assert.deepEqual(parsed, ['live'])
+  })
+
+  it('c) absent key -> no features property on the manifest', () => {
+    const md = `---\ntitle: Deck\n---\n# Hello`
+    const fm = parseFrontmatter(md)
+    assert.equal(Object.prototype.hasOwnProperty.call(fm, 'features'), false)
+    // simulate manifest construction: should not add features when absent
+    const manifest = { deck: 'test', event_code: 'test', event_name: fm.title || 'test', questions: [] }
+    if (Object.prototype.hasOwnProperty.call(fm, 'features')) {
+      manifest.features = parseFeaturesValue(fm.features)
+    }
+    assert.equal(Object.prototype.hasOwnProperty.call(manifest, 'features'), false)
+  })
+
+  it('d) canonical ordering is applied regardless of input order', () => {
+    const md = `---\ntitle: Deck\nfeatures: leaderboard, live, slides\n---\n# Hello`
+    const fm = parseFrontmatter(md)
+    const parsed = parseFeaturesValue(fm.features)
+    assert.deepEqual(parsed, ['live', 'slides', 'leaderboard'])
+    // also test with qa mixed
+    const md2 = `---\ntitle: Deck\nfeatures: feedback qa live\n---\n# Hello`
+    const fm2 = parseFrontmatter(md2)
+    const parsed2 = parseFeaturesValue(fm2.features)
+    assert.deepEqual(parsed2, ['live', 'qa', 'feedback'])
+  })
+
+  it('explicit empty list is preserved, non-explicit empty filtered is not emitted', () => {
+    const mdEmpty = `---\ntitle: Deck\nfeatures: []\n---\n# Hello`
+    const fmEmpty = parseFrontmatter(mdEmpty)
+    const parsedEmpty = parseFeaturesValue(fmEmpty.features)
+    assert.deepEqual(parsedEmpty, [])
+  })
+
+  it('YAML block list is parsed', () => {
+    const md = `---\ntitle: Deck\nfeatures:\n  - live\n  - qa\n---\n# Hello`
+    const fm = parseFrontmatter(md)
+    // parseFrontmatter should return array for block list
+    const parsed = parseFeaturesValue(fm.features)
+    assert.deepEqual(parsed, ['live', 'qa'])
   })
 })

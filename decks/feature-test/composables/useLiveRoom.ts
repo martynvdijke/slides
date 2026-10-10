@@ -142,6 +142,7 @@ class RoomClient {
   answerResult = ref<AnswerResult | null>(null)
   currentSlide = ref<SlideInfo | null>(null)
   remainingSec = ref<number | null>(null)
+  remoteNav = ref<{ index: number } | null>(null)
   private ws: WebSocket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private backoff = 1000
@@ -164,11 +165,11 @@ class RoomClient {
   private wsUrl(): string {
     const origin = this.origin
     if (origin) {
-      return origin.replace(/^http/, 'ws') + '/ws/events/' + encodeURIComponent(this.eventCode)
+      return origin.replace(/^http/, 'ws') + '/ws/events/' + encodeURIComponent(this.eventCode) + '?observer=1'
     }
     const proto = typeof location !== 'undefined' && location.protocol === 'https:' ? 'wss://' : 'ws://'
     const host = typeof location !== 'undefined' ? location.host : ''
-    return proto + host + '/ws/events/' + encodeURIComponent(this.eventCode)
+    return proto + host + '/ws/events/' + encodeURIComponent(this.eventCode) + '?observer=1'
   }
 
   private stateUrl(): string {
@@ -265,7 +266,7 @@ class RoomClient {
                 total_points: m.total_points ?? 0,
               }
             }
-          } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
+          } else if (m.type === 'nav') { const d = (m.data && typeof m.data.index === 'number') ? m.data : m; if (typeof d.index === 'number') this.remoteNav.value = { index: d.index } } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
             // ignore / keep connected
           } else {
             // unknown type — ignore for backward compat
@@ -473,6 +474,7 @@ export function useLiveRoom(options: {
   const answerResult = computed<AnswerResult | null>(() => client.value?.answerResult.value ?? null)
   const remainingSec = computed<number | null>(() => client.value?.remainingSec.value ?? null)
   const currentSlide = computed<SlideInfo | null>(() => client.value?.currentSlide.value ?? null)
+  const remoteNav = computed<{ index: number } | null>(() => client.value?.remoteNav.value ?? null)
 
   function mediaUrl(raw?: string): string {
     if (!raw) return ''
@@ -510,6 +512,7 @@ export function useLiveRoom(options: {
     answerResult,
     remainingSec,
     currentSlide,
+    remoteNav,
     sendIdentity,
     sendSlide,
   }
