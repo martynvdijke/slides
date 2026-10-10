@@ -113,3 +113,67 @@ Prompts accept image and video media.
 <!-- PresenterPanel is an overlay toggled with the `p` hotkey. -->
 
 <PresenterPanel fab />
+
+---
+
+# Ranking
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-ranking
+kind: ranking
+prompt: Rank these platform capabilities by importance to you.
+options:
+  - Developer experience
+  - Reliability
+  - Cost efficiency
+-->
+
+---
+
+# Yes / No
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-yesno
+kind: yesno
+prompt: Are you running Kubernetes in production today?
+-->
+
+---
+
+# NPS
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-nps
+kind: nps
+prompt: How likely are you to recommend this meetup?
+-->
+
+---
+
+# Open text
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-open
+kind: open
+prompt: What topic should we cover next?
+-->
+
+---
+
+# Word cloud
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-wordcloud
+kind: wordcloud
+prompt: Describe today in one word.
+-->

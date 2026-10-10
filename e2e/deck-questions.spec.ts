@@ -42,8 +42,33 @@ test.describe('deck-authored questions seeded from markdown', () => {
         correct_index: 0,
       },
       {
+        prompt: 'Rank these platform capabilities by importance to you.',
+        kind: 'ranking',
+        options: ['Developer experience', 'Reliability', 'Cost efficiency'],
+      },
+      {
+        prompt: 'Are you running Kubernetes in production today?',
+        kind: 'yesno',
+        options: [],
+      },
+      {
         prompt: "How useful was tonight's session?",
         kind: 'rating',
+        options: [],
+      },
+      {
+        prompt: 'How likely are you to recommend this meetup?',
+        kind: 'nps',
+        options: [],
+      },
+      {
+        prompt: 'What topic should we cover next?',
+        kind: 'open',
+        options: [],
+      },
+      {
+        prompt: 'Describe today in one word.',
+        kind: 'wordcloud',
         options: [],
       },
     ]
