@@ -42,7 +42,7 @@ test.describe('entry page', () => {
     await expect(page.locator('#entry-join-form')).toBeVisible()
   })
 
-  test('authenticated auto-continue via UI login then visiting /', async ({ page, request }) => {
+  test('signed-in users see the continue banner without being redirected', async ({ page, request }) => {
     // request and page do NOT share storageState by default, so we log in via UI.
     // Ensure admin exists via API first, then do UI login.
     const status = await (await request.get('/api/setup/status')).json()
@@ -65,13 +65,18 @@ test.describe('entry page', () => {
     }
     await expect(page.locator('#events-list')).toBeVisible({ timeout: 15000 })
 
-    // Now visit entry page — it should show the continue banner and auto-redirect to /admin
+    // Now visit the entry page — the continue banner appears, but there is NO
+    // forced redirect, so signed-in users can still reach the slide decks.
     await page.goto('/')
-    // Banner appears after /api/auth/me succeeds
     await expect(page.locator('#continue-banner')).toBeVisible({ timeout: 10000 })
     await expect(page.locator('#continue-name')).not.toBeEmpty()
-    // Auto-redirect to /admin after ~900ms
-    await expect(page).toHaveURL(/\/admin/, { timeout: 10000 })
+    // Give the old ~900ms auto-redirect timer time to fire, then assert we stayed put.
+    await page.waitForTimeout(1500)
+    await expect(page).toHaveURL(/\/$/)
+    // Continuing to the dashboard is an explicit choice, not a forced jump.
+    await expect(page.locator('#continue-link')).toHaveAttribute('href', '/admin')
+    // And the slide decks remain reachable from the entry page.
+    await expect(page.getByRole('link', { name: /browse decks/i }).first()).toHaveAttribute('href', '/index.html')
   })
 
   test('deck index still reachable at /index.html', async ({ page, request }) => {

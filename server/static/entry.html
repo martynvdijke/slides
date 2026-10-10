@@ -65,7 +65,6 @@
       <a id="continue-link" class="btn btn-primary" href="/admin">Continue to dashboard
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
       </a>
-      <span id="continue-hint" class="text-[#9AA0B8] text-[0.78rem] hidden md:inline">Redirecting…</span>
     </div>
   </div>
 
@@ -147,7 +146,6 @@
   'use strict';
   var banner = document.getElementById('continue-banner');
   var nameEl = document.getElementById('continue-name');
-  var hint = document.getElementById('continue-hint');
   var hostCopy = document.getElementById('host-copy');
   var hostCta = document.getElementById('host-cta');
   var form = document.getElementById('entry-join-form');
@@ -196,12 +194,10 @@
         nameEl.textContent = u;
         banner.classList.remove('hidden');
         banner.classList.add('flex');
-        if(hint) hint.classList.remove('hidden');
       }
-      // short, non-annoying auto-redirect
-      setTimeout(function(){
-        try{ location.href = '/admin'; }catch(e){}
-      }, 900);
+      // Deliberately no auto-redirect: signed-in users must still be able to see
+      // the entry options and browse the slide decks. The banner's "Continue to
+      // dashboard" button handles the jump when they actually want it.
     }).catch(function(){});
 
     // check setup status
