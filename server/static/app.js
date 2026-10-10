@@ -437,6 +437,27 @@
     });
     try{ localStorage.setItem('meetup_tab', name); }catch(e){}
   }
+  // --- Mobile polish: keep active tab visible + scroll affordance ---
+  var tabsEl = document.querySelector('.tabs');
+  function updateTabsScrollable(){
+    if(!tabsEl) return;
+    var canScroll = tabsEl.scrollWidth > tabsEl.clientWidth + 1;
+    tabsEl.classList.toggle('is-scrollable', canScroll);
+  }
+  function ensureTabVisible(name){
+    updateTabsScrollable();
+    if(!tabsEl) return;
+    var target = document.querySelector('.tab[data-tab="'+name+'"]');
+    if(target && typeof target.scrollIntoView === 'function'){
+      try{ target.scrollIntoView({behavior:'smooth', block:'nearest', inline:'center'}); }catch(e){ target.scrollIntoView(); }
+    }
+  }
+  // Enhance selectTab to auto-scroll the active tab into view
+  var _origSelectTab = selectTab;
+  selectTab = function(name){
+    _origSelectTab(name);
+    ensureTabVisible(name);
+  };
   tabs.forEach(function(b){
     b.addEventListener('click', function(){ selectTab(b.getAttribute('data-tab')); });
     b.addEventListener('keydown', function(e){
@@ -451,6 +472,11 @@
   });
   // restore tab if any
   try{ var saved=localStorage.getItem('meetup_tab'); if(saved && panels[saved]) selectTab(saved); }catch(e){}
+  // initial scroll check + responsive updates
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', function(){ updateTabsScrollable(); var sel=document.querySelector('.tab[aria-selected="true"]'); if(sel) ensureTabVisible(sel.getAttribute('data-tab')); });
+  else { updateTabsScrollable(); var sel2=document.querySelector('.tab[aria-selected="true"]'); if(sel2) ensureTabVisible(sel2.getAttribute('data-tab')); }
+  window.addEventListener('resize', updateTabsScrollable);
+  if(tabsEl) tabsEl.addEventListener('scroll', function(){ /* mask stays; no-op but keeps affordance */ }, {passive:true});
 
   // helpers for rendering
   function renderEvent(evt){

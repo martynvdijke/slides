@@ -126,6 +126,75 @@
   .lb-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid var(--border)}
   .lb-rank{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.82rem;background:rgba(124,107,255,.2);color:#C4B5FD;flex-shrink:0}
   .lb-row.is-me{border-color:#7C6BFF;background:rgba(124,107,255,.14)}
+  /* --- Global mobile polish: safe area, tap targets --- */
+  .site-header{padding-left:max(0px, env(safe-area-inset-left));padding-right:max(0px, env(safe-area-inset-right));padding-top:max(0px, env(safe-area-inset-top));}
+  .container{padding-left:max(0px, env(safe-area-inset-left));padding-right:max(0px, env(safe-area-inset-right));}
+  .btn{min-height:44px}
+  .input, .textarea{font-size:16px} /* prevent iOS zoom */
+  /* Tabs: scroll affordance, snap, fade edges */
+  .tabs{
+    scroll-snap-type:x proximity;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scroll-padding-inline:12px;
+    scroll-behavior:smooth;
+    position:relative;
+    /* fade edges when overflowing */
+    -webkit-mask-image:linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+    mask-image:linear-gradient(to right, transparent 0, black 10px, black calc(100% - 10px), transparent 100%);
+  }
+  .tab{scroll-snap-align:start;flex-shrink:0;min-height:44px}
+  /* When not scrollable, hide mask */
+  .tabs:not(.is-scrollable){ -webkit-mask-image:none; mask-image:none; }
+  /* Reaction bar comfortable spacing */
+  #reaction-bar{gap:10px}
+  @media (max-width: 430px){
+    .container{width:min(100% - 20px, 1120px)}
+    /* Header slightly tighter on phones */
+    .site-header .container{height:56px !important}
+    #event-name{font-size:1.18rem}
+    /* Tabs: tighter padding, smaller type so more fits, clear horizontal scroll */
+    .tabs{gap:4px;padding:6px}
+    .tab{padding-inline:12px;padding-block:10px;font-size:0.82rem;gap:5px}
+    .tab svg{width:14px;height:14px}
+    /* Identity bar: larger tap targets, better wrapping at 390px */
+    #identity-bar{gap:8px;padding:10px 12px !important;border-radius:14px}
+    #identity-avatar{width:38px;height:38px;font-size:19px}
+    #identity-name{height:44px !important;min-width:0 !important;max-width:none !important;flex:1 1 140px !important;font-size:16px}
+    #identity-bar .emoji-dot{width:40px;height:40px;border-radius:10px;font-size:18px}
+    #identity-bar .color-dot{width:34px;height:34px}
+    #identity-save{min-height:44px;min-width:56px;justify-content:center}
+    #identity-emoji-pick{gap:6px !important;flex:1 1 100%}
+    #identity-color-pick{gap:7px !important;flex:1 1 100%}
+    /* Recap card: ensure email + button stack cleanly, 44px targets */
+    #recap-card{padding:12px !important}
+    #recap-email{height:44px !important;min-width:0 !important;flex:1 1 200px !important;font-size:16px}
+    #recap-form{gap:8px}
+    #recap-form .btn, #recap-remove{min-height:44px}
+    #recap-form .btn{flex:1 1 auto;justify-content:center}
+    /* Live / QA / slides panels: tighter pad */
+    .card-pad{padding:16px}
+    .prompt{font-size:1.22rem}
+    .waiting{min-height:180px;padding:24px 16px}
+    /* Reaction bar: larger buttons, better wrap */
+    #reaction-bar{padding:10px !important;justify-content:flex-start}
+    #reaction-bar .r-btn{width:48px;height:48px;border-radius:13px;font-size:22px}
+    #reaction-btns{gap:8px !important}
+    #reaction-counts{width:100%;justify-content:flex-start}
+    /* Slides download rows: allow wrap on tiny screens */
+    #slides-list > div{flex-wrap:wrap}
+    #slides-list .btn{width:100%;justify-content:center;margin-top:4px}
+    /* Leaderboard podium: single row stays scrollable if needed */
+    .lb-row{padding:10px}
+    /* Generic */
+    #toast-root{bottom:max(16px, env(safe-area-inset-bottom))}
+    #reaction-float{bottom:max(88px, calc(env(safe-area-inset-bottom) + 88px))}
+  }
+  @media (max-width: 380px){
+    .tab{padding-inline:10px;font-size:0.80rem}
+    #identity-bar .emoji-dot{width:38px;height:38px}
+    #identity-bar .color-dot{width:32px;height:32px}
+  }
 </style>
 <script src="/app.js"></script>
 </body>

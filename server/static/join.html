@@ -44,6 +44,17 @@
     text-align: center;
     padding: 0.7rem 1rem;
   }
+  .site-header { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
+  .container { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
+  .btn { min-height: 44px; }
+  #join-error { word-break: break-word; overflow-wrap: anywhere; line-height: 1.45; }
+  @media (max-width: 430px){
+    .container { width: min(100% - 20px, 1120px); }
+    .card-pad { padding: 18px 16px; }
+    .room-code-input { font-size: 1.35rem; letter-spacing: 0.30em; padding: 0.9rem 1rem; }
+    #join-form .btn { min-height: 48px; font-size: 1rem; }
+    .field label { font-size: 0.80rem; }
+  }
 </style>
 <script src="/join.js"></script>
 </body>
