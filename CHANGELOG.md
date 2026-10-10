@@ -1,3 +1,11 @@
+## [1.15.1](https://github.com/martynvdijke/slides/compare/v1.15.0...v1.15.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **deck:** navigate on tap/click anywhere on a slide ([9003992](https://github.com/martynvdijke/slides/commit/90039928aace9b37f0bc1a2c094f801e1f6c4e5a)), closes [#slide-container](https://github.com/martynvdijke/slides/issues/slide-container)
+* **entry:** reflect signed-in state on the homepage ([1015c75](https://github.com/martynvdijke/slides/commit/1015c750ebab45f4ab7e52cae4d3f0ed8cf7b3f8)), closes [#host-copy](https://github.com/martynvdijke/slides/issues/host-copy) [#host-cta](https://github.com/martynvdijke/slides/issues/host-cta)
+
 # [1.15.0](https://github.com/martynvdijke/slides/compare/v1.14.0...v1.15.0) (2026-10-10)
 
 
