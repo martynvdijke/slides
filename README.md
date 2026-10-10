@@ -20,6 +20,7 @@ them at a hosted backend.
 
 - [`meetup`](./decks/meetup) — Dutch Kubernetes/Cloud Native Meetup, with live Q&A, polls and feedback slides.
 - [`opencode`](./decks/opencode) — OpenCode: what it is, the Console, Go, running it at home, and OpenCode Web on your phone.
+- [`feature-test`](./decks/feature-test) — testing deck that exercises every live question kind, image/video prompts and all in-slide components.
 
 ## Setup
 
@@ -376,6 +377,26 @@ asserts the delivered email through a fake SMTP inbox started by
 `127.0.0.1:4173` (override with `E2E_PORT`), and starts a fake SMTP server whose
 inbox is exposed for assertions on port `E2E_PORT + 1` (override with
 `E2E_MAIL_PORT`).
+
+`e2e/feature-test.spec.ts` drives the [`feature-test`](./decks/feature-test)
+deck end to end: it points the in-slide components at a live event with
+`?event=CODE`, then walks every question kind (poll, multi, ranking, yes/no,
+rating, NPS, open, word cloud) across the audience, projector and in-slide
+views, checks image and video prompts, and exercises the presenter overlay,
+podium, leaderboard, Q&A and reactions.
+
+**Load test** (50 concurrent WebSocket participants by default):
+
+```bash
+npm run test:load
+```
+
+`e2e/load.mjs` is a dependency-free Node script. With no `LOAD_BASE_URL` it
+builds and boots the Go server itself, then opens `LOAD_USERS` (default `50`)
+concurrent WebSocket clients that each join, answer the same poll and wait for
+their scored result. It verifies the answers were persisted, prints latency
+percentiles and throughput, and exits non-zero on any failure. Point it at a
+running server with `LOAD_BASE_URL=https://host npm run test:load`.
 
 ## GitHub Pages
 

@@ -1,4 +1,4 @@
-import { computed, isRef, ref, watchEffect, type Ref } from 'vue'
+import { computed, isRef, ref, shallowRef, watchEffect, type Ref } from 'vue'
 
 /**
  * useLiveRoom — a tiny shared client for the slides live-question server.
@@ -107,6 +107,20 @@ type Value<T> = T | Ref<T>
 function env(key: string): string {
   try {
     return (import.meta as any).env?.[key] || ''
+  } catch {
+    return ''
+  }
+}
+
+function queryParam(key: string): string {
+  if (typeof location === 'undefined') return ''
+  try {
+    const fromSearch = new URLSearchParams(location.search).get(key) || ''
+    if (fromSearch) return fromSearch
+    const h = location.hash || ''
+    const qi = h.indexOf('?')
+    if (qi >= 0) return new URLSearchParams(h.slice(qi + 1)).get(key) || ''
+    return ''
   } catch {
     return ''
   }
@@ -381,11 +395,11 @@ export function useLiveRoom(options: {
 } = {}) {
   const baseUrl = computed(() => {
     const explicit = readValue(options.base, '')
-    return explicit || env('VITE_LIVE_BASE_URL')
+    return explicit || queryParam('base') || env('VITE_LIVE_BASE_URL')
   })
 
-  const explicitEvent = computed(() => readValue(options.event, '') || env('VITE_EVENT_CODE'))
-  const explicitRoom = computed(() => readValue(options.room, '') || env('VITE_ROOM_CODE'))
+  const explicitEvent = computed(() => readValue(options.event, '') || queryParam('event') || env('VITE_EVENT_CODE'))
+  const explicitRoom = computed(() => readValue(options.room, '') || queryParam('room') || env('VITE_ROOM_CODE'))
 
   const resolvedCode = ref('')
   const resolveError = ref(false)
@@ -417,7 +431,9 @@ export function useLiveRoom(options: {
     return () => { active = false }
   })
 
-  const client = ref<RoomClient | null>(null)
+  // shallowRef: a deep reactive proxy would auto-unwrap the nested refs on
+  // RoomClient (state, answerResult, …) to their raw values, breaking .value.
+  const client = shallowRef<RoomClient | null>(null)
   watchEffect(() => {
     if (resolvedCode.value) {
       client.value = roomClient(resolvedCode.value, baseUrl.value)

@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present && node scripts/build-index.mjs",
-    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "test:load": "node e2e/load.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

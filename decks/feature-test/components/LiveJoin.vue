@@ -1,0 +1,145 @@
+<script setup lang="ts">
+import { computed } from 'vue'
+import { useLiveRoom } from '../composables/useLiveRoom'
+
+/**
+ * Join card: QR code, the short room code and the join URL.
+ * Works offline — it always renders, and only the live questions need the
+ * server to be reachable.
+ *
+ * Set the room with the `room` prop (short code), the `event` prop (full
+ * event code), or VITE_ROOM_CODE / VITE_EVENT_CODE at build time.
+ */
+const props = withDefaults(defineProps<{
+  event?: string
+  room?: string
+  base?: string
+  size?: number
+  hint?: boolean
+}>(), {
+  event: '',
+  room: '',
+  base: '',
+  size: 240,
+  hint: true,
+})
+
+const { qrSrc, joinUrl, joinPageUrl, roomCode, configured, staticMode } = useLiveRoom({
+  event: props.event,
+  room: props.room,
+  base: props.base,
+})
+
+const displayRoom = computed(() => props.room || roomCode.value)
+const shortUrl = computed(() => joinUrl.value.replace(/^https?:\/\//, ''))
+</script>
+
+<template>
+  <div v-if="!staticMode || configured" class="live-join">
+    <template v-if="!configured">
+      <div class="live-join-setup">
+        <div class="live-join-setup-title">Live questions not configured</div>
+        <div class="live-join-setup-hint">
+          Pass <code>room="AB2C3"</code> / <code>event="my-event-code"</code> to this component,
+          or set <code>VITE_ROOM_CODE</code> / <code>VITE_EVENT_CODE</code> when building the deck.
+        </div>
+      </div>
+    </template>
+
+    <template v-else>
+      <div class="live-join-qr">
+        <img :src="qrSrc" alt="Scan to join" :width="size" :height="size" loading="lazy" />
+      </div>
+      <div class="live-join-meta">
+        <div v-if="displayRoom" class="live-join-room-label">Room code</div>
+        <div v-if="displayRoom" class="live-join-room">{{ displayRoom }}</div>
+        <div class="live-join-url">{{ shortUrl }}</div>
+        <div v-if="hint" class="live-join-hint">
+          Scan, or visit <span class="live-join-join">{{ joinPageUrl.replace(/^https?:\/\//, '') }}</span> and enter the code
+        </div>
+      </div>
+    </template>
+  </div>
+</template>
+
+<style scoped>
+.live-join {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  text-align: left;
+  background: #0f172a;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 3px solid #326ce5;
+  border-radius: 16px;
+  padding: 18px 22px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+  max-width: 720px;
+}
+.live-join-qr {
+  background: #fff;
+  border-radius: 12px;
+  padding: 10px;
+  line-height: 0;
+}
+.live-join-qr img {
+  display: block;
+  object-fit: contain;
+}
+.live-join-meta {
+  min-width: 200px;
+}
+.live-join-room-label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  font-weight: 700;
+}
+.live-join-room {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 2.6rem;
+  font-weight: 800;
+  letter-spacing: 0.28em;
+  color: #f1f5f9;
+  line-height: 1.1;
+  margin: 2px 0 10px;
+}
+.live-join-url {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  color: #cbd5e1;
+  word-break: break-all;
+}
+.live-join-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: #94a3b8;
+  max-width: 280px;
+}
+.live-join-join {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: #93c5fd;
+}
+.live-join-setup {
+  padding: 6px 2px;
+}
+.live-join-setup-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #f1f5f9;
+  margin-bottom: 6px;
+}
+.live-join-setup-hint {
+  font-size: 12.5px;
+  color: #94a3b8;
+  max-width: 420px;
+  line-height: 1.5;
+}
+.live-join-setup-hint code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  color: #93c5fd;
+}
+</style>

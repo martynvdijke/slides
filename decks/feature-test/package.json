@@ -1,0 +1,8 @@
+{
+  "name": "feature-test",
+  "private": true,
+  "scripts": {
+    "dev": "slidev slides.md",
+    "build": "slidev build slides.md --out ../../dist/feature-test --base ${BASE_PATH:-/}feature-test/"
+  }
+}
