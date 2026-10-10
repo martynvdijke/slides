@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -871,6 +872,47 @@ func RoomCodeExists(code string) (bool, error) {
 func SetEventRoomCode(id int64, code string) error {
 	_, err := DB.Exec("UPDATE events SET room_code=? WHERE id=?", NormalizeRoomCode(code), id)
 	return err
+}
+
+// EnsureEvent returns the event with the given stable code, creating it (with a
+// freshly generated unique room code) when it does not already exist. It is
+// idempotent and safe to call on every startup; it is used to seed a
+// deterministic event (e.g. the feature-test deck) on demand.
+func EnsureEvent(code, name, description string) (*Event, bool, error) {
+	if e, err := GetEventByCode(code); err == nil {
+		return e, false, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, false, err
+	}
+
+	e, err := CreateEvent(name, code, description, "")
+	if err != nil {
+		// A concurrent startup may have inserted the same code; re-read.
+		if existing, getErr := GetEventByCode(code); getErr == nil {
+			return existing, false, nil
+		}
+		return nil, false, err
+	}
+
+	for attempt := 0; attempt < 20; attempt++ {
+		rc, err := GenRoomCode()
+		if err != nil {
+			return e, true, err
+		}
+		exists, err := RoomCodeExists(rc)
+		if err != nil {
+			return e, true, err
+		}
+		if exists {
+			continue
+		}
+		if err := SetEventRoomCode(e.ID, rc); err != nil {
+			return e, true, err
+		}
+		e.RoomCode = rc
+		return e, true, nil
+	}
+	return e, true, nil
 }
 
 func UpdateEvent(id int64, fields map[string]any) (*Event, error) {

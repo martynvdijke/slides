@@ -48,7 +48,8 @@ WORKDIR /app
 ENV PORT=6270 \
 	DB_PATH=/data/slides.db \
 	MEDIA_DIR=/data/media \
-	DECKS_DIR=/app/dist
+	DECKS_DIR=/app/dist \
+	SEED_FEATURE_TEST=1
 
 COPY --from=server /out/slides /usr/local/bin/slides
 COPY --from=decks /app/dist /app/dist

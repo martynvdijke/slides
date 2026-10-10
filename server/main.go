@@ -57,6 +57,17 @@ func main() {
 	if err := db.DeleteExpiredSessions(); err != nil {
 		log.Printf("cleanup sessions: %v", err)
 	}
+	if envTruthy("SEED_FEATURE_TEST") {
+		ev, created, err := db.EnsureEvent("feature-test", "Feature test", "Deterministic event for the feature-test deck")
+		switch {
+		case err != nil:
+			log.Printf("seed feature-test event: %v", err)
+		case created:
+			log.Printf("seeded feature-test event code=%s room=%s", ev.Code, ev.RoomCode)
+		default:
+			log.Printf("feature-test event present code=%s room=%s", ev.Code, ev.RoomCode)
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -322,4 +333,15 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// envTruthy reports whether an env var is set to a truthy value
+// (1/true/yes/on, case-insensitive).
+func envTruthy(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

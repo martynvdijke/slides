@@ -3,6 +3,6 @@
   "private": true,
   "scripts": {
     "dev": "slidev slides.md",
-    "build": "slidev build slides.md --out ../../dist/feature-test --base ${BASE_PATH:-/}feature-test/"
+    "build": "VITE_EVENT_CODE=${VITE_EVENT_CODE:-feature-test} slidev build slides.md --out ../../dist/feature-test --base ${BASE_PATH:-/}feature-test/"
   }
 }

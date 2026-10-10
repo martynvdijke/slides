@@ -121,6 +121,16 @@ then a visible "not configured" hint. The server URL is the `base` prop, then
 `VITE_LIVE_BASE_URL`, then same-origin (the all-in-one container). A short room
 code is resolved to the event at runtime via `GET /api/join/{room}`.
 
+### Feature-test defaults
+
+The `feature-test` deck builds with `VITE_EVENT_CODE=feature-test` baked in
+and resolves its API same-origin, so on the all-in-one container
+(`slides.vandijke.xyz`) its live components connect with no query params. The
+server seeds a deterministic `feature-test` event when `SEED_FEATURE_TEST` is
+truthy (the published image sets it to `1`). `?event=<code>` still overrides
+the baked code, and setting `VITE_EVENT_CODE` / `VITE_LIVE_BASE_URL` at build
+time overrides the defaults for other hosts.
+
 The components share one WebSocket per room and reconnect automatically. If the
 backend is unreachable they render the join card and wait, so the deck still
 works as a static presentation.

@@ -37,6 +37,7 @@ services:
       # profile) to start exporting: http://otel-collector:4318
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
       OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-slides}
+      SEED_FEATURE_TEST: ${SEED_FEATURE_TEST:-1} # seeds deterministic feature-test event
     volumes:
       - slides-data:/data
     restart: unless-stopped
