@@ -21,6 +21,7 @@ them at a hosted backend.
 - [`meetup`](./decks/meetup) — Dutch Kubernetes/Cloud Native Meetup, with live Q&A, polls and feedback slides.
 - [`opencode`](./decks/opencode) — OpenCode: what it is, the Console, Go, running it at home, and OpenCode Web on your phone.
 - [`feature-test`](./decks/feature-test) — testing deck that exercises every live question kind, image/video prompts and all in-slide components.
+- [`test`](./decks/test) — Static quiz fixture with pre-filled slides for every question kind (single choice, multi-select, ranking, yes/no, liking scale, NPS, open text, word cloud); used by the e2e deck tests.
 
 ## Setup
 
