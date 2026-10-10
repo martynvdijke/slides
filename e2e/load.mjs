@@ -19,6 +19,11 @@ const port = process.env.LOAD_PORT || '4180';
 const baseUrl = process.env.LOAD_BASE_URL || `http://127.0.0.1:${port}`;
 const wsBase = baseUrl.replace(/^http/, 'ws');
 
+// Regression thresholds for CI gating (0 = disabled).
+const maxP95Ms = Number(process.env.LOAD_MAX_P95_MS || 0);
+const maxMs = Number(process.env.LOAD_MAX_MS || 0);
+const minThroughput = Number(process.env.LOAD_MIN_THROUGHPUT || 0);
+
 // Child server management
 let child = null;
 let tmpRoot = null;
@@ -276,14 +281,22 @@ async function runScenario() {
   console.log(`Wall time        : ${wallMs} ms`);
   console.log(`Throughput       : ${throughput} answers/sec`);
   console.log(`Overall duration : ${Date.now() - overallStart} ms`);
+  if (maxP95Ms || maxMs || minThroughput) {
+    console.log(`Thresholds       : p95<=${maxP95Ms || '-'}ms | max<=${maxMs || '-'}ms | throughput>=${minThroughput || '-'}/s`);
+  }
   console.log('==========================');
 
-  const ok = successes === N && persisted === N && failures === 0;
+  const violations = [];
+  if (successes !== N) violations.push(`successes ${successes} != ${N}`);
+  if (persisted !== N) violations.push(`persisted ${persisted} != ${N}`);
+  if (failures !== 0) violations.push(`failures ${failures}`);
+  if (maxP95Ms && p95 > maxP95Ms) violations.push(`p95 ${p95}ms > ${maxP95Ms}ms`);
+  if (maxMs && max > maxMs) violations.push(`max ${max}ms > ${maxMs}ms`);
+  if (minThroughput && Number(throughput) < minThroughput) violations.push(`throughput ${throughput}/s < ${minThroughput}/s`);
+  const ok = violations.length === 0;
   if (!ok) {
     console.error('[load] FAILED');
-    if (successes !== N) console.error(`  successes ${successes} != ${N}`);
-    if (persisted !== N) console.error(`  persisted ${persisted} != ${N}`);
-    if (failures !== 0) console.error(`  failures ${failures}`);
+    for (const v of violations) console.error(`  ${v}`);
   } else {
     console.log('[load] PASSED');
   }

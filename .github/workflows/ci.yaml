@@ -88,6 +88,43 @@ jobs:
         env:
           E2E_PORT: 4173
 
+  load:
+    runs-on: ubuntu-latest
+    needs: [ci]
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Setup Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: server/go.mod
+          cache-dependency-path: server/go.sum
+
+      - name: Build all decks
+        run: npm run build
+
+      - name: Run load test (50 concurrent users)
+        run: npm run test:load
+        env:
+          LOAD_USERS: 50
+          LOAD_MAX_P95_MS: 2000
+          LOAD_MAX_MS: 5000
+          LOAD_MIN_THROUGHPUT: 10
+
   otel:
     permissions:
       contents: read # Required. To access the private repository
