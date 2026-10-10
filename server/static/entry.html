@@ -190,11 +190,30 @@
       // some APIs return {user:{username}} — handle broadly
       if(!u && j && j.user && typeof j.user === 'object') u = j.user.username || j.user.name;
       if(!u) u = 'host';
+      var display = String(u).trim() || 'host';
       if(banner && nameEl){
-        nameEl.textContent = u;
+        nameEl.textContent = display;
         banner.classList.remove('hidden');
         banner.classList.add('flex');
       }
+      // Also reflect signed-in state on the host card (so logged-in users don't see "Sign in")
+      try{
+        if(hostCopy) hostCopy.textContent = 'Signed in as ' + display;
+        if(hostCta){
+          hostCta.textContent = '';
+          hostCta.appendChild(document.createTextNode('Go to dashboard '));
+          var svg2 = document.createElementNS('http://www.w3.org/2000/svg','svg');
+          svg2.setAttribute('width','16'); svg2.setAttribute('height','16'); svg2.setAttribute('viewBox','0 0 24 24'); svg2.setAttribute('fill','none'); svg2.setAttribute('stroke','currentColor'); svg2.setAttribute('stroke-width','1.9'); svg2.setAttribute('aria-hidden','true');
+          var pp1 = document.createElementNS('http://www.w3.org/2000/svg','path'); pp1.setAttribute('d','M5 12h14');
+          var pp2 = document.createElementNS('http://www.w3.org/2000/svg','path'); pp2.setAttribute('d','M13 5l7 7-7 7');
+          svg2.appendChild(pp1); svg2.appendChild(pp2);
+          hostCta.appendChild(svg2);
+          // keep href as /admin (e2e asserts)
+          try{ hostCta.setAttribute('href','/admin'); }catch(e){}
+        }
+        var oidcEl = document.getElementById('host-oidc');
+        if(oidcEl) oidcEl.classList.add('hidden');
+      }catch(e2){}
       // Deliberately no auto-redirect: signed-in users must still be able to see
       // the entry options and browse the slide decks. The banner's "Continue to
       // dashboard" button handles the jump when they actually want it.
