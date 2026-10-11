@@ -1,3 +1,10 @@
+## [1.18.1](https://github.com/martynvdijke/slides/compare/v1.18.0...v1.18.1) (2026-10-11)
+
+
+### Bug Fixes
+
+* **questions:** validate correct_index on admin create/update ([#16](https://github.com/martynvdijke/slides/issues/16)) ([dce8ed1](https://github.com/martynvdijke/slides/commit/dce8ed1dcf460c453d931bd6e2f63bc75511a4aa))
+
 # [1.18.0](https://github.com/martynvdijke/slides/compare/v1.17.0...v1.18.0) (2026-10-11)
 
 
