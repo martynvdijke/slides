@@ -1336,4 +1336,5 @@
   // handle online/offline
   window.addEventListener('online', function(){ if(!sessionExpired) { updateWsBanner(false); fetchState().then(function(){ connectStream(true); }); } });
   window.addEventListener('offline', function(){ updateWsBanner(true); });
+}
 })();
