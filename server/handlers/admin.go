@@ -551,6 +551,28 @@ func validateQuestionShape(kind string, opts []string) error {
 	return nil
 }
 
+// validateCorrectIndex enforces that an optional correct answer is only set on
+// the scored kinds (poll and yesno) and points at one of the available options.
+// A nil index means the question is a non-scored interaction/feedback prompt.
+func validateCorrectIndex(kind string, opts []string, correct *int) error {
+	if correct == nil {
+		return nil
+	}
+	switch kind {
+	case "poll":
+		if *correct < 0 || *correct >= len(opts) {
+			return fmt.Errorf("correct_index must be between 0 and %d for a poll", len(opts)-1)
+		}
+	case "yesno":
+		if *correct != 0 && *correct != 1 {
+			return fmt.Errorf("correct_index must be 0 or 1 for a yesno question")
+		}
+	default:
+		return fmt.Errorf("correct_index is only supported for poll and yesno questions")
+	}
+	return nil
+}
+
 // validateQuestionMedia checks an optional prompt media reference. media_url is
 // either an uploaded /media/<name> path or an external http(s) URL.
 func validateQuestionMedia(mediaURL, mediaType string) error {
@@ -678,6 +700,10 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 		opts = []string{}
 	}
 	if err := validateQuestionShape(body.Kind, opts); err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if err := validateCorrectIndex(body.Kind, opts, body.CorrectIndex); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -896,6 +922,19 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 		effOpts = o
 	}
 	if err := validateQuestionShape(effKind, effOpts); err != nil {
+		jsonError(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Validate the correct answer against the post-patch kind and options.
+	effCorrect := q.CorrectIndex
+	if v, ok := fields["correct_index"]; ok {
+		if v == nil {
+			effCorrect = nil
+		} else if n, ok := v.(int); ok {
+			effCorrect = &n
+		}
+	}
+	if err := validateCorrectIndex(effKind, effOpts, effCorrect); err != nil {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
