@@ -1,3 +1,17 @@
+# [1.17.0](https://github.com/martynvdijke/slides/compare/v1.16.0...v1.17.0) (2026-10-11)
+
+
+### Bug Fixes
+
+* **app:** repair audience app after merge ([8063548](https://github.com/martynvdijke/slides/commit/80635480e2f28f11a7234294b7434c832bc2a0ce))
+* **app:** resolve post-merge audience runtime errors and feature gating ([8417e84](https://github.com/martynvdijke/slides/commit/8417e84ad9f33c1ec1645fe52ee795adc3562400))
+* **app:** restore option-btn hooks on interactive option labels ([7b37f30](https://github.com/martynvdijke/slides/commit/7b37f3061c03503d4da275fdc70aae2c07797223))
+
+
+### Features
+
+* **live:** interactive questions, 4h join TTL, markdown-authored Slidev layouts ([27ce466](https://github.com/martynvdijke/slides/commit/27ce4667473ca2f1ff405950d2031d437508f47b))
+
 # [1.16.0](https://github.com/martynvdijke/slides/compare/v1.15.1...v1.16.0) (2026-10-10)
 
 
