@@ -85,8 +85,10 @@ type Result struct {
 	Label string `json:"label"`
 	Count int    `json:"count"`
 	// Score and AvgRank are only set for ranking questions.
-	Score   float64 `json:"score,omitempty"`
-	AvgRank float64 `json:"avg_rank,omitempty"`
+	Score   float64  `json:"score,omitempty"`
+	AvgRank float64  `json:"avg_rank,omitempty"`
+	X       *float64 `json:"x,omitempty"`
+	Y       *float64 `json:"y,omitempty"`
 }
 
 // QuestionStats is the aggregate result set for one question.
@@ -1912,6 +1914,8 @@ func computeQuestionStats(questionID int64) (*QuestionStats, error) {
 		return rankingStats(questionID, opts, stats)
 	case "nps":
 		return npsStats(questionID, stats)
+	case "grid2x2":
+		return grid2x2Stats(questionID, stats)
 	}
 
 	rows, err := DB.Query("SELECT value, COUNT(*) as cnt FROM answers WHERE question_id=? AND status='visible' GROUP BY value ORDER BY cnt DESC LIMIT 100", questionID)
@@ -2101,6 +2105,77 @@ func npsStats(questionID int64, stats *QuestionStats) (*QuestionStats, error) {
 		nps := int(math.Round(100 * float64(promoters-detractors) / float64(stats.Total)))
 		stats.NPS = &nps
 	}
+	return stats, nil
+}
+
+// grid2x2Stats aggregates scatter coordinates, rounding to 2 decimals and merging identical points.
+func grid2x2Stats(questionID int64, stats *QuestionStats) (*QuestionStats, error) {
+	rows, err := DB.Query("SELECT value FROM answers WHERE question_id=? AND status='visible'", questionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	type key struct{ x, y float64 }
+	counts := map[key]int{}
+	for rows.Next() {
+		var val string
+		if err := rows.Scan(&val); err != nil {
+			return nil, err
+		}
+		var m map[string]float64
+		if err := json.Unmarshal([]byte(val), &m); err != nil {
+			continue
+		}
+		x, okx := m["x"]
+		y, oky := m["y"]
+		if !okx || !oky {
+			continue
+		}
+		if x < 0 || x > 1 || y < 0 || y > 1 {
+			continue
+		}
+		rx := math.Round(x*100) / 100
+		ry := math.Round(y*100) / 100
+		// Normalize -0 to 0
+		if rx == 0 {
+			rx = 0
+		}
+		if ry == 0 {
+			ry = 0
+		}
+		k := key{x: rx, y: ry}
+		counts[k]++
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Build sorted results for determinism.
+	keys := make([]key, 0, len(counts))
+	for k := range counts {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].x != keys[j].x {
+			return keys[i].x < keys[j].x
+		}
+		return keys[i].y < keys[j].y
+	})
+	results := make([]Result, 0, len(keys))
+	for _, k := range keys {
+		c := counts[k]
+		xv := k.x
+		yv := k.y
+		// Need distinct pointers
+		xc := xv
+		yc := yv
+		label := fmt.Sprintf("%.2f, %.2f", xv, yv)
+		results = append(results, Result{Label: label, Count: c, X: &xc, Y: &yc})
+		stats.Total += c
+	}
+	if results == nil {
+		results = []Result{}
+	}
+	stats.Results = results
 	return stats, nil
 }
 
