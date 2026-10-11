@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "slidev slides.md",
-    "build": "slidev build slides.md --out ../../dist/meetup --base ${BASE_PATH:-/}meetup/"
+    "build": "slidev build slides.md --out ../../dist/meetup --base ${BASE_PATH:-/}meetup/",
+    "sync:deck": "node ../templates/deck/scripts/sync-deck.mjs",
+    "sync:deck:dry": "node ../templates/deck/scripts/sync-deck.mjs --dry-run"
   }
 }

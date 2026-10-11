@@ -375,30 +375,43 @@ async function nextQuestion() {
 // ── slide sync ──
 let slidePoll: ReturnType<typeof setInterval> | null = null
 let lastSlideIndex = -1
+let lastSlideKey = ''
 let slidevNav: any = null
 
-function getSlideSnapshot(): { index: number; total: number; title: string } | null {
+const autoActivate = ref(true)
+try {
+  const v = typeof localStorage !== 'undefined' ? localStorage.getItem('pp_autoActivate') : null
+  if (v !== null) autoActivate.value = v !== 'false'
+} catch {}
+
+function setAutoActivate(v: boolean) {
+  autoActivate.value = v
+  try { localStorage.setItem('pp_autoActivate', String(v)) } catch {}
+}
+
+function getSlideSnapshot(): { index: number; total: number; title: string; id: string } | null {
   try {
     const g: any = typeof window !== 'undefined' ? (window as any) : (globalThis as any)
     const nav = slidevNav ?? g.$slidev?.nav ?? g.__slidev_nav__ ?? null
     if (nav && typeof nav.currentPage === 'number') {
       const total = nav.total ?? nav.slides?.length ?? (nav.slides?.value?.length) ?? 0
       const title = nav.currentSlideRoute?.meta?.slide?.title ?? nav.currentSlide?.title ?? nav.currentSlideRoute?.value?.meta?.slide?.title ?? ''
-      return { index: nav.currentPage, total: total || 1, title: String(title || '') }
+      const fm = nav.currentSlideRoute?.meta?.slide?.frontmatter ?? nav.currentSlide?.frontmatter ?? nav.currentSlideRoute?.value?.meta?.slide?.frontmatter ?? {}
+      const id = String(fm?.id ?? fm?.slide_id ?? '')
+      return { index: nav.currentPage, total: total || 1, title: String(title || ''), id }
     }
     if (typeof location !== 'undefined') {
       const hash = location.hash || ''
       const m = hash.match(/#\/?(\d+)/)
       if (m) {
         const idx = parseInt(m[1], 10)
-        if (!isNaN(idx)) return { index: idx, total: 1, title: '' }
+        if (!isNaN(idx)) return { index: idx, total: 1, title: '', id: '' }
       }
-      // try path like /5
       const path = location.pathname || ''
       const pm = path.match(/\/(\d+)(?:\/|$)/)
       if (pm) {
         const idx = parseInt(pm[1], 10)
-        if (!isNaN(idx) && idx > 0 && idx < 500) return { index: idx, total: 1, title: document.title || '' }
+        if (!isNaN(idx) && idx > 0 && idx < 500) return { index: idx, total: 1, title: document.title || '', id: '' }
       }
     }
   } catch {}
@@ -407,12 +420,15 @@ function getSlideSnapshot(): { index: number; total: number; title: string } | n
 
 function maybeSendSlide() {
   if (!authed.value || staticMode.value || !configured.value) return
+  if (!autoActivate.value) return
   const snap = getSlideSnapshot()
   if (!snap) return
-  if (snap.index === lastSlideIndex) return
+  const key = snap.index + ':' + snap.id
+  if (lastSlideKey === key) return
+  lastSlideKey = key
   lastSlideIndex = snap.index
-  // sendSlide is already throttled ~200ms internally
-  try { sendSlide(snap.index, snap.total, snap.title) } catch {}
+  // sendSlide is already throttled ~200ms internally; now includes frontmatter id for deck-sync
+  try { sendSlide(snap.index, snap.total, snap.title, snap.id) } catch {}
 }
 
 function startSlideWatcher() {
@@ -540,11 +556,16 @@ async function togglePodium() {
         <img v-if="previewSrc && mediaTypeVal === 'image'" :src="previewSrc" class="pp-preview" alt="media preview" />
         <video v-else-if="previewSrc && mediaTypeVal === 'video'" :src="previewSrc" class="pp-preview" controls muted />
 
+        <div class="pp-row pp-auto">
+          <label class="pp-check"><input type="checkbox" :checked="autoActivate" @change="setAutoActivate(($event.target as HTMLInputElement).checked)" /> auto-activate slides</label>
+          <span class="pp-hint" style="margin-left:6px">{{ autoActivate ? 'On — draft opens when you land on its slide' : 'Off — use Reveal/Next manually' }}</span>
+        </div>
+
         <div class="pp-actions">
           <button class="pp-btn primary" type="button" :disabled="busy" @click="submit(true)">Ask now</button>
           <button class="pp-btn" type="button" :disabled="busy" @click="submit(false)">Save draft</button>
           <button v-if="active && (active.status === 'live' || active.status === 'locked')" class="pp-btn" type="button" :disabled="busy" @click="revealActive">Reveal</button>
-          <button v-if="active" class="pp-btn danger" type="button" :disabled="busy" @click="closeActive">Close current</button>
+          <button v-if="active" class="pp-btn danger" type="button" :disabled="busy" @click="closeActive">Close</button>
           <button class="pp-btn next-btn" type="button" :disabled="nextBusy || !queueLength" :title="queueLength ? queueLength + ' in queue' : 'Queue empty'" @click="nextQuestion">
             Next <span v-if="queueLength" class="pp-badge">{{ queueLength }}</span>
           </button>

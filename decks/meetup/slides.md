@@ -421,6 +421,32 @@ Call to action — recruit speakers and hosts for the next meetup.
 -->
 
 ---
+layout: poll
+interactive: true
+id: meetup-poll-journey
+prompt: "Where are you on your cloud-native journey?"
+options: ["Exploring","Running in prod","Scaling platform"]
+points: 100
+timeLimit: 30
+---
+
+<!--
+Demo poll — synced to the backend via `npm run sync:deck` (external_id = "{deck_slug}:meetup-poll-journey").
+-->
+
+---
+layout: wordcloud
+interactive: true
+id: meetup-wordcloud-buzz
+prompt: "One word — what buzzword are you tired of?"
+timeLimit: 45
+---
+
+<!--
+Demo wordcloud — size = count. Port of the audience app's cloud renderer.
+-->
+
+---
 layout: center
 ---
 

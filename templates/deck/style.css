@@ -1,0 +1,18 @@
+/* Template deck — Midnight Auditorium tokens
+   This file is the canonical token source for live widgets.
+   decks/meetup/style.css maps the same tokens plus its K8s brand. */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@600;700&display=swap');
+
+:root {
+  --bg: #070a14;
+  --surface: #ffffff0f;
+  --text: #F2F3F8;
+  --muted: #9AA0B8;
+  --border: #ffffff1a;
+  --accent: #7C6BFF;
+  --grad: linear-gradient(135deg,#6366F1 0%,#A855F7 45%,#EC4899 75%,#22D3EE 100%);
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --font-display: "Space Grotesk", Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}

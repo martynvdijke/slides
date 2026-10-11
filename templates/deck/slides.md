@@ -58,3 +58,77 @@ Reactions overlay — floating emoji from the audience (full-bleed, no config ne
 Leaderboard — top participants by quiz points.
 <Leaderboard :limit="10" title="Leaderboard" />
 -->
+
+---
+layout: poll
+interactive: true
+id: demo-poll-journey
+prompt: "Where are you on your cloud-native journey?"
+options: ["Exploring","Running in prod","Scaling platform"]
+points: 100
+timeLimit: 30
+---
+
+<!--
+Poll — single choice. Synced via `npm run sync:deck:dry` then `sync:deck` when backend is up.
+-->
+
+---
+layout: wordcloud
+interactive: true
+id: demo-wordcloud-buzz
+prompt: "One word — what buzzword are you tired of?"
+timeLimit: 45
+---
+
+<!--
+Wordcloud — port of the audience app's cloud renderer. Size = count.
+-->
+
+---
+layout: qa
+interactive: true
+id: demo-qa-ask
+prompt: "Anything you want to ask?"
+---
+
+<!--
+Q&A board — delegates to <LiveQa>. Voting open indicator lives in global-top.
+-->
+
+---
+layout: grid2x2
+interactive: true
+id: demo-grid-priority
+prompt: "Where does platform investment sit?"
+axes:
+  x: { label: "Impact", low: "Low", high: "High" }
+  y: { label: "Effort", low: "Low", high: "High" }
+---
+
+<!--
+grid2x2 — scatter/quadrant. Degrades to a tally when the backend lacks the kind.
+-->
+
+---
+layout: nps
+interactive: true
+id: demo-nps-day
+prompt: "How likely are you to recommend today so far?"
+---
+
+<!--
+NPS 0–10 — bars + NPS badge reuse LiveQuestion.
+-->
+
+---
+layout: center
+---
+
+# That's the theme
+
+Read `THEME.md` for the full frontmatter schema and `npm run sync:deck` flow. Press **p** for the presenter panel.
+
+<!--
+Keep `id` stable when you reorder slides — external_id = "{deck_slug}:{slide_id}".
+-->

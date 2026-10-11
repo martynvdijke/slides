@@ -223,7 +223,10 @@ func GetEventState(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	writeJSON(w, http.StatusOK, BuildState(ev, pid))
 }
 
@@ -249,7 +252,10 @@ func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	meta, err := submitAnswerWithMeta(ev, pid, req.QuestionID, req.Value, req.ClientUUID)
 	if err != nil {
 		writeServiceErr(w, err)
@@ -326,7 +332,10 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid request body", http.StatusBadRequest)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	qa, err := createQA(ev, req.Body, req.Author, pid)
 	if err != nil {
 		writeServiceErr(w, err)
@@ -360,7 +369,10 @@ func VoteQA(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	votes, voted, err := toggleVote(ev, pid, pathID(r, "id"))
 	if err != nil {
 		writeServiceErr(w, err)

@@ -20,7 +20,7 @@ const props = withDefaults(defineProps<{
   showResults: true,
 })
 
-const { active, connected, configured, staticMode, mediaUrl, answerResult, remainingSec, deadlineAt } = useLiveRoom({
+const { active, connected, configured, staticMode, mediaUrl, answerResult, remainingSec, deadlineAt, sessionExpired, rejoinUrl } = useLiveRoom({
   event: props.event,
   room: props.room,
   base: props.base,
@@ -104,8 +104,23 @@ function isCorrectRow(label: string, idx: number): boolean {
 </script>
 
 <template>
-  <div v-if="!staticMode || configured" class="live-q" :class="{ expired }">
-    <div v-if="!configured" class="live-q-waiting">
+  <div
+    v-if="!staticMode || configured"
+    class="live-q"
+    :class="{ expired }"
+    :aria-busy="!connected && !!active ? 'true' : 'false'"
+  >
+    <div v-if="sessionExpired" class="live-q-expired-card" role="status" aria-live="polite">
+      <div class="live-q-expired-badge">Session ended</div>
+      <div class="live-q-expired-title">Audience session ended — rejoin from your phone</div>
+      <div class="live-q-expired-hint">
+        The 4-hour join window has closed. Scan the QR or open
+        <span class="live-q-expired-url">{{ rejoinUrl || 'the rejoin link' }}</span>
+        to continue asking and voting.
+      </div>
+    </div>
+
+    <div v-else-if="!configured" class="live-q-waiting">
       Set a room code to show live questions.
     </div>
 
@@ -122,8 +137,8 @@ function isCorrectRow(label: string, idx: number): boolean {
             <span class="live-q-timer">{{ expired ? '0s' : countdownLabel }}</span>
           </div>
         </div>
-        <span v-else-if="remaining !== null" class="live-q-timer">⏱ {{ remaining }}s</span>
-        <span v-else-if="active.status === 'locked'" class="live-q-timer locked">⏱ locked</span>
+        <span v-else-if="remaining !== null" class="live-q-timer live-q-timer-pill">⏱ {{ remaining }}s</span>
+        <span v-else-if="active.status === 'locked'" class="live-q-timer live-q-timer-pill locked">⏱ locked</span>
       </div>
 
       <img
@@ -178,15 +193,18 @@ function isCorrectRow(label: string, idx: number): boolean {
   min-width: 280px;
   max-width: 480px;
   text-align: left;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
+  background: var(--surface, rgba(255,255,255,0.06));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: var(--radius-card, 16px);
   padding: 16px 18px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .live-q.expired { opacity: 0.85; }
 .live-q-waiting {
   font-size: 14px;
-  color: #94a3b8;
+  color: var(--muted, #9AA0B8);
   font-style: italic;
 }
 .live-q-offline {
@@ -195,34 +213,37 @@ function isCorrectRow(label: string, idx: number): boolean {
 }
 .live-q-top { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
 .live-q-prompt {
+  font-family: var(--font-display, "Space Grotesk", Inter, system-ui, sans-serif);
   font-size: 16px;
   font-weight: 700;
-  color: #f1f5f9;
+  color: var(--text, #F2F3F8);
   line-height: 1.35;
   margin-bottom: 12px;
   flex: 1;
+  letter-spacing: -0.02em;
 }
 .live-q-countdown { flex-shrink: 0; }
 .live-q-ring {
-  width: 52px; height: 52px;
+  width: 56px; height: 56px;
   border-radius: 50%;
   display: grid; place-items: center;
-  background: conic-gradient(#38bdf8 var(--pct, 0%), rgba(255,255,255,0.12) 0);
+  background: conic-gradient(var(--accent, #7C6BFF) var(--pct, 0%), rgba(255,255,255,0.12) 0);
   padding: 3px;
 }
 .live-q-ring::before {
   content: '';
   width: 100%; height: 100%;
   border-radius: 50%;
-  background: #0f172a;
+  background: var(--bg, #070a14);
   grid-area: 1 / 1;
 }
 .live-q-timer {
   grid-area: 1 / 1;
   z-index: 1;
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 12px;
   font-weight: 800;
-  color: #e0f2fe;
+  color: var(--text, #F2F3F8);
   font-variant-numeric: tabular-nums;
 }
 .live-q-countdown.is-expired .live-q-ring { background: conic-gradient(#ef4444 100%, rgba(255,255,255,0.12) 0); }
@@ -239,20 +260,18 @@ function isCorrectRow(label: string, idx: number): boolean {
   padding: 6px 8px;
   margin-bottom: 10px;
 }
-.live-q-head { display: flex; align-items: flex-start; gap: 10px; }
-.live-q-head .live-q-prompt { flex: 1; }
-.live-q-timer {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+.live-q-timer-pill {
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 13px;
   font-weight: 700;
   color: #fbbf24;
   background: rgba(251, 191, 36, 0.12);
   border: 1px solid rgba(251, 191, 36, 0.35);
-  border-radius: 999px;
+  border-radius: var(--radius-pill, 999px);
   padding: 2px 10px;
   white-space: nowrap;
 }
-.live-q-timer.locked { color: #f59e0b; }
+.live-q-timer-pill.locked { color: #f59e0b; }
 .live-q-locked {
   font-size: 13px;
   color: #fbbf24;
@@ -265,7 +284,7 @@ function isCorrectRow(label: string, idx: number): boolean {
   max-width: 100%;
   max-height: 240px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
   display: block;
   margin-bottom: 14px;
   background: #000;
@@ -285,7 +304,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 .live-q-row.correct .live-q-label { color: #86efac; }
 .live-q-label {
   font-size: 13px;
-  color: #e2e8f0;
+  color: var(--text, #e2e8f0);
   grid-column: 1;
 }
 .live-q-correct {
@@ -300,12 +319,13 @@ function isCorrectRow(label: string, idx: number): boolean {
 }
 .live-q-avg {
   font-size: 11px;
-  color: #94a3b8;
+  color: var(--muted, #94a3b8);
   margin-left: 6px;
 }
 .live-q-count {
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 12px;
-  color: #94a3b8;
+  color: var(--muted, #94a3b8);
   font-variant-numeric: tabular-nums;
   min-width: 22px;
   text-align: right;
@@ -321,7 +341,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 }
 .live-q-fill {
   height: 100%;
-  background: linear-gradient(90deg, #326ce5, #38bdf8);
+  background: var(--grad, linear-gradient(90deg, #6366F1, #A855F7 45%, #EC4899 75%, #22D3EE));
   border-radius: 999px;
   transition: width 0.4s ease;
 }
@@ -329,7 +349,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 .live-q-total {
   margin-top: 10px;
   font-size: 11px;
-  color: #64748b;
+  color: var(--muted, #64748b);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-weight: 600;
@@ -337,9 +357,9 @@ function isCorrectRow(label: string, idx: number): boolean {
 .live-q-quiz-note {
   margin-top: 8px;
   font-size: 12px;
-  color: #cbd5e1;
+  color: var(--muted, #cbd5e1);
   background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
   border-radius: 8px;
   padding: 7px 10px;
 }
@@ -347,7 +367,47 @@ function isCorrectRow(label: string, idx: number): boolean {
 .live-q-bad { color: #fca5a5; font-weight: 700; }
 .live-q-hidden {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--muted, #94a3b8);
   font-style: italic;
+}
+.live-q-expired-card {
+  border: 1px solid rgba(251,191,36,0.35);
+  background: linear-gradient(135deg, rgba(124,107,255,0.14), rgba(236,72,153,0.08));
+  border-radius: 12px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 6px;
+}
+.live-q-expired-badge {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #fbbf24;
+  background: rgba(251,191,36,0.14);
+  border: 1px solid rgba(251,191,36,0.3);
+  border-radius: 999px;
+  padding: 2px 8px;
+  width: fit-content;
+}
+.live-q-expired-title {
+  font-family: var(--font-display, "Space Grotesk", Inter, sans-serif);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #F2F3F8);
+  line-height: 1.35;
+}
+.live-q-expired-hint {
+  font-size: 11.5px;
+  color: var(--muted, #9AA0B8);
+  line-height: 1.5;
+}
+.live-q-expired-url {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  color: #93c5fd;
+  word-break: break-all;
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-q-fill { transition: none; }
 }
 </style>

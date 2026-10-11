@@ -160,6 +160,7 @@ type StateDTO struct {
 	Leaderboard    []db.LeaderboardEntry `json:"leaderboard"`
 	Me             MeDTO                 `json:"me"`
 	CurrentSlide   *live.Slide           `json:"current_slide,omitempty"`
+	JoinSession    *JoinSessionDTO       `json:"join_session,omitempty"`
 }
 
 type AnalyticsDTO struct {
@@ -560,6 +561,11 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 	if s, ok := Broker.GetSlide(ev.Code); ok {
 		cp := s
 		state.CurrentSlide = &cp
+	}
+	if participantID > 0 {
+		if js, err := db.GetJoinSessionByParticipant(participantID, ev.ID); err == nil && js != nil {
+			state.JoinSession = buildJoinSessionDTO(js)
+		}
 	}
 
 	return state

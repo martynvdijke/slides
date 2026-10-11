@@ -68,14 +68,14 @@ const blockMedal = ['🥈', '🥇', '🥉']
             </div>
           </div>
         </div>
-        <ol v-if="rest.length" class="podium-rest">
+        <TransitionGroup v-if="rest.length" name="podium-list" tag="ol" class="podium-rest">
           <li v-for="e in rest" :key="e.rank + '-' + e.name" class="podium-row">
             <span class="podium-row-rank">{{ e.rank }}</span>
             <span class="podium-row-avatar" :style="{ background: e.color }">{{ e.emoji }}</span>
             <span class="podium-row-name">{{ e.name }}</span>
             <span class="podium-row-pts">{{ e.points }}</span>
           </li>
-        </ol>
+        </TransitionGroup>
       </template>
     </div>
   </div>
@@ -86,22 +86,25 @@ const blockMedal = ['🥈', '🥇', '🥉']
   min-width: 300px;
   max-width: 480px;
   text-align: left;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
+  background: var(--surface, rgba(255,255,255,0.06));
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: var(--radius-card, 16px);
   padding: 16px 18px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .podium-title {
   font-size: 12px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--muted, #9AA0B8);
   font-weight: 700;
   margin-bottom: 12px;
 }
 .podium-empty {
   font-size: 13px;
-  color: #94a3b8;
+  color: var(--muted, #9AA0B8);
   font-style: italic;
 }
 .podium-stage {
@@ -130,9 +133,10 @@ const blockMedal = ['🥈', '🥇', '🥉']
   border: 2px solid rgba(255, 255, 255, 0.25);
 }
 .podium-name {
+  font-family: var(--font-display, Inter, sans-serif);
   font-size: 12px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text, #e2e8f0);
   max-width: 96px;
   white-space: nowrap;
   overflow: hidden;
@@ -149,12 +153,13 @@ const blockMedal = ['🥈', '🥇', '🥉']
   padding: 8px 6px;
   color: #0f172a;
 }
+/* shared rank colors — gold / silver / bronze */
 .podium-col.first .podium-block { height: 130px; background: linear-gradient(180deg, #fbbf24, #b45309); }
 .podium-col.second .podium-block { height: 100px; background: linear-gradient(180deg, #d1d5db, #6b7280); }
 .podium-col.third .podium-block { height: 80px; background: linear-gradient(180deg, #f59e0b, #92400e); }
 .podium-medal { font-size: 20px; }
-.podium-rank { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 700; opacity: 0.75; }
-.podium-pts { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 800; }
+.podium-rank { font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace); font-size: 11px; font-weight: 700; opacity: 0.75; }
+.podium-pts { font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace); font-size: 14px; font-weight: 800; }
 .podium-rest {
   list-style: none;
   margin: 0;
@@ -168,17 +173,19 @@ const blockMedal = ['🥈', '🥇', '🥉']
   align-items: center;
   gap: 9px;
   background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border, rgba(255,255,255,0.08));
   border-radius: 9px;
   padding: 6px 9px;
+  transition: transform 0.25s ease, opacity 0.25s ease, background 0.2s ease;
 }
 .podium-row-rank {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 12px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--muted, #9AA0B8);
   min-width: 18px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .podium-row-avatar {
   width: 24px;
@@ -196,15 +203,24 @@ const blockMedal = ['🥈', '🥇', '🥉']
   flex: 1;
   font-size: 12px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text, #e2e8f0);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .podium-row-pts {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, "JetBrains Mono", ui-monospace, monospace);
   font-size: 12px;
   font-weight: 700;
-  color: #38bdf8;
+  color: var(--accent, #7C6BFF);
+  font-variant-numeric: tabular-nums;
+}
+/* enter/leave reorder */
+.podium-list-move { transition: transform 0.35s ease; }
+.podium-list-enter-active, .podium-list-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.podium-list-enter-from, .podium-list-leave-to { opacity: 0; transform: translateY(6px); }
+.podium-list-leave-active { position: absolute; }
+@media (prefers-reduced-motion: reduce) {
+  .podium-row, .podium-list-move, .podium-list-enter-active, .podium-list-leave-active { transition: none; }
 }
 </style>

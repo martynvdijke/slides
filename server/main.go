@@ -57,6 +57,9 @@ func main() {
 	if err := db.DeleteExpiredSessions(); err != nil {
 		log.Printf("cleanup sessions: %v", err)
 	}
+	if _, err := db.DeleteExpiredJoinSessions(); err != nil {
+		log.Printf("cleanup join sessions: %v", err)
+	}
 
 	mux := http.NewServeMux()
 
@@ -91,6 +94,7 @@ func main() {
 	mux.HandleFunc("GET /api/events/{code}/results", handlers.GetEventResults)
 	mux.HandleFunc("POST /api/events/{code}/recap/subscribe", handlers.RecapSubscribe)
 	mux.HandleFunc("POST /api/events/{code}/recap/unsubscribe", handlers.RecapUnsubscribe)
+	mux.HandleFunc("POST /api/events/{code}/join", handlers.JoinEvent)
 	mux.HandleFunc("GET /api/join/{room}", handlers.ResolveRoom)
 	mux.HandleFunc("GET /api/settings/analytics", handlers.PublicGetAnalyticsSettings)
 
@@ -149,6 +153,7 @@ func main() {
 	adminMux.HandleFunc("PUT /api/admin/settings/filter", handlers.AdminUpdateFilterSettings)
 	adminMux.HandleFunc("GET /api/admin/settings/recap", handlers.AdminGetRecapSettings)
 	adminMux.HandleFunc("PUT /api/admin/settings/recap", handlers.AdminUpdateRecapSettings)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/deck/sync", handlers.AdminDeckSync)
 	for _, method := range []string{"GET", "POST", "PATCH", "DELETE", "PUT"} {
 		mux.Handle(method+" /api/admin/", handlers.AdminAuth(adminMux))
 	}
@@ -205,7 +210,7 @@ func main() {
 		staticHandler.ServeHTTP(w, r)
 	})
 	// SPA assets live at the site root, next to the built decks.
-	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "reset.js", "results.js", "tailwind.css", "logo.svg"} {
+	for _, asset := range []string{"app.js", "admin.js", "live.js", "join.js", "reset.js", "results.js", "tailwind.css", "tokens.css", "logo.svg"} {
 		mux.HandleFunc("GET /"+asset, page(asset))
 	}
 
@@ -243,6 +248,18 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	handlers.StartReaper(ctx, time.Second)
+	go func() {
+		ticker := time.NewTicker(5 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				_, _ = db.DeleteExpiredJoinSessions()
+			}
+		}
+	}()
 
 	srv := &http.Server{Addr: ":" + port, Handler: handler}
 	go func() {

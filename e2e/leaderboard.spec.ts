@@ -19,10 +19,10 @@ test.describe('leaderboard', () => {
     // Wait for live card to show the question
     await expect(page.locator('#live-card .prompt')).toContainText('Capital of France?', { timeout: 15000 })
 
-    // Set identity name
-    const nameInput = page.locator('#identity-name')
-    await nameInput.fill('TestPlayer')
-    await page.locator('#identity-save').click()
+    // Set identity name (bottom-sheet flow)
+    await page.locator('#identity-open').click()
+    await page.locator('#sheet-name').fill('TestPlayer')
+    await page.locator('#sheet-save').click()
     await expect(page.locator('#toast-root')).toContainText(/profile saved/i, { timeout: 5000 })
 
     // Answer the correct option (Paris)

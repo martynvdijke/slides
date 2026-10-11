@@ -1,6 +1,11 @@
 /* Dutch K8s Meetup — CNCF branding */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@600;700&display=swap');
 
+/* ── Midnight Auditorium tokens (shared with audience app) ──
+   Live widgets use these; deck chrome keeps its own K8s palette.
+   Widgets must NOT hardcode #326CE5 / rgba(15,23,42) — use the tokens.
+   Meetup intentionally keeps K8s blue for its footer/chrome only. */
 :root {
   --k8s-blue: #326CE5;
   --k8s-blue-mid: #3B7FD4;
@@ -8,6 +13,19 @@
   --k8s-red: #C0392B;
   --k8s-ink: #1a1e2e;
   --footer-h: 28px;
+
+  /* Midnight Auditorium — frozen contract */
+  --bg: #070a14;
+  --surface: #ffffff0f;
+  --text: #F2F3F8;
+  --muted: #9AA0B8;
+  --border: #ffffff1a;
+  --accent: #7C6BFF;
+  --grad: linear-gradient(135deg,#6366F1 0%,#A855F7 45%,#EC4899 75%,#22D3EE 100%);
+  --radius-card: 16px;
+  --radius-pill: 999px;
+  --font-display: "Space Grotesk", Inter, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
 html, body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }

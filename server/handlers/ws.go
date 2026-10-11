@@ -25,6 +25,7 @@ type wsEnvelope struct {
 	For   string          `json:"for,omitempty"`
 	OK    *bool           `json:"ok,omitempty"`
 	Error string          `json:"error,omitempty"`
+	Code  string          `json:"code,omitempty"`
 	ID    int64           `json:"id,omitempty"`
 	Votes int             `json:"votes,omitempty"`
 	Voted bool            `json:"voted,omitempty"`
@@ -86,14 +87,27 @@ func acceptWS(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
 	})
 }
 
+func sessionExpiredFrame(ev *db.Event) []byte {
+	data, _ := json.Marshal(map[string]string{"event_code": ev.Code, "rejoin_url": "/e/" + ev.Code})
+	env := map[string]any{"type": "session_expired", "code": "join_expired", "data": json.RawMessage(data)}
+	b, _ := json.Marshal(env)
+	return b
+}
+
 func EventWS(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
 	isPresenter := sessionUser(r) != nil
+	var pid int64
+	var expired bool
+	if isPresenter {
+		pid = participantID(w, r, ev.ID)
+	} else {
+		pid, _, expired = resolveJoinForWS(w, r, ev)
+	}
 	ctx := r.Context()
 
 	c, err := acceptWS(w, r)
@@ -102,6 +116,12 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 	}
 	defer c.CloseNow()
 	c.SetReadLimit(64 * 1024)
+
+	if !isPresenter && expired {
+		_ = writeRaw(ctx, c, sessionExpiredFrame(ev))
+		time.Sleep(1100 * time.Millisecond)
+		return
+	}
 
 	ch, unsub := Broker.Subscribe(ev.Code)
 	defer unsub()
@@ -131,6 +151,8 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 
 	ticker := time.NewTicker(25 * time.Second)
 	defer ticker.Stop()
+	expiryTicker := time.NewTicker(60 * time.Second)
+	defer expiryTicker.Stop()
 
 	// simple token bucket: 10 burst, 5 per sec
 	var tokens = 10
@@ -174,12 +196,24 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
+			if !isPresenter && (isJoinExpired(r, ev) || (pid != 0 && func() bool { _, err := db.GetJoinSessionByParticipant(pid, ev.ID); return err != nil }())) {
+				// per inbound expiry: send error + session_expired then close
+				var peekFor wsInbound
+				_ = json.Unmarshal(raw, &peekFor)
+				forWhat := peekFor.Type
+				_ = writeWS(ctx, c, wsEnvelope{Type: "error", For: forWhat, Error: "join_expired", Code: "join_expired"})
+				_ = writeRaw(ctx, c, sessionExpiredFrame(ev))
+				time.Sleep(200 * time.Millisecond)
+				return
+			}
 			// intercept slide before dispatch
 			var slidePeek struct {
 				Type  string `json:"type"`
 				Index *int   `json:"index"`
 				Total *int   `json:"total"`
 				Title string `json:"title"`
+				ID       string `json:"id"`
+				DeckSlug string `json:"deck_slug"`
 			}
 			_ = json.Unmarshal(raw, &slidePeek)
 			if slidePeek.Type == "slide" {
@@ -187,11 +221,6 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 					_ = writeWS(ctx, c, wsEnvelope{Type: "error", For: "slide", Error: "unauthorized"})
 					continue
 				}
-				now := time.Now().UnixMilli()
-				if now-lastSlideMs < 200 {
-					continue
-				}
-				lastSlideMs = now
 				idx := 0
 				if slidePeek.Index != nil {
 					idx = *slidePeek.Index
@@ -201,6 +230,14 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 					tot = *slidePeek.Total
 				}
 				s := live.Slide{Index: idx, Total: tot, Title: slidePeek.Title}
+				now := time.Now().UnixMilli()
+				// Always activate (idempotent); throttle only broadcast/storage
+				_ = ActivateQuestionForSlide(ev.ID, idx, slidePeek.ID, slidePeek.DeckSlug)
+				if now-lastSlideMs < 200 {
+					_ = writeWS(ctx, c, okEnvelope("slide"))
+					continue
+				}
+				lastSlideMs = now
 				Broker.SetSlide(ev.Code, s)
 				Broker.BroadcastSlide(ev.Code, s)
 				_ = writeWS(ctx, c, okEnvelope("slide"))
@@ -226,6 +263,22 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		case <-ticker.C:
 			if err := writeWS(ctx, c, wsEnvelope{Type: "ping"}); err != nil {
 				return
+			}
+		case <-expiryTicker.C:
+			if !isPresenter {
+				expired := false
+				if pid != 0 {
+					if _, err := db.GetJoinSessionByParticipant(pid, ev.ID); err != nil {
+						expired = true
+					}
+				} else if isJoinExpired(r, ev) {
+					expired = true
+				}
+				if expired {
+					_ = writeRaw(ctx, c, sessionExpiredFrame(ev))
+					time.Sleep(200 * time.Millisecond)
+					return
+				}
 			}
 		case <-ctx.Done():
 			return
@@ -391,4 +444,42 @@ func AdminEventStatsWS(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+}
+
+// Deck interactive slides MUST set frontmatter id; slides without id are ignored.
+// Resolve by deck_slug+slide_id when deck_slug present, else by slide_id among deck questions.
+func ActivateQuestionForSlide(eventID int64, slideIndex int, slideID string, deckSlug string) error {
+    if slideID == "" {
+        return nil
+    }
+    var q *db.Question
+    var err error
+    if deckSlug != "" {
+        q, err = db.FindQuestionByExternalID(eventID, deckSlug+":"+slideID)
+    } else {
+        // Resolve by slide_id alone; if multiple decks share slide_id, pick most recently updated (max id)
+        row := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID)
+        var id int64
+        if e := row.Scan(&id); e == nil {
+            q, err = db.GetQuestion(id)
+        }
+    }
+    if err != nil || q == nil {
+        return nil
+    }
+    if q.Status != "draft" {
+        return nil
+    }
+    if !q.AutoActivate {
+        return nil
+    }
+    if err := db.ActivateQuestion(eventID, q.ID, nil); err != nil {
+        return err
+    }
+    BroadcastEvent(eventID)
+    return nil
+}
+
+func OnSlideChange(ev *db.Event, slideIndex int, slideID string) error {
+    return ActivateQuestionForSlide(ev.ID, slideIndex, slideID, "")
 }

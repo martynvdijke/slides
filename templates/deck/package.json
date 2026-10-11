@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "slidev slides.md",
-    "build": "slidev build slides.md --out ../../dist/DECK_NAME --base ${BASE_PATH:-/}DECK_NAME/"
+    "build": "slidev build slides.md --out ../../dist/DECK_NAME --base ${BASE_PATH:-/}DECK_NAME/",
+    "sync:deck": "node scripts/sync-deck.mjs",
+    "sync:deck:dry": "node scripts/sync-deck.mjs --dry-run"
   }
 }

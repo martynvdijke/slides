@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted, onUnmounted } from 'vue'
+import { ref, watch, onUnmounted } from 'vue'
 import { useLiveRoom } from '../composables/useLiveRoom'
 
 const props = withDefaults(defineProps<{
@@ -34,14 +34,19 @@ const nodes = ref<Node[]>([])
 let seq = 0
 let cleanupTimer: ReturnType<typeof setTimeout> | null = null
 
+// respect reduced motion — still show but without flying
+function prefersReduced(): boolean {
+  try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false }
+}
+
 function spawn(emoji: string) {
-  // find reusable inactive slot or push
+  if (prefersReduced()) return
   const inactive = nodes.value.find(n => !n.active)
   const n: Node = {
     id: seq++,
     emoji,
-    x: 5 + Math.random() * 90, // vw %
-    drift: (Math.random() - 0.5) * 60, // px drift
+    x: 5 + Math.random() * 90,
+    drift: (Math.random() - 0.5) * 60,
     duration: 1800 + Math.random() * 1400,
     delay: 0,
     size: 22 + Math.random() * 26,
@@ -52,11 +57,9 @@ function spawn(emoji: string) {
   } else if (nodes.value.length < MAX_NODES) {
     nodes.value.push(n)
   } else {
-    // pool full — replace oldest inactive or random
     const idx = Math.floor(Math.random() * nodes.value.length)
     Object.assign(nodes.value[idx], n)
   }
-  // deactivate after duration
   setTimeout(() => {
     const found = nodes.value.find(v => v.id === n.id)
     if (found) found.active = false
@@ -65,10 +68,10 @@ function spawn(emoji: string) {
 
 watch(reactions, (batch) => {
   if (!batch || !batch.length) return
+  if (prefersReduced()) return
   for (const { emoji, count } of batch) {
     const c = Math.min(count, 6)
     for (let i = 0; i < c; i++) {
-      // stagger a bit
       setTimeout(() => spawn(emoji), i * 90)
     }
   }
@@ -125,5 +128,8 @@ onUnmounted(() => {
     transform: translate3d(var(--drift), -92vh, 0) scale(0.9);
     opacity: 0;
   }
+}
+@media (prefers-reduced-motion: reduce) {
+  .live-reactions { display: none; }
 }
 </style>

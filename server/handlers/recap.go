@@ -228,7 +228,10 @@ func RecapSubscribe(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	if pid == 0 {
 		jsonError(w, "could not identify participant", http.StatusInternalServerError)
 		return
@@ -254,7 +257,10 @@ func RecapUnsubscribe(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	pid := participantID(w, r, ev.ID)
+	pid, _, ok := checkJoin(w, r, ev)
+	if !ok {
+		return
+	}
 	if pid == 0 {
 		jsonError(w, "could not identify participant", http.StatusInternalServerError)
 		return
