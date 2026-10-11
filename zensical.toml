@@ -1,0 +1,91 @@
+# Zensical configuration for the Slides documentation site.
+#
+# Build:   zensical build --strict --clean
+# Preview: zensical serve   (http://localhost:8000)
+#
+# Docs live in docs/ (docs/index.md is the home page); the generated static
+# site is written to site/ (git-ignored). See docs/deployment.md for the
+# GitHub Pages workflow that publishes it.
+
+[project]
+site_name = "Slides"
+site_description = "Slidev decks with live audience questions, polls, quizzes, Q&A, moderation and recaps."
+site_url = "https://martynvdijke.github.io/slides/"
+docs_dir = "docs"
+site_dir = "site"
+use_directory_urls = true
+strict = true
+repo_url = "https://github.com/martynvdijke/slides"
+repo_name = "martynvdijke/slides"
+edit_uri = "edit/main/docs/"
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting started" = "getting-started.md" },
+  { "Decks" = "decks.md" },
+  { "Questions" = "questions.md" },
+  { "Moderation & safety" = "moderation.md" },
+  { "Recap & results" = "recap.md" },
+  { "Configuration" = "configuration.md" },
+  { "Deployment" = "deployment.md" },
+  { "API reference" = "api.md" },
+  { "Operations" = "operations.md" },
+  { "Architecture" = "architecture.md" },
+  { "Contributing" = "contributing.md" },
+]
+
+[project.theme]
+name = "material"
+language = "en"
+variant = "modern"
+features = [
+  "navigation.instant",
+  "navigation.instant.prefetch",
+  "navigation.tracking",
+  "navigation.sections",
+  "navigation.top",
+  "navigation.footer",
+  "toc.follow",
+  "search.suggest",
+  "search.highlight",
+  "content.code.copy",
+  "content.code.select",
+  "content.tabs.link",
+]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+toggle = { icon = "material/brightness-7", name = "Switch to dark mode" }
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+toggle = { icon = "material/brightness-4", name = "Switch to light mode" }
+
+[project.markdown_extensions]
+abbr = {}
+admonition = {}
+attr_list = {}
+def_list = {}
+footnotes = {}
+md_in_html = {}
+pymdownx.betterem = {}
+pymdownx.caret = {}
+pymdownx.details = {}
+pymdownx.emoji.emoji_generator = "zensical.extensions.emoji.to_svg"
+pymdownx.emoji.emoji_index = "zensical.extensions.emoji.twemoji"
+pymdownx.inlinehilite = {}
+pymdownx.keys = {}
+pymdownx.mark = {}
+pymdownx.snippets = {}
+pymdownx.tilde = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.highlight.line_spans = "__span"
+pymdownx.highlight.pygments_lang_class = true
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+pymdownx.tabbed.alternate_style = true
+pymdownx.tabbed.combine_header_slug = true
+toc.permalink = true
