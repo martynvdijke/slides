@@ -27,7 +27,8 @@
     return q || '';
   }
   var code=getCode();
-  var stateCache=null;
+  function esc(s){ return String(s||''); }
+  var stateCache={};
   var sessionExpired=false;
   var spectatorMode=false;
   var rejoinUrl='/e/'+encodeURIComponent(code);
@@ -601,8 +602,7 @@
     var date = evt.event_date ? ' · '+evt.event_date : '';
     var status = evt.status ? ' · '+(evt.status==='open'?'Open':'Closed') : '';
     d.textContent = (evt.description||'') + brand + date + status;
-    document.title = (evt.name||evt.code) + ' — Meetup';
-    document.title = esc(evt.name) + ' — Meetup';
+    document.title = esc(evt.name||evt.code) + ' — Meetup';
     try{ applyFeatureGating(evt); }catch(e){}
   }
 
@@ -1094,6 +1094,8 @@
       rejoinUrl=ru;
       showSessionSheet('expired', rc);
       try{ if(ws) ws.close(); }catch(e){}
+      return;
+    }
     if(m.type==='participants' && m.data){
       participantsData={count:m.data.count||0, participants:Array.isArray(m.data.participants)?m.data.participants:[]};
       renderAudienceRoster();
@@ -1231,8 +1233,8 @@
 
   function applyState(data){
     if(!data) return;
-    stateCache=data;
-    if(data.join_session) updateJoinCountdown(data);
+    try{ stateCache=data; }catch(e){ console.error('applyState init', e); throw e; }
+    try{ if(data.join_session) updateJoinCountdown(data); }catch(e){ console.error('updateJoinCountdown', e); throw e; }
     if(data.event) renderEvent(data.event);
     if(data.event && data.event.show_podium){ renderPodium(data.leaderboard || []); }
     else { renderLive(data.active_question || null); }
@@ -1336,5 +1338,4 @@
   // handle online/offline
   window.addEventListener('online', function(){ if(!sessionExpired) { updateWsBanner(false); fetchState().then(function(){ connectStream(true); }); } });
   window.addEventListener('offline', function(){ updateWsBanner(true); });
-}
 })();
