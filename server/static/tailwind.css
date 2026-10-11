@@ -78,3 +78,9 @@ dialog.sheet[open]{display:block;transform:none;animation:sheetIn .22s var(--eas
 .session-sheet-card{background:rgba(255,255,255,.06);border:1px solid var(--border);border-radius:16px;padding:18px;display:grid;gap:12px}
 .tab-badge{margin-left:6px;min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--grad);color:#fff;font-size:.7rem;font-weight:700;display:inline-grid;place-items:center;line-height:1}
 .tab-badge:empty{display:none}
+/* === Mobile polish (phone ≤430px) — committed prebuilt addon === */
+/* Safe-area for notched phones is handled per-page, but ensure toast/overlays respect insets */
+#toast-root{bottom:max(22px, env(safe-area-inset-bottom))}
+@media (max-width: 430px){
+  .btn{min-height:44px}
+}

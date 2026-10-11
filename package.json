@@ -1,14 +1,16 @@
 {
   "name": "slides",
-  "version": "1.13.0",
+  "version": "1.16.0",
   "private": true,
   "type": "module",
   "workspaces": [
     "decks/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present && node scripts/build-index.mjs",
-    "test:e2e": "playwright test -c e2e/playwright.config.ts"
+    "build": "npm run build --workspaces --if-present && node scripts/extract-questions.mjs && node scripts/build-index.mjs",
+    "test:scripts": "node --test scripts/",
+    "test:e2e": "playwright test -c e2e/playwright.config.ts",
+    "test:load": "node e2e/load.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

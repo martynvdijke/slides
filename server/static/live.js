@@ -91,6 +91,52 @@
   }
 
   var currentState=null;
+  var participantsData={count:0, participants:[]};
+  function escText(s){ return String(s||''); }
+  function renderWaitingRoster(){
+    var c=document.getElementById('waiting-roster');
+    if(!c) return;
+    c.textContent='';
+    var count=participantsData && typeof participantsData.count==='number' ? participantsData.count : (participantsData.participants?participantsData.participants.length:0);
+    var list=(participantsData && Array.isArray(participantsData.participants)) ? participantsData.participants : [];
+    var pill=document.createElement('div');
+    pill.id='waiting-roster-count';
+    pill.className='pill live';
+    pill.style.cssText='display:inline-flex;align-items:center;gap:8px;padding:8px 16px;border-radius:999px;font-weight:800;font-size:1rem;background:linear-gradient(135deg,#22D3EE 0%,#6366F1 100%);color:#fff;border:none;box-shadow:0 8px 24px rgba(99,102,241,.35);margin-top:16px';
+    pill.textContent = count===0 ? 'No one has joined yet' : (count===1 ? '1 waiting' : count+' waiting');
+    c.appendChild(pill);
+    if(!list.length){
+      if(count===0){
+        var hint=document.createElement('div'); hint.style.cssText='color:var(--muted);font-size:.9rem;margin-top:10px'; hint.textContent='Share the QR code to invite the audience.';
+        c.appendChild(hint);
+      }
+      return;
+    }
+    var chips=document.createElement('div'); chips.id='waiting-roster-chips';
+    chips.style.cssText='display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-height:220px;overflow:auto;margin-top:14px;padding:4px';
+    var cap=40;
+    var visible=list.slice(0,cap);
+    visible.forEach(function(p){
+      var chip=document.createElement('span');
+      chip.style.cssText='display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);font-weight:600;font-size:.92rem;max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#E8EAF4';
+      if(p.color){ chip.style.borderColor=p.color+'55'; chip.style.background=p.color+'18'; }
+      var em=document.createElement('span'); em.textContent=p.emoji||'🙂'; em.style.fontSize='1rem';
+      var nm=document.createElement('span'); nm.textContent=escText(p.name)||'Anonymous'; nm.style.overflow='hidden'; nm.style.textOverflow='ellipsis';
+      chip.appendChild(em); chip.appendChild(nm); chips.appendChild(chip);
+    });
+    c.appendChild(chips);
+    if(list.length>cap){
+      var more=document.createElement('div'); more.style.cssText='color:var(--muted);font-size:.85rem;margin-top:8px;font-weight:600'; more.textContent='+'+(list.length-cap)+' more';
+      c.appendChild(more);
+    }
+  }
+  function fetchParticipants(){
+    if(!code) return;
+    fetch('/api/events/'+encodeURIComponent(code)+'/participants',{credentials:'same-origin'}).then(function(r){return r.json()}).then(function(j){
+      participantsData={count: j.count||0, participants: Array.isArray(j.participants)?j.participants:[]};
+      renderWaitingRoster();
+    }).catch(function(){});
+  }
   // Result bars/answers are only shown when the question is revealed, or when
   // the host enabled results on a question that is not locked.
   function canReveal(active){
@@ -154,8 +200,12 @@
       var orb=document.createElement('div'); orb.className='orb'; orb.innerHTML='<svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="1.7"><path d="M12 3l7 4v8l-7 4-7-4V7z"/><circle cx="12" cy="12" r="3"/></svg>';
       var h=document.createElement('h3'); h.textContent='Waiting for the host…'; h.style.fontSize='1.6rem';
       var p=document.createElement('p'); p.textContent='The host will launch the next question. Results and Q&A update live.';
-      w.appendChild(orb); w.appendChild(h); w.appendChild(p); area.appendChild(w);
+      w.appendChild(orb); w.appendChild(h); w.appendChild(p);
+      var roster=document.createElement('div'); roster.id='waiting-roster'; roster.style.cssText='width:100%;display:flex;flex-direction:column;align-items:center;margin-top:4px';
+      w.appendChild(roster); area.appendChild(w);
       if(counter) counter.textContent='— responses';
+      // roster renders after participants fetch / ws update
+      try{ renderWaitingRoster(); }catch(e){}
       return;
     }
     renderMedia(area, active);
@@ -405,7 +455,7 @@
   setInterval(tickCountdown, 250);
 
   var ws=null; var wsBackoff=1000; var wsTimer=null;
-  function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/events/'+encodeURIComponent(code); }
+  function wsUrl(){ return (location.protocol==='https:'?'wss://':'ws://')+location.host+'/ws/events/'+encodeURIComponent(code)+'?observer=1'; }
   function fetchState(){
     if(!code) return;
     fetch('/api/events/'+encodeURIComponent(code)+'/state',{credentials:'same-origin'}).then(function(r){return r.json()}).then(applyState).catch(function(){});
@@ -427,6 +477,16 @@
     ws.onmessage=function(ev){
       try{
         var m=JSON.parse(ev.data);
+        if(m.type==='participants' && m.data){
+          participantsData={count: m.data.count||0, participants: Array.isArray(m.data.participants)?m.data.participants:[]};
+          renderWaitingRoster();
+          return;
+        }
+        if(m.type==='nav' && m.data && typeof m.data.index==='number'){
+          // deck nav sync — keep slide indicator in sync if present
+          // no direct action needed; projector deck handles its own iframe
+          return;
+        }
         if(m.type==='slide'){
           var sd=m.data || m;
           var slide={index:sd.index, total:sd.total, title:sd.title||''};
@@ -449,6 +509,6 @@
     document.getElementById('prompt-area').textContent='No code in URL. Open /live/YOURCODE';
   } else {
     document.getElementById('event-code').textContent=code;
-    fetchState(); connect();
+    fetchState(); fetchParticipants(); connect();
   }
 })();

@@ -1,4 +1,4 @@
-import { computed, isRef, ref, watchEffect, type Ref } from 'vue'
+import { computed, isRef, ref, shallowRef, watchEffect, type Ref } from 'vue'
 
 /**
  * useLiveRoom — a tiny shared client for the slides live-question server.
@@ -118,6 +118,20 @@ function env(key: string): string {
   }
 }
 
+function queryParam(key: string): string {
+  if (typeof location === 'undefined') return ''
+  try {
+    const fromSearch = new URLSearchParams(location.search).get(key) || ''
+    if (fromSearch) return fromSearch
+    const h = location.hash || ''
+    const qi = h.indexOf('?')
+    if (qi >= 0) return new URLSearchParams(h.slice(qi + 1)).get(key) || ''
+    return ''
+  } catch {
+    return ''
+  }
+}
+
 function readValue<T>(value: Value<T> | undefined, fallback: T): T {
   if (value === undefined) return fallback
   return isRef(value) ? value.value : value
@@ -138,6 +152,7 @@ class RoomClient {
   sessionExpired = ref(false)
   rejoinUrl = ref('')
   joinSession = ref<JoinSession | null>(null)
+  remoteNav = ref<{ index: number } | null>(null)
   private ws: WebSocket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
   private backoff = 1000
@@ -160,11 +175,11 @@ class RoomClient {
   private wsUrl(): string {
     const origin = this.origin
     if (origin) {
-      return origin.replace(/^http/, 'ws') + '/ws/events/' + encodeURIComponent(this.eventCode)
+      return origin.replace(/^http/, 'ws') + '/ws/events/' + encodeURIComponent(this.eventCode) + '?observer=1'
     }
     const proto = typeof location !== 'undefined' && location.protocol === 'https:' ? 'wss://' : 'ws://'
     const host = typeof location !== 'undefined' ? location.host : ''
-    return proto + host + '/ws/events/' + encodeURIComponent(this.eventCode)
+    return proto + host + '/ws/events/' + encodeURIComponent(this.eventCode) + '?observer=1'
   }
 
   private stateUrl(): string {
@@ -310,6 +325,8 @@ class RoomClient {
               const url = m?.data?.rejoin_url || m?.rejoin_url || ''
               this.markSessionExpired(url)
             }
+          } else if (m.type === 'nav') { const d = (m.data && typeof m.data.index === 'number') ? m.data : m; if (typeof d.index === 'number') this.remoteNav.value = { index: d.index } } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
+            // ignore / keep connected
           } else {
             // unknown type — ignore for backward compat
           }
@@ -480,11 +497,11 @@ export function useLiveRoom(options: {
 } = {}) {
   const baseUrl = computed(() => {
     const explicit = readValue(options.base, '')
-    return explicit || env('VITE_LIVE_BASE_URL')
+    return explicit || queryParam('base') || env('VITE_LIVE_BASE_URL')
   })
 
-  const explicitEvent = computed(() => readValue(options.event, '') || env('VITE_EVENT_CODE'))
-  const explicitRoom = computed(() => readValue(options.room, '') || env('VITE_ROOM_CODE'))
+  const explicitEvent = computed(() => readValue(options.event, '') || queryParam('event') || env('VITE_EVENT_CODE'))
+  const explicitRoom = computed(() => readValue(options.room, '') || queryParam('room') || env('VITE_ROOM_CODE'))
 
   const resolvedCode = ref('')
   const resolveError = ref(false)
@@ -515,7 +532,9 @@ export function useLiveRoom(options: {
     return () => { active = false }
   })
 
-  const client = ref<RoomClient | null>(null)
+  // shallowRef: a deep reactive proxy would auto-unwrap the nested refs on
+  // RoomClient (state, answerResult, …) to their raw values, breaking .value.
+  const client = shallowRef<RoomClient | null>(null)
   watchEffect(() => {
     if (resolvedCode.value) {
       client.value = roomClient(resolvedCode.value, baseUrl.value)
@@ -557,6 +576,7 @@ export function useLiveRoom(options: {
   const answerResult = computed<AnswerResult | null>(() => client.value?.answerResult.value ?? null)
   const remainingSec = computed<number | null>(() => client.value?.remainingSec.value ?? null)
   const currentSlide = computed<SlideInfo | null>(() => client.value?.currentSlide.value ?? null)
+  const remoteNav = computed<{ index: number } | null>(() => client.value?.remoteNav.value ?? null)
 
   function mediaUrl(raw?: string): string {
     if (!raw) return ''
@@ -602,6 +622,7 @@ export function useLiveRoom(options: {
     answerResult,
     remainingSec,
     currentSlide,
+    remoteNav,
     sendIdentity,
     sendSlide,
     rejoin,

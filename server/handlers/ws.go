@@ -94,16 +94,54 @@ func sessionExpiredFrame(ev *db.Event) []byte {
 	return b
 }
 
+func isObserver(r *http.Request) bool {
+	switch r.URL.Query().Get("observer") {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
+}
+
+func broadcastParticipants(ev *db.Event) {
+	parts, err := db.ListParticipants(ev.ID)
+	if err != nil {
+		return
+	}
+	type dto struct {
+		Name  string `json:"name"`
+		Emoji string `json:"emoji"`
+		Color string `json:"color"`
+	}
+	out := make([]dto, 0, len(parts))
+	for _, p := range parts {
+		name := p.DisplayName
+		if name == "" {
+			name = "Anonymous"
+		}
+		emoji := p.Emoji
+		if emoji == "" {
+			emoji = "\U0001f642"
+		}
+		out = append(out, dto{Name: name, Emoji: emoji, Color: p.Color})
+	}
+	_ = Broker.BroadcastParticipants(ev.Code, map[string]any{"count": len(out), "participants": out})
+}
+
 func EventWS(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
 		jsonError(w, "event not found", http.StatusNotFound)
 		return
 	}
-	isPresenter := sessionUser(r) != nil
+
+	observer := isObserver(r)
 	var pid int64
 	var expired bool
-	if isPresenter {
+	isPresenter := sessionUser(r) != nil
+	if observer {
+		pid = 0
+	} else if isPresenter {
 		pid = participantID(w, r, ev.ID)
 	} else {
 		pid, _, expired = resolveJoinForWS(w, r, ev)
@@ -148,6 +186,9 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 	if !sendState() {
 		return
 	}
+	if !observer && pid != 0 {
+		go func(e *db.Event) { time.Sleep(120 * time.Millisecond); broadcastParticipants(e) }(ev)
+	}
 
 	ticker := time.NewTicker(25 * time.Second)
 	defer ticker.Stop()
@@ -179,7 +220,7 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide {
+			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide || fr.Kind == live.KindParticipants || fr.Kind == live.KindNav {
 				if err := writeRaw(ctx, c, fr.Data); err != nil {
 					return
 				}
@@ -363,6 +404,7 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 			_ = db.UpdateParticipantIdentity(pid, name, emoji, color)
 			db.InvalidateLeaderboard(ev.ID)
 			BroadcastEvent(ev.ID)
+			broadcastParticipants(ev)
 		}
 		env := okEnvelope("identity")
 		return env
@@ -423,11 +465,7 @@ func AdminEventStatsWS(w http.ResponseWriter, r *http.Request) {
 			if !open {
 				return
 			}
-			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide {
-				// forward slide frames? admin stats ignores but forward is fine; ignore like reactions for stats
-				if fr.Kind == live.KindSlide {
-					// optionally forward raw; we just ignore for stats but don't block
-				}
+			if fr.Kind == live.KindReactions || fr.Kind == live.KindSlide || fr.Kind == live.KindParticipants || fr.Kind == live.KindNav {
 				continue
 			}
 			if fresh, err := db.GetEventByID(ev.ID); err == nil && fresh != nil {

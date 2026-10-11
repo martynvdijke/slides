@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Meetup — Gather. Ask. React.</title>
 <meta name="description" content="Meetup — the live event toolkit for polls, Q&A and instant feedback.">
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
@@ -102,6 +102,23 @@
   </footer>
 </main>
 
+<style>
+  .site-header { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
+  .container { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
+  .btn { min-height: 44px; }
+  @media (max-width: 430px){
+    .container { width: min(100% - 20px, 1120px); }
+    .hero { padding-block: 28px 20px; }
+    .hero-grid { gap: 20px; }
+    .display { font-size: clamp(2rem, 10vw, 2.8rem); margin-block: 10px; }
+    .lead { font-size: 0.98rem; }
+    .mock { padding: 12px; border-radius: 16px; }
+    .mock-screen { padding: 14px; }
+    .two-col { gap: 14px; }
+    .card-pad { padding: 16px; }
+    footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  }
+</style>
 <div id="toast-root" aria-live="polite" aria-atomic="true"></div>
 <script>
 function initUmamiTracking(){

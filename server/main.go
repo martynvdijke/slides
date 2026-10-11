@@ -60,6 +60,22 @@ func main() {
 	if _, err := db.DeleteExpiredJoinSessions(); err != nil {
 		log.Printf("cleanup join sessions: %v", err)
 	}
+	if envTruthy("SEED_FEATURE_TEST") {
+		ev, created, err := db.EnsureEvent("feature-test", "Feature test", "Deterministic event for the feature-test deck")
+		switch {
+		case err != nil:
+			log.Printf("seed feature-test event: %v", err)
+		case created:
+			log.Printf("seeded feature-test event code=%s room=%s", ev.Code, ev.RoomCode)
+		default:
+			log.Printf("feature-test event present code=%s room=%s", ev.Code, ev.RoomCode)
+		}
+	}
+	if envTruthy("SEED_DECK_QUESTIONS") {
+		if err := db.SeedDeckQuestionsFromDir(decksDir); err != nil {
+			log.Printf("seed deck questions: %v", err)
+		}
+	}
 
 	mux := http.NewServeMux()
 
@@ -91,6 +107,7 @@ func main() {
 	mux.HandleFunc("GET /api/events/{code}/presentations/{id}/download", handlers.DownloadPresentation)
 	mux.HandleFunc("GET /api/events/{code}/qr.png", handlers.EventQR)
 	mux.HandleFunc("GET /api/events/{code}/leaderboard", handlers.PublicGetLeaderboard)
+	mux.HandleFunc("GET /api/events/{code}/participants", handlers.PublicListParticipants)
 	mux.HandleFunc("GET /api/events/{code}/results", handlers.GetEventResults)
 	mux.HandleFunc("POST /api/events/{code}/recap/subscribe", handlers.RecapSubscribe)
 	mux.HandleFunc("POST /api/events/{code}/recap/unsubscribe", handlers.RecapUnsubscribe)
@@ -128,6 +145,8 @@ func main() {
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/presentations/{pid}", handlers.AdminDeletePresentation)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/export.csv", handlers.AdminExportCSV)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/leaderboard", handlers.AdminGetLeaderboard)
+	adminMux.HandleFunc("GET /api/admin/events/{id}/participants", handlers.AdminListParticipants)
+	adminMux.HandleFunc("POST /api/admin/events/{id}/slide", handlers.AdminSlideControl)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/recap", handlers.AdminListRecapSubscriptions)
 	adminMux.HandleFunc("DELETE /api/admin/events/{id}/recap/{sid}", handlers.AdminDeleteRecapSubscription)
 	adminMux.HandleFunc("GET /api/admin/events/{id}/recap/preview", handlers.AdminGetRecapPreview)
@@ -339,4 +358,15 @@ func getEnv(key, fallback string) string {
 		return val
 	}
 	return fallback
+}
+
+// envTruthy reports whether an env var is set to a truthy value
+// (1/true/yes/on, case-insensitive).
+func envTruthy(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv(key))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }

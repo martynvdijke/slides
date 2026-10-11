@@ -31,8 +31,8 @@ let clockTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => { clockTimer = setInterval(() => { nowMs.value = Date.now() }, 250) })
 onUnmounted(() => { if (clockTimer) clearInterval(clockTimer); clockTimer = null })
 
-const isImage = computed(() => (active.value?.media_type || '').startsWith('image/'))
-const isVideo = computed(() => (active.value?.media_type || '').startsWith('video/'))
+const isImage = computed(() => (active.value?.media_type || '').startsWith('image'))
+const isVideo = computed(() => (active.value?.media_type || '').startsWith('video'))
 const revealVisible = computed(() => {
   const a = active.value
   if (!a) return false

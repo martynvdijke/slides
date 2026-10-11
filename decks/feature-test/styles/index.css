@@ -1,0 +1,203 @@
+/* ── Mobile polish for Slidev decks ──
+   Desktop / projector (>768px) is untouched — every rule is inside max-width:768px.
+   Portrait phones: thin 16/9 band becomes a card anchored top on a glass background
+   with a subtle rotate hint; the hover control bar is hidden to reduce clutter.
+   Landscape phones: slide fills height; controls stay compact.
+*/
+
+@media (max-width: 768px) {
+  /* Use real mobile viewport height when Slidev sets --vh */
+  #page-root {
+    height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
+    overflow: hidden;
+  }
+  #slide-container.slidev-slide-container {
+    height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
+  }
+
+  /* ── Bottom control bar: compact & non-intrusive on small screens ──
+     Selector matches: <div class="absolute bottom-0 left-0 ... opacity-0 hover:opacity-*"> */
+  #slide-container > div.absolute.bottom-0 {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  #slide-container > div.absolute.bottom-0 nav > div {
+    gap: 2px !important;
+    padding: 6px 8px !important;
+    font-size: 14px !important;
+  }
+  #slide-container > div.absolute.bottom-0 nav button,
+  #slide-container > div.absolute.bottom-0 nav a {
+    min-width: 32px;
+    min-height: 32px;
+    display: inline-grid;
+    place-items: center;
+  }
+  /* keep progress bar subtle */
+  #slidev-progress-bar {
+    height: 2px !important;
+    opacity: 0.9;
+  }
+}
+
+/* ── Portrait phones: the critical fix ── */
+@media (max-width: 768px) and (orientation: portrait) {
+  /* collapse 2-col grid to single column */
+  #page-root.grid {
+    display: block !important;
+    grid-template-columns: 1fr !important;
+    background: #0a1020;
+  }
+
+  /* Glass chrome replaces black letterbox */
+  #slide-container.slidev-slide-container {
+    background:
+      radial-gradient(900px circle at 18% 6%, rgba(50,108,229,0.22), transparent 58%),
+      radial-gradient(700px circle at 92% 78%, rgba(99,102,241,0.16), transparent 60%),
+      radial-gradient(600px circle at 50% -8%, rgba(56,189,248,0.10), transparent 60%),
+      #0a1020 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    padding-top: 10px !important;
+    padding-bottom: 0 !important;
+    overflow: hidden !important;
+  }
+
+  /* Anchor slide as a card at top — overrides JS inline matrix */
+  #slide-content.slidev-slide-content {
+    position: relative !important;
+    left: 0 !important;
+    right: auto !important;
+    top: 0 !important;
+    bottom: auto !important;
+    transform: scale(calc(100vw / 980px)) !important;
+    transform-origin: top center !important;
+    border-radius: 14px !important;
+    overflow: hidden !important;
+    box-shadow:
+      0 14px 44px rgba(0,0,0,0.48),
+      0 2px 10px rgba(0,0,0,0.30),
+      0 0 0 1px rgba(255,255,255,0.10) !important;
+    flex-shrink: 0;
+  }
+
+  /* Optional decorative grain inside the slide (inherited) stays */
+
+  /* Hide the heavy control bar entirely in portrait — swipe/keys still work.
+     It sits in the letterbox and looks like clutter. */
+  #slide-container > div.absolute.bottom-0 {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    visibility: hidden !important;
+  }
+  /* Reveal on focus-within for keyboard / a11y users who tab */
+  #slide-container:focus-within > div.absolute.bottom-0 {
+    opacity: 0.85 !important;
+    pointer-events: auto !important;
+    visibility: visible !important;
+  }
+
+  /* Meetup's fixed blue footer would float over letterbox — hide on portrait */
+  body::after,
+  .global-k8s-footer {
+    display: none !important;
+  }
+
+  /* ── Rotate hint: tasteful pill in the glass area ── */
+  #slide-container.slidev-slide-container::after {
+    content: "↻  Rotate to landscape for the best view  ·  swipe to navigate";
+    position: absolute;
+    left: 50%;
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    max-width: calc(100vw - 32px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+    font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    font-size: 11.5px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    line-height: 1;
+    color: #e2e8f0;
+    background: rgba(15,23,42,0.88);
+    border: 1px solid rgba(255,255,255,0.14);
+    padding: 10px 16px;
+    border-radius: 999px;
+    box-shadow: 0 6px 22px rgba(0,0,0,0.28), 0 1px 0 rgba(255,255,255,0.06) inset;
+    backdrop-filter: blur(10px) saturate(1.2);
+    -webkit-backdrop-filter: blur(10px) saturate(1.2);
+    pointer-events: none;
+    z-index: 5;
+  }
+
+}
+
+@media (max-width: 360px) and (orientation: portrait) {
+  #slide-container.slidev-slide-container::after {
+    content: "↻  Rotate for best view";
+    font-size: 11px !important;
+    padding: 9px 14px !important;
+  }
+}
+
+/* ── Landscape phones / small tablets in landscape ── */
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 500px) {
+  #page-root.grid {
+    height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
+  }
+  #slide-container.slidev-slide-container {
+    height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
+    display: grid !important;
+    place-items: center !important;
+    background: #0a1020;
+  }
+  /* Let Slidev's JS centering do its job in landscape — just ensure no extra chrome */
+  #slide-content.slidev-slide-content {
+    border-radius: 10px !important;
+    overflow: hidden !important;
+    box-shadow: 0 10px 36px rgba(0,0,0,0.40), 0 0 0 1px rgba(255,255,255,0.08) !important;
+  }
+  /* Compact control bar stays visible but minimal */
+  #slide-container > div.absolute.bottom-0 {
+    opacity: 0.22 !important;
+    transition: opacity 0.22s ease;
+  }
+  #slide-container > div.absolute.bottom-0:hover,
+  #slide-container > div.absolute.bottom-0:focus-within {
+    opacity: 1 !important;
+  }
+  #slide-container > div.absolute.bottom-0 nav > div {
+    padding: 4px 6px !important;
+    font-size: 13px !important;
+  }
+  /* Hide rotate hint in landscape */
+  #slide-container.slidev-slide-container::after {
+    display: none !important;
+  }
+  /* Footer stays but slimmer */
+  .global-k8s-footer {
+    height: 22px !important;
+    font-size: 9.5px !important;
+    padding: 0 10px !important;
+  }
+  body::after {
+    height: 22px !important;
+  }
+}
+
+/* ── In-slide live components live inside 980×552 canvas — no per-component hacks needed.
+   Canvas scaling handles legibility. Guard against overflow on the smallest viewports. ── */
+@media (max-width: 768px) and (orientation: portrait) {
+  .live-join,
+  .live-q,
+  .live-qa {
+    max-width: 100%;
+  }
+}

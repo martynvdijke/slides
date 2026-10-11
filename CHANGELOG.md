@@ -1,3 +1,53 @@
+# [1.16.0](https://github.com/martynvdijke/slides/compare/v1.15.1...v1.16.0) (2026-10-10)
+
+
+### Features
+
+* **feature-test:** define all eight question kinds in the deck ([a20da91](https://github.com/martynvdijke/slides/commit/a20da91cf98c3fb971aeb14b6623f44a1edddfdb))
+
+## [1.15.1](https://github.com/martynvdijke/slides/compare/v1.15.0...v1.15.1) (2026-10-10)
+
+
+### Bug Fixes
+
+* **deck:** navigate on tap/click anywhere on a slide ([9003992](https://github.com/martynvdijke/slides/commit/90039928aace9b37f0bc1a2c094f801e1f6c4e5a)), closes [#slide-container](https://github.com/martynvdijke/slides/issues/slide-container)
+* **entry:** reflect signed-in state on the homepage ([1015c75](https://github.com/martynvdijke/slides/commit/1015c750ebab45f4ab7e52cae4d3f0ed8cf7b3f8)), closes [#host-copy](https://github.com/martynvdijke/slides/issues/host-copy) [#host-cta](https://github.com/martynvdijke/slides/issues/host-cta)
+
+# [1.15.0](https://github.com/martynvdijke/slides/compare/v1.14.0...v1.15.0) (2026-10-10)
+
+
+### Features
+
+* **app:** waiting-room roster, feature-aware tabs, and admin deck controls ([e17e314](https://github.com/martynvdijke/slides/commit/e17e314f2ccc9002b7b0458f87ce689a58753419))
+* **deck:** per-deck feature flags and remote deck navigation ([150b26b](https://github.com/martynvdijke/slides/commit/150b26bd4989c6e35cde79a3b3998d909bc428f9))
+* **server:** waiting-room participant roster, admin deck control, and per-deck feature flags ([c07b003](https://github.com/martynvdijke/slides/commit/c07b00303521e89038c4f6a8842611205ed57a2a))
+
+# [1.14.0](https://github.com/martynvdijke/slides/compare/v1.13.3...v1.14.0) (2026-10-10)
+
+
+### Bug Fixes
+
+* **entry:** stop force-redirecting signed-in users to the dashboard ([af52cc2](https://github.com/martynvdijke/slides/commit/af52cc20468f009c129363e16bec867bc7ae68a5))
+
+
+### Features
+
+* **app:** mobile polish for the attendee web app ([7e42751](https://github.com/martynvdijke/slides/commit/7e42751281c96bda76a19732d199f96f57c0a964))
+* **deck:** mobile-friendly slide layout on phones ([5b68317](https://github.com/martynvdijke/slides/commit/5b683171bf780a0be90a793057dc25f825dc5852))
+* **live:** connect feature-test deck to the container backend ([8966bd7](https://github.com/martynvdijke/slides/commit/8966bd72f715f41727fb0a46c55e001b8a565298))
+* **questions:** seed live questions from deck markdown on startup ([0b5aa88](https://github.com/martynvdijke/slides/commit/0b5aa8829f27a9c95e67cc7a3aae0eeb38323cb1))
+
+## [1.13.3](https://github.com/martynvdijke/slides/compare/v1.13.2...v1.13.3) (2026-10-10)
+
+
+### Bug Fixes
+
+* render in-slide live components and question media ([bf8fba0](https://github.com/martynvdijke/slides/commit/bf8fba0c36c17b35c400e8db5c85cdb55b2e4854))
+
+## [1.13.2](https://github.com/martynvdijke/slides/compare/v1.13.1...v1.13.2) (2026-10-09)
+
+## [1.13.1](https://github.com/martynvdijke/slides/compare/v1.13.0...v1.13.1) (2026-10-08)
+
 # [1.13.0](https://github.com/martynvdijke/slides/compare/v1.12.0...v1.13.0) (2026-10-06)
 
 

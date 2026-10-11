@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -49,20 +50,25 @@ type Session struct {
 }
 
 type Event struct {
-	ID               int64
-	Code             string
-	RoomCode         string
-	Name             string
-	Description      string
-	EventDate        string
-	Status           string
-	FeedbackOpen     bool
-	ShowPodium       bool
-	QASlowModeS      int
-	ResultsPublished bool
-	CreatedAt        time.Time
-	QuestionCount    int
-	PendingQACount   int
+	ID                 int64
+	Code               string
+	RoomCode           string
+	Name               string
+	Description        string
+	EventDate          string
+	Status             string
+	FeedbackOpen       bool
+	ShowPodium         bool
+	QASlowModeS        int
+	ResultsPublished   bool
+	FeatureLive        bool
+	FeatureQA          bool
+	FeatureSlides      bool
+	FeatureFeedback    bool
+	FeatureLeaderboard bool
+	CreatedAt          time.Time
+	QuestionCount      int
+	PendingQACount     int
 }
 
 type Presentation struct {
@@ -534,6 +540,20 @@ func migrate() error {
 	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_external ON questions(event_id, external_id) WHERE external_id <> ''"); err != nil {
 		return err
 	}
+	if err := ensureColumn("questions", "seed_key", "seed_key TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	for _, col := range []struct{ name, ddl string }{
+		{"feature_live", "feature_live INTEGER NOT NULL DEFAULT 1"},
+		{"feature_qa", "feature_qa INTEGER NOT NULL DEFAULT 1"},
+		{"feature_slides", "feature_slides INTEGER NOT NULL DEFAULT 1"},
+		{"feature_feedback", "feature_feedback INTEGER NOT NULL DEFAULT 1"},
+		{"feature_leaderboard", "feature_leaderboard INTEGER NOT NULL DEFAULT 1"},
+	} {
+		if err := ensureColumn("events", col.name, col.ddl); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -917,13 +937,17 @@ func DeleteExpiredSessions() error {
 // events
 
 func scanEventRow(row *sql.Row) (*Event, error) {
+	if DB == nil {
+		return nil, sql.ErrNoRows
+	}
 	var e Event
 	var fo int
 	var sp int
 	var sm int
 	var rp int
+	var fl, fq, fs, ff, flb int
 	var ca string
-	err := row.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca)
+	err := row.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &fl, &fq, &fs, &ff, &flb, &ca)
 	if err != nil {
 		return nil, err
 	}
@@ -931,6 +955,11 @@ func scanEventRow(row *sql.Row) (*Event, error) {
 	e.ShowPodium = sp == 1
 	e.QASlowModeS = sm
 	e.ResultsPublished = rp == 1
+	e.FeatureLive = fl == 1
+	e.FeatureQA = fq == 1
+	e.FeatureSlides = fs == 1
+	e.FeatureFeedback = ff == 1
+	e.FeatureLeaderboard = flb == 1
 	e.CreatedAt = parseTimePragmatic(ca)
 	// populate counts
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=?", e.ID).Scan(&e.QuestionCount)
@@ -944,8 +973,9 @@ func scanEventRows(rows *sql.Rows) (*Event, error) {
 	var sp int
 	var sm int
 	var rp int
+	var fl, fq, fs, ff, flb int
 	var ca string
-	err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca)
+	err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &fl, &fq, &fs, &ff, &flb, &ca)
 	if err != nil {
 		return nil, err
 	}
@@ -953,6 +983,11 @@ func scanEventRows(rows *sql.Rows) (*Event, error) {
 	e.ShowPodium = sp == 1
 	e.QASlowModeS = sm
 	e.ResultsPublished = rp == 1
+	e.FeatureLive = fl == 1
+	e.FeatureQA = fq == 1
+	e.FeatureSlides = fs == 1
+	e.FeatureFeedback = ff == 1
+	e.FeatureLeaderboard = flb == 1
 	e.CreatedAt = parseTimePragmatic(ca)
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=?", e.ID).Scan(&e.QuestionCount)
 	_ = DB.QueryRow("SELECT COUNT(*) FROM qa_questions WHERE event_id=? AND status='pending'", e.ID).Scan(&e.PendingQACount)
@@ -969,7 +1004,7 @@ func CreateEvent(name, code, description, eventDate string) (*Event, error) {
 }
 
 func ListEvents() ([]Event, error) {
-	rows, err := DB.Query("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
+	rows, err := DB.Query("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard, created_at, (SELECT COUNT(*) FROM questions WHERE event_id=events.id) as qc, (SELECT COUNT(*) FROM qa_questions WHERE event_id=events.id AND status='pending') as pc FROM events ORDER BY created_at DESC, id DESC")
 	if err != nil {
 		return nil, err
 	}
@@ -981,14 +1016,20 @@ func ListEvents() ([]Event, error) {
 		var sp int
 		var sm int
 		var rp int
+		var fl, fq, fs, ff, flb int
 		var ca string
-		if err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
+		if err := rows.Scan(&e.ID, &e.Code, &e.RoomCode, &e.Name, &e.Description, &e.EventDate, &e.Status, &fo, &sp, &sm, &rp, &fl, &fq, &fs, &ff, &flb, &ca, &e.QuestionCount, &e.PendingQACount); err != nil {
 			return nil, err
 		}
 		e.FeedbackOpen = fo == 1
 		e.ShowPodium = sp == 1
 		e.QASlowModeS = sm
 		e.ResultsPublished = rp == 1
+		e.FeatureLive = fl == 1
+		e.FeatureQA = fq == 1
+		e.FeatureSlides = fs == 1
+		e.FeatureFeedback = ff == 1
+		e.FeatureLeaderboard = flb == 1
 		e.CreatedAt = parseTimePragmatic(ca)
 		out = append(out, e)
 	}
@@ -996,12 +1037,18 @@ func ListEvents() ([]Event, error) {
 }
 
 func GetEventByID(id int64) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE id=?", id)
+	if DB == nil {
+		return nil, sql.ErrNoRows
+	}
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard, created_at FROM events WHERE id=?", id)
 	return scanEventRow(row)
 }
 
 func GetEventByCode(code string) (*Event, error) {
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE code=?", code)
+	if DB == nil {
+		return nil, sql.ErrNoRows
+	}
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard, created_at FROM events WHERE code=?", code)
 	e, err := scanEventRow(row)
 	if err != nil {
 		return nil, err
@@ -1012,11 +1059,14 @@ func GetEventByCode(code string) (*Event, error) {
 
 // GetEventByRoomCode looks up an event by its short, case-insensitive join code.
 func GetEventByRoomCode(code string) (*Event, error) {
+	if DB == nil {
+		return nil, sql.ErrNoRows
+	}
 	rc := NormalizeRoomCode(code)
 	if rc == "" {
 		return nil, sql.ErrNoRows
 	}
-	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, created_at FROM events WHERE room_code=?", rc)
+	row := DB.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, show_podium, qa_slow_mode_s, results_published, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard, created_at FROM events WHERE room_code=?", rc)
 	return scanEventRow(row)
 }
 
@@ -1036,16 +1086,62 @@ func SetEventRoomCode(id int64, code string) error {
 	return err
 }
 
+// EnsureEvent returns the event with the given stable code, creating it (with a
+// freshly generated unique room code) when it does not already exist. It is
+// idempotent and safe to call on every startup; it is used to seed a
+// deterministic event (e.g. the feature-test deck) on demand.
+func EnsureEvent(code, name, description string) (*Event, bool, error) {
+	if e, err := GetEventByCode(code); err == nil {
+		return e, false, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return nil, false, err
+	}
+
+	e, err := CreateEvent(name, code, description, "")
+	if err != nil {
+		// A concurrent startup may have inserted the same code; re-read.
+		if existing, getErr := GetEventByCode(code); getErr == nil {
+			return existing, false, nil
+		}
+		return nil, false, err
+	}
+
+	for attempt := 0; attempt < 20; attempt++ {
+		rc, err := GenRoomCode()
+		if err != nil {
+			return e, true, err
+		}
+		exists, err := RoomCodeExists(rc)
+		if err != nil {
+			return e, true, err
+		}
+		if exists {
+			continue
+		}
+		if err := SetEventRoomCode(e.ID, rc); err != nil {
+			return e, true, err
+		}
+		e.RoomCode = rc
+		return e, true, nil
+	}
+	return e, true, nil
+}
+
 func UpdateEvent(id int64, fields map[string]any) (*Event, error) {
 	allowed := map[string]string{
-		"name":              "name",
-		"description":       "description",
-		"event_date":        "event_date",
-		"status":            "status",
-		"feedback_open":     "feedback_open",
-		"show_podium":       "show_podium",
-		"qa_slow_mode_s":    "qa_slow_mode_s",
-		"results_published": "results_published",
+		"name":                "name",
+		"description":         "description",
+		"event_date":          "event_date",
+		"status":              "status",
+		"feedback_open":       "feedback_open",
+		"show_podium":         "show_podium",
+		"qa_slow_mode_s":      "qa_slow_mode_s",
+		"results_published":   "results_published",
+		"feature_live":        "feature_live",
+		"feature_qa":          "feature_qa",
+		"feature_slides":      "feature_slides",
+		"feature_feedback":    "feature_feedback",
+		"feature_leaderboard": "feature_leaderboard",
 	}
 	var sets []string
 	var args []any
@@ -1055,7 +1151,7 @@ func UpdateEvent(id int64, fields map[string]any) (*Event, error) {
 			continue
 		}
 		sets = append(sets, col+"=?")
-		if col == "feedback_open" || col == "show_podium" || col == "results_published" {
+		if col == "feedback_open" || col == "show_podium" || col == "results_published" || col == "feature_live" || col == "feature_qa" || col == "feature_slides" || col == "feature_feedback" || col == "feature_leaderboard" {
 			switch val := v.(type) {
 			case bool:
 				args = append(args, btoi(val))
@@ -1097,6 +1193,39 @@ func EventCodeExists(code string) (bool, error) {
 	var n int
 	err := DB.QueryRow("SELECT COUNT(*) FROM events WHERE code=?", code).Scan(&n)
 	return n > 0, err
+}
+
+func ListParticipants(eventID int64) ([]Participant, error) {
+	rows, err := DB.Query("SELECT id,event_id,token,created_at,display_name,emoji,color,last_seen FROM participants WHERE event_id=? ORDER BY last_seen DESC, id DESC LIMIT 200", eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Participant
+	for rows.Next() {
+		var p Participant
+		var ca string
+		var dn, em, cl sql.NullString
+		var ls sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.EventID, &p.Token, &ca, &dn, &em, &cl, &ls); err != nil {
+			return nil, err
+		}
+		p.CreatedAt = parseTimePragmatic(ca)
+		if dn.Valid {
+			p.DisplayName = dn.String
+		}
+		if em.Valid {
+			p.Emoji = em.String
+		}
+		if cl.Valid {
+			p.Color = cl.String
+		}
+		if ls.Valid {
+			p.LastSeen = ls.Int64
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
 }
 
 // presentations
@@ -1622,6 +1751,18 @@ func RevealQuestion(eventID, questionID int64) error {
 		return fmt.Errorf("question cannot be revealed from status %q", status)
 	}
 	return nil
+}
+
+// SetQuestionSeedKey stores the stable seed key for a question.
+func SetQuestionSeedKey(id int64, key string) error {
+	_, err := DB.Exec("UPDATE questions SET seed_key=? WHERE id=?", key, id)
+	return err
+}
+
+// GetQuestionBySeedKey returns the question with the given seed key for the event.
+func GetQuestionBySeedKey(eventID int64, key string) (*Question, error) {
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND seed_key=?", eventID, key)
+	return scanQuestionRow(row)
 }
 
 // ValidQuestionKind reports whether kind is a supported question type.

@@ -13,9 +13,11 @@ type Frame struct {
 }
 
 const (
-	KindRefresh   = "refresh"
-	KindReactions = "reactions"
-	KindSlide     = "slide"
+	KindRefresh      = "refresh"
+	KindReactions    = "reactions"
+	KindSlide        = "slide"
+	KindParticipants = "participants"
+	KindNav          = "nav"
 )
 
 type Slide struct {
@@ -176,6 +178,22 @@ func (b *Broker) GetSlide(event string) (Slide, bool) {
 	defer b.sMu.Unlock()
 	s, ok := b.slides[event]
 	return s, ok
+}
+
+func (b *Broker) BroadcastParticipants(event string, payload any) error {
+	inner, _ := json.Marshal(payload)
+	env := map[string]any{"type": "participants", "data": json.RawMessage(inner)}
+	data, _ := json.Marshal(env)
+	b.broadcastFrame(event, Frame{Kind: KindParticipants, Data: data})
+	return nil
+}
+
+func (b *Broker) BroadcastNav(event string, index int) error {
+	inner, _ := json.Marshal(map[string]int{"index": index})
+	env := map[string]any{"type": "nav", "data": json.RawMessage(inner)}
+	data, _ := json.Marshal(env)
+	b.broadcastFrame(event, Frame{Kind: KindNav, Data: data})
+	return nil
 }
 
 func (b *Broker) BroadcastSlide(event string, s Slide) {

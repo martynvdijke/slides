@@ -20,6 +20,8 @@ them at a hosted backend.
 
 - [`meetup`](./decks/meetup) — Dutch Kubernetes/Cloud Native Meetup, with live Q&A, polls and feedback slides.
 - [`opencode`](./decks/opencode) — OpenCode: what it is, the Console, Go, running it at home, and OpenCode Web on your phone.
+- [`feature-test`](./decks/feature-test) — testing deck that exercises every live question kind, image/video prompts and all in-slide components.
+- [`test`](./decks/test) — Static quiz fixture with pre-filled slides for every question kind (single choice, multi-select, ranking, yes/no, liking scale, NPS, open text, word cloud); used by the e2e deck tests.
 
 ## Setup
 
@@ -120,9 +122,53 @@ then a visible "not configured" hint. The server URL is the `base` prop, then
 `VITE_LIVE_BASE_URL`, then same-origin (the all-in-one container). A short room
 code is resolved to the event at runtime via `GET /api/join/{room}`.
 
+### Feature-test defaults
+
+The `feature-test` deck builds with `VITE_EVENT_CODE=feature-test` baked in
+and resolves its API same-origin, so on the all-in-one container
+(`slides.vandijke.xyz`) its live components connect with no query params. The
+server seeds a deterministic `feature-test` event when `SEED_FEATURE_TEST` is
+truthy (the published image sets it to `1`). `?event=<code>` still overrides
+the baked code, and setting `VITE_EVENT_CODE` / `VITE_LIVE_BASE_URL` at build
+time overrides the defaults for other hosts.
+
 The components share one WebSocket per room and reconnect automatically. If the
 backend is unreachable they render the join card and wait, so the deck still
 works as a static presentation.
+
+### Questions defined in markdown
+
+You can define live/quiz questions directly in a deck's `slides.md` with an HTML comment block anywhere in the markdown — it renders nothing in the slides:
+
+```md
+<!-- live-question
+id: k8s-control-plane
+kind: multi
+prompt: Which of these are Kubernetes control-plane components?
+options:
+  - kube-apiserver
+  - etcd
+  - kubelet
+correct: 0
+points: 100
+time_limit_s: 30
+-->
+```
+
+Fields:
+
+- `id` — stable key for updates (optional, auto-generated if omitted).
+- `kind` — `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud`.
+- `prompt` — question text (required).
+- `options` — list of choices (requires ≥2 for `poll`/`multi`/`ranking`).
+- `correct` — correct answer as index (`0`-based) or exact option text.
+- `points` — maps to `points_base` (default `100`).
+- `mode` — `live` (default) or `feedback`.
+- `show_results` — whether to show the tally (default `true`).
+- `time_limit_s` / `duration_sec` — time limit in seconds.
+- `media_url` / `media_type` — optional image or video prompt.
+
+At build time each deck emits `dist/<deck>/questions.json`. On startup the Go server seeds those questions into the event whose `code` equals the deck name when `SEED_DECK_QUESTIONS` is truthy (the published image sets it to `1`). Re-imports on each container upgrade update existing questions in place rather than duplicating them. Markdown is the source of truth — edits to the deck are applied on the next start.
 
 ### Presenter panel
 
@@ -376,6 +422,26 @@ asserts the delivered email through a fake SMTP inbox started by
 `127.0.0.1:4173` (override with `E2E_PORT`), and starts a fake SMTP server whose
 inbox is exposed for assertions on port `E2E_PORT + 1` (override with
 `E2E_MAIL_PORT`).
+
+`e2e/feature-test.spec.ts` drives the [`feature-test`](./decks/feature-test)
+deck end to end: it points the in-slide components at a live event with
+`?event=CODE`, then walks every question kind (poll, multi, ranking, yes/no,
+rating, NPS, open, word cloud) across the audience, projector and in-slide
+views, checks image and video prompts, and exercises the presenter overlay,
+podium, leaderboard, Q&A and reactions.
+
+**Load test** (50 concurrent WebSocket participants by default):
+
+```bash
+npm run test:load
+```
+
+`e2e/load.mjs` is a dependency-free Node script. With no `LOAD_BASE_URL` it
+builds and boots the Go server itself, then opens `LOAD_USERS` (default `50`)
+concurrent WebSocket clients that each join, answer the same poll and wait for
+their scored result. It verifies the answers were persisted, prints latency
+percentiles and throughput, and exits non-zero on any failure. Point it at a
+running server with `LOAD_BASE_URL=https://host npm run test:load`.
 
 ## GitHub Pages
 
