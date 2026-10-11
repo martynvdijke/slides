@@ -1,0 +1,10 @@
+# Documentation site dependencies.
+#
+# Zensical is the static site generator used for docs/ (site/ output).
+# It requires Python >= 3.11.
+#
+#   python3 -m venv .venv && . .venv/bin/activate
+#   pip install -r docs/requirements.txt
+#   zensical build --strict --clean
+#   zensical serve   # http://localhost:8000
+zensical>=0.0.68,<0.1
