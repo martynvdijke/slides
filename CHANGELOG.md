@@ -1,3 +1,10 @@
+# [1.18.0](https://github.com/martynvdijke/slides/compare/v1.17.0...v1.18.0) (2026-10-11)
+
+
+### Features
+
+* **questions:** aggregate grid2x2 answers into scatter coordinates ([2eee056](https://github.com/martynvdijke/slides/commit/2eee056298e69f88031bc886a32f4be274d0d0d7))
+
 # [1.17.0](https://github.com/martynvdijke/slides/compare/v1.16.0...v1.17.0) (2026-10-11)
 
 
