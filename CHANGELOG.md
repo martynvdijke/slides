@@ -1,3 +1,11 @@
+## [1.20.1](https://github.com/martynvdijke/slides/compare/v1.20.0...v1.20.1) (2026-10-12)
+
+
+### Bug Fixes
+
+* **live:** auto-activate slide questions while navigating the deck ([e8d83c2](https://github.com/martynvdijke/slides/commit/e8d83c2fd31e39ee10911fadf66aaf8ffc2ad827))
+* **server:** guard nil DB in ListParticipants to prevent WS teardown panic ([77df9dc](https://github.com/martynvdijke/slides/commit/77df9dc40f48c9770640d84a6fb875502f46bf4c))
+
 # [1.20.0](https://github.com/martynvdijke/slides/compare/v1.19.1...v1.20.0) (2026-10-12)
 
 
