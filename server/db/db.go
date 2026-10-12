@@ -1198,6 +1198,9 @@ func EventCodeExists(code string) (bool, error) {
 }
 
 func ListParticipants(eventID int64) ([]Participant, error) {
+	if DB == nil {
+		return nil, sql.ErrNoRows
+	}
 	rows, err := DB.Query("SELECT id,event_id,token,created_at,display_name,emoji,color,last_seen FROM participants WHERE event_id=? ORDER BY last_seen DESC, id DESC LIMIT 200", eventID)
 	if err != nil {
 		return nil, err

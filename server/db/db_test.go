@@ -34,6 +34,16 @@ func TestMigrateIdempotent(t *testing.T) {
 	}
 }
 
+func TestListParticipantsNilDB(t *testing.T) {
+	tmpDB(t)
+	old := DB
+	DB = nil
+	defer func() { DB = old }()
+	if _, err := ListParticipants(1); err == nil {
+		t.Fatal("expected error when DB is nil, got nil")
+	}
+}
+
 func TestUsersAndSessions(t *testing.T) {
 	tmpDB(t)
 	n, _ := CountUsers()

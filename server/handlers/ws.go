@@ -187,7 +187,17 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !observer && pid != 0 {
-		go func(e *db.Event) { time.Sleep(120 * time.Millisecond); broadcastParticipants(e) }(ev)
+		go func(e *db.Event) {
+			// Delayed so an in-flight join settles before we snapshot the roster.
+			// Bail out if the connection/request ends first (avoids touching a
+			// closed DB during shutdown/test teardown).
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(120 * time.Millisecond):
+			}
+			broadcastParticipants(e)
+		}(ev)
 	}
 
 	ticker := time.NewTicker(25 * time.Second)
