@@ -5,7 +5,7 @@
   'use strict';
 
   var code=(function(){
-    var parts=location.pathname.split('/').filter(Boolean); // ["results", "<code>"]
+    var parts=location.pathname.split('/').filter(Boolean);
     return parts.length>1 ? decodeURIComponent(parts[parts.length-1]) : '';
   })();
 
@@ -37,17 +37,28 @@
     document.getElementById('results-name').textContent=ev.name||'Event';
     var meta=document.getElementById('results-meta');
     clear(meta);
-    if(ev.code) meta.appendChild(el('span','pill',ev.code));
+    if(ev.code){
+      var codePill=el('span','pill',ev.code);
+      codePill.style.fontFamily='var(--font-mono)'; codePill.style.letterSpacing='.04em'; codePill.style.textTransform='none';
+      meta.appendChild(codePill);
+    }
     var d=fmtDate(ev.event_date);
     if(d) meta.appendChild(el('span',null,d));
-    if(ev.description) meta.appendChild(el('span',null,ev.description));
+    if(ev.description){
+      var desc=el('span',null,ev.description);
+      desc.style.color='var(--muted)';
+      meta.appendChild(desc);
+    }
   }
 
   function statCard(label,value){
     var card=el('div','glass','');
-    card.style.padding='12px 14px';
-    card.appendChild(el('div','font-extrabold','')).textContent=String(value);
-    var l=el('div',null,label); l.style.color='var(--muted)'; l.style.fontSize='.78rem';
+    card.style.padding='14px 16px';
+    card.style.borderRadius='10px';
+    var v=el('div',null,String(value));
+    v.style.fontWeight='800'; v.style.fontSize='1.35rem'; v.style.letterSpacing='-.03em'; v.style.lineHeight='1'; v.style.fontVariantNumeric='tabular-nums';
+    card.appendChild(v);
+    var l=el('div',null,label); l.style.color='var(--muted)'; l.style.fontSize='.74rem'; l.style.fontWeight='600'; l.style.letterSpacing='.06em'; l.style.textTransform='uppercase'; l.style.marginTop='4px';
     card.appendChild(l);
     return card;
   }
@@ -55,11 +66,11 @@
   function renderStats(stats){
     var host=document.getElementById('results-stats');
     clear(host);
-    host.appendChild(el('h2','font-bold','Participation'));
+    var h=el('h2',null,'Participation'); h.className='section-h'; host.appendChild(h);
+    var sub=el('p',null,'Headline totals across the event.'); sub.className='section-desc'; sub.style.marginBottom='12px'; host.appendChild(sub);
     var grid=el('div','grid','');
-    grid.style.gridTemplateColumns='repeat(auto-fit,minmax(120px,1fr))';
+    grid.style.gridTemplateColumns='repeat(auto-fit,minmax(124px,1fr))';
     grid.style.gap='10px';
-    grid.style.marginTop='10px';
     grid.appendChild(statCard('Participants',stats.participants||0));
     grid.appendChild(statCard('Answers',stats.answers||0));
     grid.appendChild(statCard('Questions',stats.questions||0));
@@ -80,55 +91,57 @@
     head.style.gap='10px';
     head.style.fontSize='.86rem';
     var name=el('span',null,label);
+    name.style.fontWeight='600';
     if(opts.correct) name.textContent=label+' ✓';
-    if(opts.correct) name.style.color='#6EE7B7';
+    if(opts.correct) name.style.color='var(--success)';
     head.appendChild(name);
     var val=el('span',null,count+(opts.suffix?' '+opts.suffix:''));
-    val.style.color='var(--muted)';
+    val.style.color='var(--muted)'; val.style.fontVariantNumeric='tabular-nums';
     head.appendChild(val);
     row.appendChild(head);
     var track=el('div','track','');
+    track.style.height='8px';
     var fill=el('div','fill','');
     fill.style.width=pct(count,total)+'%';
-    if(opts.correct) fill.style.background='linear-gradient(135deg,#10B981,#22D3EE)';
+    fill.style.background = opts.correct ? 'var(--success)' : 'var(--accent)';
     track.appendChild(fill);
     row.appendChild(track);
     return row;
   }
 
   function renderQuestion(q){
-    var card=el('div','glass card-pad','');
+    var card=el('div','q-card','');
     var head=el('div',null,'');
     head.style.display='flex';
     head.style.justifyContent='space-between';
     head.style.gap='10px';
-    head.style.alignItems='baseline';
-    var prompt=el('h3','font-bold',q.prompt||'Question');
-    prompt.style.margin='0';
+    head.style.alignItems='flex-start';
+    var prompt=el('h3',null,q.prompt||'Question');
+    prompt.style.margin='0'; prompt.style.fontWeight='700'; prompt.style.letterSpacing='-.02em'; prompt.style.fontSize='1rem'; prompt.style.lineHeight='1.3';
     head.appendChild(prompt);
-    head.appendChild(el('span','pill',q.kind));
+    var kindPill=el('span','pill',q.kind); kindPill.style.fontSize='.72rem'; kindPill.style.flexShrink='0';
+    head.appendChild(kindPill);
     card.appendChild(head);
 
     var meta=el('div',null,(q.respondents||0)+' respondent'+((q.respondents===1)?'':'s')+' · '+(q.total||0)+' answer'+((q.total===1)?'':'s'));
     meta.style.color='var(--muted)';
     meta.style.fontSize='.78rem';
-    meta.style.margin='4px 0 10px';
+    meta.style.margin='4px 0 12px';
     card.appendChild(meta);
 
     var results=q.results||[];
     var total=q.total||0;
 
     if(q.kind==='wordcloud'){
-      if(!results.length){ card.appendChild(el('p',null,'No answers yet.')); return card; }
+      if(!results.length){ var p=el('p',null,'No answers yet.'); p.style.color='var(--muted)'; card.appendChild(p); return card; }
       var cloud=el('div','','');
       cloud.style.display='flex';
       cloud.style.flexWrap='wrap';
       cloud.style.gap='6px';
       var max=results[0].count||1;
       results.forEach(function(r){
-        var chip=el('span','pill',r.label+' '+r.count);
-        var scale=1+Math.round((r.count/max)*0.9*10)/10;
-        chip.style.fontSize=Math.min(1.6,scale*0.9)+'rem';
+        var chip=el('span','pill',r.label+' · '+r.count);
+        chip.style.fontSize='.84rem'; chip.style.background='var(--surface-2)';
         cloud.appendChild(chip);
       });
       card.appendChild(cloud);
@@ -137,10 +150,8 @@
 
     if(q.kind==='nps'){
       if(q.nps!==undefined && q.nps!==null){
-        var badge=el('div',null,'NPS '+(q.nps>0?'+':'')+q.nps);
-        badge.style.fontWeight='800';
-        badge.style.fontSize='1.5rem';
-        badge.style.color=q.nps>=0?'#6EE7B7':'#FCA5A5';
+        var badge=el('div','pill live', 'NPS '+(q.nps>0?'+':'')+q.nps);
+        badge.style.fontWeight='700'; badge.style.marginBottom='10px'; badge.style.display='inline-flex';
         card.appendChild(badge);
       }
       var npsWrap=el('div','grid','');
@@ -151,7 +162,7 @@
     }
 
     if(q.kind==='ranking'){
-      if(!results.length){ card.appendChild(el('p',null,'No answers yet.')); return card; }
+      if(!results.length){ var ep=el('p',null,'No answers yet.'); ep.style.color='var(--muted)'; card.appendChild(ep); return card; }
       var wrap=el('div','grid','');
       wrap.style.gap='6px';
       results.forEach(function(r){
@@ -163,8 +174,7 @@
       return card;
     }
 
-    // poll / rating / yesno / multi / open share the bar list.
-    if(!results.length){ card.appendChild(el('p',null,'No answers yet.')); return card; }
+    if(!results.length){ var np=el('p',null,'No answers yet.'); np.style.color='var(--muted)'; card.appendChild(np); return card; }
     var list=el('div','grid','');
     list.style.gap='6px';
     results.forEach(function(r){
@@ -180,6 +190,9 @@
   function renderQuestions(questions){
     var host=document.getElementById('results-questions');
     clear(host);
+    var title=el('h2',null,'Questions'); title.className='section-h'; title.style.marginLeft='2px';
+    var sub=el('p',null,'Per-question aggregates.'); sub.className='section-desc'; sub.style.margin='0 0 8px 2px';
+    host.appendChild(title); host.appendChild(sub);
     var list=(questions||[]).filter(function(q){ return q.status!=='draft'; });
     if(!list.length){
       var empty=el('div','glass card-pad','No questions were asked at this event.');
@@ -193,7 +206,8 @@
   function renderQA(qa){
     var host=document.getElementById('results-qa');
     clear(host);
-    host.appendChild(el('h2','font-bold','Q&A'));
+    var h=el('h2',null,'Q&A highlights'); h.className='section-h'; host.appendChild(h);
+    var sub=el('p',null,'Top audience questions by votes.'); sub.className='section-desc'; sub.style.marginBottom='10px'; host.appendChild(sub);
     if(!qa||!qa.length){
       var p=el('p',null,'No answered questions yet.'); p.style.color='var(--muted)';
       host.appendChild(p);
@@ -201,13 +215,12 @@
     }
     var list=el('div','grid','');
     list.style.gap='8px';
-    list.style.marginTop='8px';
     qa.forEach(function(item){
       var row=el('div','qa-item','');
-      row.style.padding='10px 12px';
+      row.style.padding='12px 14px';
       row.appendChild(el('div','qa-body',item.body||''));
       var meta=el('div','qa-meta','');
-      meta.style.marginTop='4px';
+      meta.style.marginTop='6px';
       meta.style.color='var(--muted)';
       meta.style.fontSize='.78rem';
       var who=item.author?('— '+item.author):'— Anonymous';
@@ -221,7 +234,8 @@
   function renderLeaderboard(entries){
     var host=document.getElementById('results-leaderboard');
     clear(host);
-    host.appendChild(el('h2','font-bold','Top scores'));
+    var h=el('h2',null,'Leaderboard'); h.className='section-h'; host.appendChild(h);
+    var sub=el('p',null,'Top scores from quiz questions.'); sub.className='section-desc'; sub.style.marginBottom='10px'; host.appendChild(sub);
     if(!entries||!entries.length){
       var p=el('p',null,'No scores yet.'); p.style.color='var(--muted)';
       host.appendChild(p);
@@ -229,23 +243,24 @@
     }
     var list=el('div','grid','');
     list.style.gap='6px';
-    list.style.marginTop='8px';
-    var medals={1:'🥇',2:'🥈',3:'🥉'};
     entries.forEach(function(e){
-      var row=el('div','lb-row','');
+      var row=el('div','','');
       row.style.display='flex';
       row.style.alignItems='center';
       row.style.gap='10px';
-      row.style.padding='6px 8px';
-      var rank=el('span',null,medals[e.rank]||('#'+e.rank));
-      rank.style.width='34px';
-      rank.style.fontWeight='700';
+      row.style.padding='8px 10px';
+      row.style.borderRadius='10px';
+      row.style.background='var(--surface-1)';
+      row.style.border='1px solid var(--border)';
+      var rank=el('span',null, e.rank<=3 ? ('#'+e.rank) : ('#'+e.rank));
+      rank.style.width='32px'; rank.style.fontWeight='700'; rank.style.fontSize='.84rem'; rank.style.color='var(--muted)'; rank.style.fontVariantNumeric='tabular-nums';
+      if(e.rank===1) rank.style.color='var(--accent)';
       row.appendChild(rank);
-      row.appendChild(el('span',null,e.emoji||'🙂'));
-      row.appendChild(el('span',null,e.name||'Anonymous'));
+      if(e.emoji) row.appendChild(el('span',null,e.emoji));
+      var nm=el('span',null,e.name||'Anonymous'); nm.style.fontWeight='600'; nm.style.flex='1'; nm.style.minWidth='0'; nm.style.overflow='hidden'; nm.style.textOverflow='ellipsis'; nm.style.whiteSpace='nowrap';
+      row.appendChild(nm);
       var pts=el('span',null,e.points+' pts');
-      pts.style.marginLeft='auto';
-      pts.style.fontWeight='700';
+      pts.style.fontWeight='700'; pts.style.fontVariantNumeric='tabular-nums';
       row.appendChild(pts);
       list.appendChild(row);
     });

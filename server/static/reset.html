@@ -1,10 +1,35 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset password</title><link rel="stylesheet" href="/tailwind.css"></head>
-<body class="antialiased"><div class="max-w-[520px] mx-auto my-[60px] px-4"><div class="glass card-pad">
-<h1 class="font-bold text-[1.4rem]">Reset password</h1>
-<form id="form-reset" class="mt-4 grid gap-3">
-<div class="field"><label for="np">New password</label><input id="np" class="input" type="password" required minlength="8"></div>
-<button class="btn btn-primary" type="submit">Set new password</button>
-<div id="reset-msg" class="text-[#9AA0B8] text-[0.88rem]"></div>
-</form></div></div>
-<script src="/reset.js"></script></body></html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Reset password — Meetup</title><link rel="stylesheet" href="/tailwind.css"><link rel="stylesheet" href="/tokens.css">
+<style>
+body{background:var(--bg);color:var(--text)}
+.card{max-width:520px;margin:60px auto;padding:0 16px}
+.panel{background:var(--surface-1);border:1px solid var(--border);border-radius:14px;padding:22px}
+@media(min-width:48rem){.panel{padding:28px}}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;letter-spacing:-.03em;color:var(--text);text-decoration:none;margin-bottom:18px}
+.brand-mark{width:36px;height:36px;border-radius:8px;background:var(--text);color:var(--bg);display:grid;place-items:center;border:1px solid var(--border)}
+.field label{font-weight:600;color:#d6daea}
+.input{min-height:44px}
+.input:focus{border-color:rgba(79,124,255,.55);box-shadow:0 0 0 3px rgba(79,124,255,.22),0 0 0 1px rgba(255,255,255,.08)}
+.btn{min-height:44px}
+.help{color:var(--muted);font-size:.82rem;margin-top:2px}
+.msg{color:var(--muted);font-size:.88rem;min-height:1.2em}
+.msg.err{color:#f87171}
+.msg.ok{color:#34d399}
+</style>
+</head>
+<body class="antialiased">
+<div class="card">
+  <a class="brand" href="/"><span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path fill-rule="evenodd" d="M7.5 6.75h9a3 3 0 0 1 3 3v4.5a3 3 0 0 1-3 3h-5.25l-2.625 2.625v-2.625H7.5a3 3 0 0 1-3-3v-4.5a3 3 0 0 1 3-3zM10.125 9.75v4.5L13.875 12z"/></svg></span> Meetup</a>
+  <div class="panel">
+    <h1 class="font-bold text-[1.4rem]" style="font-family:var(--font-display);letter-spacing:-.03em;margin:0">Reset password</h1>
+    <p class="help">Choose a new password — at least 8 characters.</p>
+    <form id="form-reset" class="mt-4 grid gap-3">
+      <div class="field"><label for="np">New password</label><input id="np" class="input" type="password" required minlength="8" autocomplete="new-password" placeholder="••••••••"><div class="help" id="np-help">Must be 8+ characters.</div></div>
+      <button class="btn btn-primary" type="submit">Set new password</button>
+      <div id="reset-msg" class="msg" role="status" aria-live="polite"></div>
+      <div class="help"><a href="/admin" style="color:var(--muted);text-decoration:underline">Back to sign in</a></div>
+    </form>
+  </div>
+</div>
+<script src="/reset.js"></script>
+</body></html>

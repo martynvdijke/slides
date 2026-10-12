@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * Backwards-compatible combined card: join QR + room code + live question
- * results. Prefer composing <LiveJoin>, <LiveQuestion> and <LiveQa> directly
- * for more control.
- */
 withDefaults(defineProps<{
   event?: string
   room?: string
@@ -29,7 +24,7 @@ withDefaults(defineProps<{
 <style scoped>
 .liveqr-wrap {
   display: flex;
-  gap: 22px;
+  gap: 18px;
   align-items: flex-start;
   justify-content: center;
   flex-wrap: wrap;

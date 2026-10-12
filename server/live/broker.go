@@ -21,9 +21,12 @@ const (
 )
 
 type Slide struct {
-	Index int    `json:"index"`
-	Total int    `json:"total"`
-	Title string `json:"title"`
+	Index      int    `json:"index"`
+	Total      int    `json:"total"`
+	Title      string `json:"title"`
+	QuestionID int64  `json:"question_id,omitempty"`
+	SlideID    string `json:"slide_id,omitempty"`
+	DeckSlug   string `json:"deck_slug,omitempty"`
 }
 
 type Broker struct {

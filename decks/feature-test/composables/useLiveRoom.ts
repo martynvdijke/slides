@@ -103,6 +103,11 @@ export interface SlideInfo {
   id?: string
 }
 
+export interface JoinSession {
+  expires_at: number
+  remaining_s: number
+}
+
 type Value<T> = T | Ref<T>
 
 function env(key: string): string {
@@ -143,6 +148,10 @@ class RoomClient {
   answerResult = ref<AnswerResult | null>(null)
   currentSlide = ref<SlideInfo | null>(null)
   remainingSec = ref<number | null>(null)
+  // 4h join session — when expired the deck shows a projector hint
+  sessionExpired = ref(false)
+  rejoinUrl = ref('')
+  joinSession = ref<JoinSession | null>(null)
   remoteNav = ref<{ index: number } | null>(null)
   private ws: WebSocket | null = null
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null
@@ -177,16 +186,49 @@ class RoomClient {
     return this.origin + '/api/events/' + encodeURIComponent(this.eventCode) + '/state'
   }
 
+  private joinUrlApi(): string {
+    return this.origin + '/api/events/' + encodeURIComponent(this.eventCode) + '/join'
+  }
+
+  private markSessionExpired(rejoinUrl?: string) {
+    this.sessionExpired.value = true
+    if (rejoinUrl) this.rejoinUrl.value = rejoinUrl
+    else if (!this.rejoinUrl.value) {
+      // fallback — audience can rejoin via /e/{code}
+      this.rejoinUrl.value = this.origin + '/e/' + encodeURIComponent(this.eventCode)
+    }
+    this.connected.value = false
+    // stop auto-reconnect while expired — user must rejoin explicitly
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    try { this.ws?.close() } catch {}
+    this.ws = null
+  }
+
+  private clearSessionExpired() {
+    this.sessionExpired.value = false
+  }
+
+  private syncJoinSession(data: any) {
+    // StateDTO may include join_session:{expires_at, remaining_s}
+    if (data && data.join_session && typeof data.join_session.expires_at === 'number') {
+      this.joinSession.value = {
+        expires_at: data.join_session.expires_at,
+        remaining_s: typeof data.join_session.remaining_s === 'number' ? data.join_session.remaining_s : 0,
+      }
+    } else {
+      this.joinSession.value = null
+    }
+  }
+
   private syncCurrentSlide(data: any) {
     if (data && typeof data === 'object' && data.current_slide && typeof data.current_slide.index === 'number' && typeof data.current_slide.total === 'number') {
       this.currentSlide.value = { index: data.current_slide.index, total: data.current_slide.total, title: data.current_slide.title || '', id: data.current_slide.id || '' }
     } else if (data && data.current_slide === null) {
       this.currentSlide.value = null
     } else if (!data?.current_slide) {
-      // absent -> null (no slide yet); keep null to hide indicator
-      // if already set, don't clear on every state if missing — keep previous; but spec says null when absent
-      // we keep previous only if we had a slide frame; state without slide keeps existing
-      // To match "null when absent" and late-join: if state has no current_slide, show null only if we never got a slide
       if (!this.currentSlide.value) this.currentSlide.value = null
     }
   }
@@ -219,6 +261,7 @@ class RoomClient {
 
   private connect() {
     if (this.stopped) return
+    if (this.sessionExpired.value) return
     if (typeof WebSocket === 'undefined') {
       this.schedule()
       return
@@ -227,6 +270,10 @@ class RoomClient {
       const ws = new WebSocket(this.wsUrl())
       this.ws = ws
       ws.onopen = () => {
+        if (this.sessionExpired.value) {
+          try { ws.close() } catch {}
+          return
+        }
         this.connected.value = true
         this.backoff = 1000
       }
@@ -234,14 +281,21 @@ class RoomClient {
         try {
           const m = JSON.parse(ev.data)
           if (!m || typeof m.type !== 'string') return
+          // 4h join expiry — sent before close
+          if (m.type === 'session_expired' || m.code === 'join_expired') {
+            const url = m?.data?.rejoin_url || m?.rejoin_url || ''
+            this.markSessionExpired(url)
+            return
+          }
           if (m.type === 'state' && m.data) {
+            // if we were expired but got a fresh state, clear the flag
+            if (this.sessionExpired.value) this.clearSessionExpired()
             this.state.value = m.data
             this.syncCurrentSlide(m.data)
             this.syncRemainingSec(m.data)
-            // also update answer-result fields from state if present
+            this.syncJoinSession(m.data)
             const aq = m.data?.active_question
             if (aq && typeof aq.my_correct !== 'undefined') {
-              // keep answerResult in sync when state carries scoring
               if (aq.my_correct !== null && aq.my_correct !== undefined) {
                 this.answerResult.value = {
                   is_correct: aq.my_correct ?? null,
@@ -251,7 +305,6 @@ class RoomClient {
               }
             }
           } else if (m.type === 'slide') {
-            // slide frame: {type:"slide", data:{index,total,title}} or {type:"slide", index,total,title}
             const d = (m.data && typeof m.data.index === 'number') ? m.data : m
             if (typeof d.index === 'number' && typeof d.total === 'number') {
               this.currentSlide.value = { index: d.index, total: d.total, title: d.title || '', id: d.id || '' }
@@ -259,13 +312,18 @@ class RoomClient {
           } else if (m.type === 'reactions' && Array.isArray(m.data)) {
             this.reactions.value = m.data as ReactionCount[]
           } else if (m.type === 'result' && m.for === 'answer') {
-            // The server sends scoring fields at the top level of the frame.
             if (typeof m.is_correct !== 'undefined' || typeof m.points_awarded !== 'undefined') {
               this.answerResult.value = {
                 is_correct: m.is_correct ?? null,
                 points_awarded: m.points_awarded ?? 0,
                 total_points: m.total_points ?? 0,
               }
+            }
+          } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
+            // Surface join_expired delivered as an error frame as well
+            if (m.code === 'join_expired' || m.error === 'join_expired') {
+              const url = m?.data?.rejoin_url || m?.rejoin_url || ''
+              this.markSessionExpired(url)
             }
           } else if (m.type === 'nav') { const d = (m.data && typeof m.data.index === 'number') ? m.data : m; if (typeof d.index === 'number') this.remoteNav.value = { index: d.index } } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
             // ignore / keep connected
@@ -278,6 +336,10 @@ class RoomClient {
       }
       ws.onclose = () => {
         this.ws = null
+        if (this.sessionExpired.value) {
+          this.connected.value = false
+          return
+        }
         this.connected.value = false
         this.schedule()
       }
@@ -290,7 +352,7 @@ class RoomClient {
   }
 
   private schedule() {
-    if (this.stopped || this.reconnectTimer) return
+    if (this.stopped || this.sessionExpired.value || this.reconnectTimer) return
     const delay = this.backoff
     this.backoff = Math.min(this.backoff * 2, 10000)
     this.reconnectTimer = setTimeout(() => {
@@ -302,16 +364,56 @@ class RoomClient {
 
   private async pollOnce() {
     try {
-      const r = await fetch(this.stateUrl(), { cache: 'no-store' })
+      const r = await fetch(this.stateUrl(), { cache: 'no-store', credentials: 'same-origin' })
+      if (r.status === 401) {
+        try {
+          const j = await r.json()
+          if (j && (j.code === 'join_expired' || j.error === 'join_expired')) {
+            const url = j.rejoin_url || j?.data?.rejoin_url || ''
+            this.markSessionExpired(url)
+            return
+          }
+        } catch {}
+        // generic 401 without code — don't treat as expired
+        return
+      }
       if (r.ok) {
         const data = await r.json()
+        if (this.sessionExpired.value) this.clearSessionExpired()
         this.state.value = data
         this.syncCurrentSlide(data)
         this.syncRemainingSec(data)
+        this.syncJoinSession(data)
         this.connected.value = true
       }
     } catch {
       /* offline; the join card still renders */
+    }
+  }
+
+  async rejoin(): Promise<boolean> {
+    try {
+      const r = await fetch(this.joinUrlApi(), { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}' })
+      if (!r.ok) {
+        // if backend returns rejoin_url on failure, keep showing sheet
+        try {
+          const j = await r.json()
+          if (j && j.rejoin_url) this.rejoinUrl.value = j.rejoin_url
+        } catch {}
+        return false
+      }
+      // success — clear expiry and reconnect
+      this.clearSessionExpired()
+      this.rejoinUrl.value = ''
+      this.backoff = 1000
+      await this.pollOnce()
+      // re-open WS even if poll succeeded
+      if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+        this.connect()
+      }
+      return true
+    } catch {
+      return false
     }
   }
 
@@ -330,11 +432,9 @@ class RoomClient {
       try {
         this.ws!.send(JSON.stringify({ type: 'slide', index: p.index, total: p.total, title: p.title || '', id: p.id || '' }))
         this.lastSlideSent = Date.now()
-        // optimistically update local slide
         this.currentSlide.value = { index: p.index, total: p.total, title: p.title || '', id: p.id || '' }
       } catch {}
     }
-    // throttle / coalesce ~200ms
     if (this.slideThrottle) {
       this.pendingSlide = payload
       return
@@ -418,7 +518,6 @@ export function useLiveRoom(options: {
       resolveError.value = false
       return
     }
-    // Resolve the short room code once; guard against stale async results.
     let active = true
     resolveError.value = false
     resolveRoom(baseUrl.value, room).then((ev) => {
@@ -446,6 +545,9 @@ export function useLiveRoom(options: {
 
   const state = computed(() => client.value?.state.value ?? null)
   const connected = computed(() => client.value?.connected.value ?? false)
+  const sessionExpired = computed(() => client.value?.sessionExpired.value ?? false)
+  const rejoinUrl = computed(() => client.value?.rejoinUrl.value ?? '')
+  const joinSession = computed<JoinSession | null>(() => client.value?.joinSession.value ?? null)
 
   const staticMode = computed(() => !!env('VITE_STATIC_EXPORT'))
   const configured = computed(() => !!resolvedCode.value)
@@ -468,7 +570,6 @@ export function useLiveRoom(options: {
   const qrSrc = computed(() => (code.value ? trimSlash(baseUrl.value) + '/api/events/' + encodeURIComponent(code.value) + '/qr.png' : ''))
   const joinPageUrl = computed(() => trimSlash(baseUrl.value) + '/join')
 
-  // new streams
   const reactions = computed<ReactionCount[]>(() => client.value?.reactions.value ?? [])
   const leaderboard = computed<LeaderboardEntry[]>(() => state.value?.leaderboard ?? [])
   const me = computed<Me | null>(() => state.value?.me ?? null)
@@ -491,9 +592,17 @@ export function useLiveRoom(options: {
     client.value?.sendSlide(index, total, title, id)
   }
 
+  async function rejoin(): Promise<boolean> {
+    if (!client.value) return false
+    return client.value.rejoin()
+  }
+
   return {
     state,
     connected,
+    sessionExpired,
+    rejoinUrl,
+    joinSession,
     staticMode,
     configured,
     resolveError,
@@ -516,5 +625,6 @@ export function useLiveRoom(options: {
     remoteNav,
     sendIdentity,
     sendSlide,
+    rejoin,
   }
 }

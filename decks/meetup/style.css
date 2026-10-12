@@ -1,11 +1,6 @@
-/* Dutch K8s Meetup — CNCF branding */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=JetBrains+Mono:wght@600;700&display=swap');
+/* Dutch K8s Meetup — CNCF chrome + flat live-widget tokens */
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap');
 
-/* ── Midnight Auditorium tokens (shared with audience app) ──
-   Live widgets use these; deck chrome keeps its own K8s palette.
-   Widgets must NOT hardcode #326CE5 / rgba(15,23,42) — use the tokens.
-   Meetup intentionally keeps K8s blue for its footer/chrome only. */
 :root {
   --k8s-blue: #326CE5;
   --k8s-blue-mid: #3B7FD4;
@@ -14,21 +9,49 @@
   --k8s-ink: #1a1e2e;
   --footer-h: 28px;
 
-  /* Midnight Auditorium — frozen contract */
-  --bg: #070a14;
-  --surface: #ffffff0f;
-  --text: #F2F3F8;
-  --muted: #9AA0B8;
-  --border: #ffffff1a;
-  --accent: #7C6BFF;
-  --grad: linear-gradient(135deg,#6366F1 0%,#A855F7 45%,#EC4899 75%,#22D3EE 100%);
-  --radius-card: 16px;
+  /* Live widgets — flat neutral-dark, mirrors tokens.css */
+  --bg: #0b0c10;
+  --bg-2: #111318;
+  --bg-3: #151821;
+  --surface: #14161d;
+  --surface-1: #181b23;
+  --surface-2: #1e212b;
+  --surface-3: #272b36;
+  --text: #eceef2;
+  --muted: #9aa0b8;
+  --muted-2: #6d7288;
+  --border: #23252f;
+  --border-2: #2c2f3a;
+  --border-strong: #343747;
+  --accent: #4f7cff;
+  --accent-hover: #3f62f0;
+  --accent-pressed: #3354e0;
+  --accent-soft: rgba(79,124,255,.11);
+  --accent-ring: rgba(79,124,255,.34);
+  --accent-2: var(--accent);
+  --success: #19b27a;
+  --warn: #e6a817;
+  --danger: #ef4444;
+  --grad: var(--accent);
+  --grad-2: var(--accent);
+  --radius-sm: 8px;
+  --radius: 10px;
+  --radius-lg: 14px;
+  --radius-card: 14px;
   --radius-pill: 999px;
-  --font-display: "Space Grotesk", Inter, system-ui, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-body: "DM Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --ease: cubic-bezier(.16,1,.3,1);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,.42);
+  --shadow: 0 4px 18px rgba(0,0,0,.48);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.56);
+  --focus-ring: 0 0 0 3px var(--accent-ring);
 }
+*{font-variant-ligatures:common-ligatures}
+html{color-scheme:dark}
 
-html, body { font-family: 'Inter', system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+html, body { font-family: var(--font-body); }
 
 .slidev-layout {
   background: #fff !important;
@@ -57,7 +80,7 @@ body::after {
   justify-content: space-between;
   padding: 0 18px;
   z-index: 1000;
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: var(--font-body);
   font-size: 10.5px;
   pointer-events: none;
 }

@@ -3,62 +3,55 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Meetup — Gather. Ask. React.</title>
-<meta name="description" content="Meetup — the live event toolkit for polls, Q&A and instant feedback.">
+<title>Meetup — live polls, Q&amp;A and feedback for events</title>
+<meta name="description" content="Run live polls, up-votable Q&amp;A and instant feedback. Your audience joins from a phone with a 5-character room code.">
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="stylesheet" href="/tailwind.css">
+<link rel="stylesheet" href="/tokens.css">
 </head>
 <body class="antialiased">
 <header class="site-header" role="banner">
   <div class="container flex items-center justify-between h-16 gap-4">
     <a class="brand" href="/" aria-label="Meetup home">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="currentColor" class="w-[18px] h-[18px]"><path fill-rule="evenodd" d="M7.5 6.75h9a3 3 0 0 1 3 3v4.5a3 3 0 0 1-3 3h-5.25l-2.625 2.625v-2.625H7.5a3 3 0 0 1-3-3v-4.5a3 3 0 0 1 3-3zM10.125 9.75v4.5L13.875 12z"/></svg>
-      </span>
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="currentColor" class="w-[18px] h-[18px]"><path fill-rule="evenodd" d="M7.5 6.75h9a3 3 0 0 1 3 3v4.5a3 3 0 0 1-3 3h-5.25l-2.625 2.625v-2.625H7.5a3 3 0 0 1-3-3v-4.5a3 3 0 0 1 3-3zM10.125 9.75v4.5L13.875 12z"/></svg></span>
       Meetup
     </a>
     <nav aria-label="Primary">
-      <a class="btn btn-ghost btn-small" href="/admin">Host dashboard
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
-      </a>
+      <a class="btn btn-ghost btn-small" href="/admin">Host dashboard <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg></a>
     </nav>
   </div>
 </header>
-
 <main id="main" class="container">
   <section class="hero" aria-labelledby="hero-title">
     <div class="hero-grid">
       <div class="flex flex-col gap-0">
-        <span class="eyebrow"><i aria-hidden="true"></i> Live events, minus the awkward silence</span>
-        <h1 id="hero-title" class="display">Gather.<br>Ask. <span>React.</span></h1>
-        <p class="lead">Meetup is the zero-friction toolkit for conference energy — live polls, up-votable Q&amp;A, rating scales, word clouds and instant feedback. No apps, no sign-ups. Just a link.</p>
+        <span class="eyebrow"><i aria-hidden="true"></i> Live polls, Q&amp;A and feedback</span>
+        <h1 id="hero-title" class="display">Ask your room.<br>See answers <span>live.</span></h1>
+        <p class="lead">Run live polls, up-votable Q&amp;A, ratings, word clouds and instant feedback. Your audience joins from a phone with a 5-character room code — no app, no sign-up. Questions activate as you move through your slides.</p>
         <div class="flex flex-wrap gap-3 mt-[22px]">
-          <a class="btn btn-primary" href="/admin">Host dashboard
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg>
-          </a>
+          <a class="btn btn-primary" href="/admin">Host dashboard <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" aria-hidden="true"><path d="M5 12h14"/><path d="M13 5l7 7-7 7"/></svg></a>
           <a class="btn btn-ghost" href="#how">How it works</a>
         </div>
-        <div class="mt-[18px] flex gap-2.5 flex-wrap items-center text-[0.86rem] text-[#9AA0B8]">
+        <div class="mt-[18px] flex gap-2.5 flex-wrap items-center text-[0.86rem]" style="color:var(--muted)">
           <span class="pill">No build step</span>
           <span class="pill">Works offline</span>
           <span class="pill">Keyboard ready</span>
         </div>
       </div>
-
       <div class="mock" aria-hidden="true">
         <div class="mock-bar">
-          <span class="mock-dot bg-[#FF5F57]"></span>
-          <span class="mock-dot bg-[#FFBD2E]"></span>
-          <span class="mock-dot bg-[#28C840]"></span>
-          <span class="ml-auto font-semibold text-[0.72rem] leading-none font-mono tracking-[0.06em] text-[#9AA0B8]">LIVE • 142 responses</span>
+          <span class="mock-dot" style="background:#FF5F57"></span>
+          <span class="mock-dot" style="background:#FFBD2E"></span>
+          <span class="mock-dot" style="background:#28C840"></span>
+          <span class="ml-auto font-semibold text-[0.72rem] leading-none" style="font-family:var(--font-mono);letter-spacing:.06em;color:var(--muted)">LIVE · 142 responses</span>
         </div>
         <div class="mock-screen">
           <div class="font-bold tracking-[-0.03em]">Which topic should we deep-dive?</div>
-          <div class="bar-row"><span class="bar-label">Systems</span><div class="bar-track"><div class="bar-fill w-[62%]"></div></div><span class="text-[0.82rem] text-[#9AA0B8]">62%</span></div>
-          <div class="bar-row"><span class="bar-label">Frontend</span><div class="bar-track"><div class="bar-fill w-[48%]"></div></div><span class="text-[0.82rem] text-[#9AA0B8]">48%</span></div>
-          <div class="bar-row"><span class="bar-label">AI / Data</span><div class="bar-track"><div class="bar-fill w-[34%]"></div></div><span class="text-[0.82rem] text-[#9AA0B8]">34%</span></div>
+          <div class="bar-row"><span class="bar-label">Systems</span><div class="bar-track"><div class="bar-fill" style="width:62%"></div></div><span class="text-[0.82rem]" style="color:var(--muted)">62%</span></div>
+          <div class="bar-row"><span class="bar-label">Frontend</span><div class="bar-track"><div class="bar-fill" style="width:48%"></div></div><span class="text-[0.82rem]" style="color:var(--muted)">48%</span></div>
+          <div class="bar-row"><span class="bar-label">AI / Data</span><div class="bar-track"><div class="bar-fill" style="width:34%"></div></div><span class="text-[0.82rem]" style="color:var(--muted)">34%</span></div>
           <div class="flex gap-2 mt-1 flex-wrap">
-            <span class="cloud-item text-[0.82rem] text-white border-0" style="background:linear-gradient(135deg,#6366F1,#EC4899)">curious</span>
+            <span class="cloud-item text-[0.82rem] text-white" style="background:var(--accent);border-color:var(--accent);color:#fff">curious</span>
             <span class="cloud-item text-[0.9rem]">inspired</span>
             <span class="cloud-item text-[0.78rem] opacity-90">focused</span>
             <span class="cloud-item text-[0.82rem]">hype</span>
@@ -70,12 +63,11 @@
       </div>
     </div>
   </section>
-
   <section id="how" class="two-col pb-[42px]" aria-labelledby="how-title">
     <div class="glass card-pad">
       <h2 id="how-title" class="section-title">For your audience</h2>
       <p class="section-sub">One link. Opens on any phone. No login.</p>
-      <ol class="mt-4 pl-[18px] text-[#C2C7DD] leading-[1.7] list-decimal space-y-1">
+      <ol class="mt-4 pl-[18px] leading-[1.7] list-decimal space-y-1" style="color:var(--muted)">
         <li>Scan the QR on the big screen or open <span class="kbd">/e/CODE</span></li>
         <li>Answer live — polls, stars, open text, word clouds</li>
         <li>Ask questions, up-vote the best ones</li>
@@ -85,38 +77,34 @@
     <div class="glass card-pad">
       <h2 class="section-title">For hosts</h2>
       <p class="section-sub">Create an event in 20 seconds. Project with confidence.</p>
-      <ul class="mt-4 pl-[18px] text-[#C2C7DD] leading-[1.7] list-disc space-y-1">
+      <ul class="mt-4 pl-[18px] leading-[1.7] list-disc space-y-1" style="color:var(--muted)">
         <li>Live projector view at <span class="kbd">/live/CODE</span> with giant typography</li>
         <li>Activate questions one at a time — results animate in real time</li>
         <li>Moderate Q&amp;A, manage slides, export CSV</li>
       </ul>
-      <div class="mt-[18px]">
-        <a class="btn btn-primary" href="/admin">Open host dashboard</a>
-      </div>
+      <div class="mt-[18px]"><a class="btn btn-primary" href="/admin">Open host dashboard</a></div>
     </div>
   </section>
-
-  <footer class="py-[18px] pb-9 border-t border-white/10 text-[#9AA0B8] text-[0.84rem] flex flex-wrap gap-3 justify-between">
-    <span>© 2026 Meetup · Built for rooms that buzz.</span>
+  <footer class="py-[18px] pb-9 border-t flex flex-wrap gap-3 justify-between text-[0.84rem]" style="border-color:var(--border);color:var(--muted)">
+    <span>© 2026 Meetup · Present and participate.</span>
     <span class="inline-flex gap-2 items-center"><span class="pill">Offline-friendly</span><span class="pill">No trackers by default</span></span>
   </footer>
 </main>
-
 <style>
-  .site-header { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
-  .container { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
-  .btn { min-height: 44px; }
-  @media (max-width: 430px){
-    .container { width: min(100% - 20px, 1120px); }
-    .hero { padding-block: 28px 20px; }
-    .hero-grid { gap: 20px; }
-    .display { font-size: clamp(2rem, 10vw, 2.8rem); margin-block: 10px; }
-    .lead { font-size: 0.98rem; }
-    .mock { padding: 12px; border-radius: 16px; }
-    .mock-screen { padding: 14px; }
-    .two-col { gap: 14px; }
-    .card-pad { padding: 16px; }
-    footer { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
+  .site-header{ padding-left:max(0px, env(safe-area-inset-left)); padding-right:max(0px, env(safe-area-inset-right)); }
+  .container{ padding-left:max(0px, env(safe-area-inset-left)); padding-right:max(0px, env(safe-area-inset-right)); }
+  .btn{ min-height:44px; }
+  @media(max-width:430px){
+    .container{ width:min(100% - 20px,1120px); }
+    .hero{ padding-block:28px 20px; }
+    .hero-grid{ gap:20px; }
+    .display{ font-size:clamp(2rem,10vw,2.8rem); margin-block:10px; }
+    .lead{ font-size:.98rem; }
+    .mock{ padding:12px; border-radius:16px; }
+    .mock-screen{ padding:14px; }
+    .two-col{ gap:14px; }
+    .card-pad{ padding:16px; }
+    footer{ padding-bottom:max(24px, env(safe-area-inset-bottom)); }
   }
 </style>
 <div id="toast-root" aria-live="polite" aria-atomic="true"></div>

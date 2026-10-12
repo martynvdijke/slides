@@ -6,6 +6,7 @@
 <title>Join a room — Slides</title>
 <link rel="icon" type="image/svg+xml" href="/logo.svg">
 <link rel="stylesheet" href="/tailwind.css">
+<link rel="stylesheet" href="/tokens.css">
 </head>
 <body class="antialiased">
 <header class="site-header" role="banner">
@@ -16,44 +17,33 @@
     </a>
   </div>
 </header>
-
 <main id="main" class="container" role="main">
   <div class="pt-8 pb-2 max-w-[520px] mx-auto w-full">
     <div class="glass card-pad">
-      <h1 class="font-extrabold tracking-[-0.03em] text-[1.35rem] leading-[1.15] m-0">Join the room</h1>
-      <p class="section-sub mt-1">Enter the code shown on the slide, or scan the QR code.</p>
-
+      <h1 class="font-extrabold tracking-[-0.03em] text-[1.35rem] leading-[1.15] m-0" style="font-family:var(--font-display)">Join the room</h1>
+      <p class="section-sub mt-1" style="color:var(--muted)">Enter the code shown on the slide, or scan the QR code.</p>
       <form id="join-form" class="mt-4 grid gap-3" novalidate>
         <div class="field">
           <label for="room-code">Room code</label>
           <input id="room-code" class="input room-code-input" placeholder="AB2C3" inputmode="text" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="5" aria-describedby="join-error">
         </div>
-        <button class="btn btn-primary" type="submit">Join room</button>
-        <p id="join-error" class="text-[#ff8f8f] text-[0.84rem]" role="alert" hidden></p>
+        <button class="btn btn-primary" type="submit" style="min-height:48px">Join room</button>
+        <p id="join-error" class="text-[0.84rem]" style="color:#f08a8a;word-break:break-word;overflow-wrap:anywhere;line-height:1.45" role="alert" hidden></p>
       </form>
     </div>
+    <p class="text-center mt-3 text-[0.84rem]" style="color:var(--muted)">No account needed · Works on any phone</p>
   </div>
 </main>
-
 <style>
-  .room-code-input {
-    text-transform: uppercase;
-    letter-spacing: 0.35em;
-    font-size: 1.5rem;
-    font-weight: 700;
-    text-align: center;
-    padding: 0.7rem 1rem;
-  }
-  .site-header { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
-  .container { padding-left: max(0px, env(safe-area-inset-left)); padding-right: max(0px, env(safe-area-inset-right)); }
-  .btn { min-height: 44px; }
-  #join-error { word-break: break-word; overflow-wrap: anywhere; line-height: 1.45; }
-  @media (max-width: 430px){
-    .container { width: min(100% - 20px, 1120px); }
-    .card-pad { padding: 18px 16px; }
-    .room-code-input { font-size: 1.35rem; letter-spacing: 0.30em; padding: 0.9rem 1rem; }
-    #join-form .btn { min-height: 48px; font-size: 1rem; }
-    .field label { font-size: 0.80rem; }
+  .room-code-input{ text-transform:uppercase; letter-spacing:.34em; font-size:1.5rem; font-weight:700; text-align:center; padding:.8rem 1rem; font-family:var(--font-mono); }
+  .site-header{ padding-left:max(0px, env(safe-area-inset-left)); padding-right:max(0px, env(safe-area-inset-right)); }
+  .container{ padding-left:max(0px, env(safe-area-inset-left)); padding-right:max(0px, env(safe-area-inset-right)); }
+  .btn{ min-height:44px; }
+  @media(max-width:430px){
+    .container{ width:min(100% - 20px,1120px); }
+    .card-pad{ padding:18px 16px; }
+    .room-code-input{ font-size:1.35rem; letter-spacing:.30em; padding:.9rem 1rem; }
+    #join-form .btn{ min-height:48px; font-size:1rem; }
   }
 </style>
 <script src="/join.js"></script>

@@ -29,12 +29,11 @@ interface Node {
   active: boolean
 }
 
-const MAX_NODES = 30
+const MAX_NODES = 18
 const nodes = ref<Node[]>([])
 let seq = 0
 let cleanupTimer: ReturnType<typeof setTimeout> | null = null
 
-// respect reduced motion — still show but without flying
 function prefersReduced(): boolean {
   try { return window.matchMedia('(prefers-reduced-motion: reduce)').matches } catch { return false }
 }
@@ -45,11 +44,11 @@ function spawn(emoji: string) {
   const n: Node = {
     id: seq++,
     emoji,
-    x: 5 + Math.random() * 90,
-    drift: (Math.random() - 0.5) * 60,
-    duration: 1800 + Math.random() * 1400,
+    x: 8 + Math.random() * 84,
+    drift: (Math.random() - 0.5) * 40,
+    duration: 2000 + Math.random() * 1200,
     delay: 0,
-    size: 22 + Math.random() * 26,
+    size: 18 + Math.random() * 18,
     active: true,
   }
   if (inactive) {
@@ -70,9 +69,9 @@ watch(reactions, (batch) => {
   if (!batch || !batch.length) return
   if (prefersReduced()) return
   for (const { emoji, count } of batch) {
-    const c = Math.min(count, 6)
+    const c = Math.min(count, 3)
     for (let i = 0; i < c; i++) {
-      setTimeout(() => spawn(emoji), i * 90)
+      setTimeout(() => spawn(emoji), i * 140)
     }
   }
 }, { deep: true })
@@ -114,7 +113,7 @@ onUnmounted(() => {
   line-height: 1;
   will-change: transform, opacity;
   animation: rise var(--dur) ease-out forwards;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.35));
+  opacity: .9;
   user-select: none;
 }
 @keyframes rise {
@@ -122,10 +121,10 @@ onUnmounted(() => {
     transform: translate3d(0, 0, 0) scale(0.7);
     opacity: 0;
   }
-  10% { opacity: 1; transform: translate3d(0, -10vh, 0) scale(1); }
+  12% { opacity: 1; transform: translate3d(0, -10vh, 0) scale(1); }
   60% { opacity: 1; }
   100% {
-    transform: translate3d(var(--drift), -92vh, 0) scale(0.9);
+    transform: translate3d(var(--drift), -88vh, 0) scale(0.88);
     opacity: 0;
   }
 }

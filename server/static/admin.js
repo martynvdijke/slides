@@ -52,6 +52,72 @@
   };
 
   var state={ user:null, events:[], selectedId:null };
+  // --- dialogs (replace window.prompt hacks) ---
+  var pendingCloneEv=null; var pendingActivate={q:null, defVal:0};
+  function openDialog(id){ var el=document.getElementById(id); if(el){ el.classList.remove('hidden'); var focusEl=el.querySelector('input,select'); if(focusEl) try{focusEl.focus();}catch(e){} } }
+  function closeDialog(id){ var el=document.getElementById(id); if(el) el.classList.add('hidden'); }
+  function openCloneDialog(ev){
+    pendingCloneEv=ev;
+    var inp=document.getElementById('clone-name-input');
+    if(inp) inp.value=(ev.name||'')+' (copy)';
+    openDialog('dialog-clone');
+  }
+  function openDurationDialog(q){
+    pendingActivate.q=q; pendingActivate.defVal=(q.duration_sec!=null?q.duration_sec:0);
+    var sel=document.getElementById('duration-override');
+    var desc=document.getElementById('duration-desc');
+    if(sel) sel.value='keep';
+    if(desc) desc.textContent='Saved: '+(pendingActivate.defVal===0?'untimed':pendingActivate.defVal+'s')+' · Choose an override or keep saved.';
+    openDialog('dialog-duration');
+  }
+  function doCloneConfirm(){
+    if(!pendingCloneEv) return;
+    var inp=document.getElementById('clone-name-input');
+    var newName=inp?inp.value.trim():'';
+    var payload=newName?{name:newName}:{};
+    var btn=document.getElementById('btn-clone-confirm'); if(btn) btn.disabled=true;
+    api('/api/admin/events/'+pendingCloneEv.id+'/clone',{method:'POST', body:JSON.stringify(payload)}).then(function(newEv){
+      toast('Event cloned');
+      var nid=newEv && (newEv.id || (newEv.event && newEv.event.id));
+      return loadEvents().then(function(){
+        if(nid) selectEvent(nid);
+        else if(newEv && newEv.code){
+          var found=state.events.find(function(e){return e.code===newEv.code});
+          if(found) selectEvent(found.id);
+        }
+      });
+    }).catch(function(err){ toast((err.j && err.j.error) || err.message || 'Clone failed','err'); }).then(function(){ if(btn) btn.disabled=false; closeDialog('dialog-clone'); pendingCloneEv=null; });
+  }
+  function doDurationConfirm(){
+    var q=pendingActivate.q; if(!q) return;
+    var sel=document.getElementById('duration-override');
+    var raw=sel?sel.value:'keep';
+    var overrideBody=null;
+    if(raw!=='keep'){
+      var pv=parseInt(raw,10);
+      if(!isNaN(pv) && pv!==pendingActivate.defVal){
+        if(pv!==0 && (pv<5 || pv>180)){ toast('Duration must be 0 or 5–180','err'); return; }
+        overrideBody=JSON.stringify({duration_sec: pv});
+      }
+    }
+    closeDialog('dialog-duration');
+    var opts={method:'POST'};
+    if(overrideBody) opts.body=overrideBody;
+    api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/activate',opts).then(function(){ toast('Activated'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Activate failed','err'); });
+    pendingActivate.q=null;
+  }
+  // dialog wiring (deferred until DOM ready, but elements exist after load)
+  // --- drawer / mobile ---
+  function toggleDrawer(open){
+    var side=document.getElementById('admin-side');
+    var overlay=document.getElementById('nav-overlay');
+    var btn=document.getElementById('btn-nav-toggle');
+    if(!side) return;
+    var willOpen = typeof open==='boolean' ? open : !side.classList.contains('open');
+    side.classList.toggle('open', willOpen);
+    if(overlay) { overlay.classList.toggle('hidden', !willOpen); overlay.classList.toggle('open', willOpen); }
+    if(btn) btn.setAttribute('aria-expanded', willOpen ? 'true':'false');
+  }
   // --- admin participants roster ---
   var adminParticipants={count:0, participants:[]};
   function renderAdminParticipants(){
@@ -126,6 +192,10 @@
     els.gateLogin.classList.toggle('hidden', which!=='login');
     els.app.classList.toggle('hidden', which!=='app');
     els.btnLogout.classList.toggle('hidden', which!=='app');
+    // workspace buttons disabled until event selected
+    var wsBtns=document.querySelectorAll('[data-workspace]');
+    var hasSel=!!state.selectedId;
+    wsBtns.forEach(function(b){ b.setAttribute('aria-disabled', hasSel?'false':'true'); b.style.opacity=hasSel?'':'0.45'; b.style.pointerEvents=hasSel?'':'none'; });
   }
 
   // setup & login forms
@@ -213,7 +283,13 @@
     if(name==='leaderboard') startLeaderboardPolling();
     else stopLeaderboardPolling();
   }
-  navBtns.forEach(function(b){ b.addEventListener('click', function(){ setView(b.getAttribute('data-view')); }); });
+  navBtns.forEach(function(b){ b.addEventListener('click', function(){
+    var v=b.getAttribute('data-view');
+    // if workspace and no selection, hint
+    if(b.hasAttribute('data-workspace') && !state.selectedId){ toast('Select an event first','err'); setView('events'); return; }
+    setView(v);
+    if(window.innerWidth<=760) toggleDrawer(false);
+  }); });
 
   // events
   document.getElementById('btn-new-event').addEventListener('click', function(){ els.createWrap.classList.remove('hidden'); });
@@ -233,17 +309,24 @@
   });
 
   function loadEvents(){
+    var loadingEl=document.getElementById('events-loading'); if(loadingEl) loadingEl.classList.remove('hidden');
     return api('/api/admin/events').then(function(list){
+      if(loadingEl) loadingEl.classList.add('hidden');
       state.events=Array.isArray(list)?list:[];
       renderEvents(state.events);
       if(state.events.length && !state.selectedId) selectEvent(state.events[0].id);
       else if(state.selectedId) updateSelectedBar();
-    }).catch(function(err){ if(err.code!==401) toast('Could not load events','err'); });
+      else { showGate('app'); }
+      // keep workspace disabled state in sync
+      var wsBtns=document.querySelectorAll('[data-workspace]');
+      var hasSel=!!state.selectedId;
+      wsBtns.forEach(function(b){ b.setAttribute('aria-disabled', hasSel?'false':'true'); b.style.opacity=hasSel?'':'0.45'; b.style.pointerEvents=hasSel?'':'none'; });
+    }).catch(function(err){ var loadingEl2=document.getElementById('events-loading'); if(loadingEl2) loadingEl2.classList.add('hidden'); if(err.code!==401) toast('Could not load events','err'); var root2=els.eventsList; if(root2 && !root2.childNodes.length){ var er=document.createElement('div'); er.className='empty-state'; er.innerHTML='<div class="empty-icon">!</div><div style="font-weight:700">Could not load events</div><div style="font-size:.82rem">Check your connection and try again.</div>'; root2.appendChild(er);} });
   }
   function renderEvents(list){
     var root=els.eventsList; root.textContent='';
     if(!list.length){
-      var empty=document.createElement('div'); empty.className='glass card-pad admin-empty'; empty.textContent='No events yet — create your first one.';
+      var empty=document.createElement('div'); empty.className='empty-state'; empty.innerHTML='<div class="empty-icon">+</div><div style="font-weight:700">No events yet</div><div style="font-size:.82rem">Create your first event to start building questions and going live.</div>';
       root.appendChild(empty); return;
     }
     list.forEach(function(ev){
@@ -264,25 +347,7 @@
       var aAud=document.createElement('a'); aAud.className='btn btn-ghost btn-small'; aAud.href='/e/'+encodeURIComponent(ev.code); aAud.target='_blank'; aAud.textContent='Audience';
       var aJoin=document.createElement('a'); aJoin.className='btn btn-ghost btn-small'; aJoin.href='/join'+(ev.room_code?'?room='+encodeURIComponent(ev.room_code):''); aJoin.target='_blank'; aJoin.textContent='Join';
       var btnClone=document.createElement('button'); btnClone.className='btn btn-ghost btn-small'; btnClone.type='button'; btnClone.textContent='Clone';
-      btnClone.addEventListener('click', function(){
-        var defName=(ev.name||'')+' (copy)';
-        var newName=window.prompt('Clone name (leave blank to auto-generate)', defName);
-        if(newName===null) return;
-        newName=newName.trim();
-        var payload=newName?{name:newName}:{};
-        btnClone.disabled=true;
-        api('/api/admin/events/'+ev.id+'/clone',{method:'POST', body:JSON.stringify(payload)}).then(function(newEv){
-          toast('Event cloned');
-          var nid=newEv && (newEv.id || (newEv.event && newEv.event.id));
-          return loadEvents().then(function(){
-            if(nid) selectEvent(nid);
-            else if(newEv && newEv.code){
-              var found=state.events.find(function(e){return e.code===newEv.code});
-              if(found) selectEvent(found.id);
-            }
-          });
-        }).catch(function(err){ toast((err.j && err.j.error) || err.message || 'Clone failed','err'); }).then(function(){ btnClone.disabled=false; });
-      });
+      btnClone.addEventListener('click', function(){ openCloneDialog(ev); });
       actions.appendChild(btnSel); actions.appendChild(aLive); actions.appendChild(aAud); actions.appendChild(aJoin); actions.appendChild(btnClone);
       card.appendChild(top); card.appendChild(actions); root.appendChild(card);
     });
@@ -308,8 +373,12 @@
   }
   function updateSelectedBar(){
     var ev=state.events.find(function(e){return e.id===state.selectedId});
+    var wsBtns=document.querySelectorAll('[data-workspace]');
+    var hasSel=!!ev;
+    wsBtns.forEach(function(b){ b.setAttribute('aria-disabled', hasSel?'false':'true'); b.style.opacity=hasSel?'':'0.45'; b.style.pointerEvents=hasSel?'':'none'; });
     if(!ev){
       els.selectedBar.classList.add('hidden');
+      els.selectedBar.classList.remove('is-live');
       var dc=document.getElementById('deck-controls'); if(dc) dc.classList.add('hidden');
       var ap=document.getElementById('admin-participants-panel'); if(ap) ap.classList.add('hidden');
       return;
@@ -317,6 +386,18 @@
     els.selectedBar.classList.remove('hidden');
     els.selName.textContent=ev.name;
     els.selMeta.textContent=ev.code+(ev.room_code?' · room '+ev.room_code:'')+' · '+ev.status+' · '+(ev.event_date||'no date');
+    var isLive = ev.status==='open';
+    els.selectedBar.classList.toggle('is-live', isLive);
+    var dot=document.getElementById('sel-live-dot'); if(dot) dot.classList.toggle('hidden', !isLive);
+    var pill=document.getElementById('sel-live-pill'); if(pill) pill.classList.toggle('hidden', !isLive);
+    var hint=document.getElementById('sel-hint');
+    if(hint){
+      hint.textContent='';
+      var roomChip=document.createElement('span'); roomChip.className='pill'; roomChip.style.fontSize='.72rem'; roomChip.textContent='room '+ev.room_code;
+      var countChip=document.createElement('span'); countChip.className='pill'; countChip.style.fontSize='.72rem'; countChip.textContent=(ev.question_count||0)+' questions';
+      hint.appendChild(roomChip); hint.appendChild(countChip);
+      if(ev.pending_qa_count){ var qaChip=document.createElement('span'); qaChip.className='pill'; qaChip.style.fontSize='.72rem'; qaChip.textContent=ev.pending_qa_count+' pending Q&A'; hint.appendChild(qaChip); }
+    }
     syncPodiumButton(ev);
     document.getElementById('sel-live').href='/live/'+encodeURIComponent(ev.code);
     document.getElementById('sel-aud').href='/e/'+encodeURIComponent(ev.code);
@@ -584,16 +665,23 @@
   }
 
   function loadQuestions(id){
+    var qListEl=document.getElementById('questions-list');
+    if(qListEl) qListEl.textContent='Loading questions…';
     api('/api/admin/events/'+id+'/questions').then(function(list){
       var arr=Array.isArray(list)?list:[];
       renderQuestions(arr);
       renderQueue(arr);
       document.getElementById('q-count').textContent=arr.length+' total';
-    }).catch(function(){ document.getElementById('questions-list').textContent='Could not load questions.'; });
+    }).catch(function(){ var qe=document.getElementById('questions-list'); if(qe){ qe.textContent=''; var er=document.createElement('div'); er.className='empty-state'; er.innerHTML='<div class="empty-icon">!</div><div style="font-weight:700">Could not load questions</div>'; qe.appendChild(er); } });
   }
   function renderQuestions(list){
     var root=document.getElementById('questions-list'); root.textContent='';
-    if(!list.length){ var e=document.createElement('div'); e.className='glass card-pad'; e.style.color='var(--muted)'; e.textContent='No questions yet.'; root.appendChild(e); return; }
+    var qEmpty=document.getElementById('questions-empty');
+    if(!list.length){
+      if(qEmpty) qEmpty.classList.remove('hidden');
+      return;
+    }
+    if(qEmpty) qEmpty.classList.add('hidden');
     list.forEach(function(q, idx){
       var row=document.createElement('div'); row.className='q-row '+q.status;
       var top=document.createElement('div'); top.style.display='flex'; top.style.justifyContent='space-between'; top.style.gap='10px'; top.style.alignItems='flex-start';
@@ -636,22 +724,13 @@
       var actions=document.createElement('div'); actions.className='inline'; actions.style.marginTop='6px';
       if(q.status==='draft'||q.status==='closed'){
         var bAct=document.createElement('button'); bAct.className='btn btn-primary btn-small'; bAct.type='button'; bAct.textContent='Activate';
+        bAct.setAttribute('aria-label','Activate '+q.prompt);
         bAct.addEventListener('click', function(){
-          var overrideBody=null;
-          // allow optional duration override via prompt (simple, keeps UI uncluttered)
-          if(!q.is_feedback){
-            var defVal = (q.duration_sec!=null? q.duration_sec:0);
-            var raw = window.prompt('Duration in seconds — 0=untimed, 5–180 (leave as '+defVal+' to keep saved value)', String(defVal));
-            if(raw===null) return;
-            var pv=parseInt(raw,10);
-            if(!isNaN(pv) && pv!==defVal){
-              if(pv!==0 && (pv<5 || pv>180)){ toast('Duration must be 0 or 5–180','err'); return; }
-              overrideBody=JSON.stringify({duration_sec: pv});
-            }
+          if(q.is_feedback){
+            api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/activate',{method:'POST'}).then(function(){ toast('Activated'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Activate failed','err'); });
+          } else {
+            openDurationDialog(q);
           }
-          var opts={method:'POST'};
-          if(overrideBody) opts.body=overrideBody;
-          api('/api/admin/events/'+state.selectedId+'/questions/'+q.id+'/activate',opts).then(function(){ toast('Activated'); loadQuestions(state.selectedId); }).catch(function(err){ toast(err.message||'Activate failed','err'); });
         });
         actions.appendChild(bAct);
       }
@@ -765,7 +844,7 @@
             pct = total? r.count/total*100 : 0;
           }
           var fill=document.createElement('div'); fill.style.height='100%'; fill.style.width= pct+'%';
-          fill.style.background=isCorrect?'linear-gradient(135deg,#22C55E,#16A34A)':'linear-gradient(135deg,#6366F1,#EC4899)';
+          fill.style.background=isCorrect?'#22C55E':'var(--accent)';
           track.appendChild(fill); barWrap.appendChild(row2); barWrap.appendChild(track);
         });
       }
@@ -943,7 +1022,7 @@
             filtered.forEach(function(r,i){
               var s=document.createElement('span'); s.className='cloud-item'; s.textContent=r.label;
               var sc=0.9 + (r.count/max)*0.6; s.style.fontSize=sc+'rem';
-              if(i===0){ s.style.background='linear-gradient(135deg,#6366F1,#EC4899)'; s.style.color='#fff'; s.style.borderColor='transparent'; }
+              if(i===0){ s.style.background='var(--accent)'; s.style.color='#fff'; s.style.borderColor='transparent'; }
               cloud.appendChild(s);
             });
           }
@@ -985,7 +1064,7 @@
               pct = q.total? (r.count/q.total*100) : 0;
             }
             var fill=document.createElement('div'); fill.style.height='100%'; fill.style.width= pct+'%';
-            fill.style.background=isCorrect?'linear-gradient(135deg,#22C55E,#16A34A)':'linear-gradient(135deg,#6366F1,#EC4899)';
+            fill.style.background=isCorrect?'#22C55E':'var(--accent)';
             track.appendChild(fill); row.appendChild(head); row.appendChild(track); wrap.appendChild(row);
           });
           card.appendChild(wrap);
@@ -1560,6 +1639,73 @@
     btnToggleParts.textContent= hidden ? 'Collapse' : 'Expand';
     btnToggleParts.setAttribute('aria-expanded', hidden ? 'true':'false');
   });
+
+  // dialog wiring
+  var elClone=document.getElementById('dialog-clone');
+  if(elClone){
+    elClone.addEventListener('click', function(e){ if(e.target===elClone) closeDialog('dialog-clone'); });
+    var b=document.getElementById('btn-clone-cancel'); if(b) b.addEventListener('click', function(){ closeDialog('dialog-clone'); pendingCloneEv=null; });
+    var ok=document.getElementById('btn-clone-confirm'); if(ok) ok.addEventListener('click', doCloneConfirm);
+    var inp2=document.getElementById('clone-name-input'); if(inp2) inp2.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); doCloneConfirm(); } });
+  }
+  var elDur=document.getElementById('dialog-duration');
+  if(elDur){
+    elDur.addEventListener('click', function(e){ if(e.target===elDur) closeDialog('dialog-duration'); });
+    var bc=document.getElementById('btn-duration-cancel'); if(bc) bc.addEventListener('click', function(){ closeDialog('dialog-duration'); pendingActivate.q=null; });
+    var bok=document.getElementById('btn-duration-confirm'); if(bok) bok.addEventListener('click', doDurationConfirm);
+  }
+  // drawer wiring
+  var btnToggle=document.getElementById('btn-nav-toggle');
+  var overlay=document.getElementById('nav-overlay');
+  if(btnToggle) btnToggle.addEventListener('click', function(){ toggleDrawer(); });
+  if(overlay) overlay.addEventListener('click', function(){ toggleDrawer(false); });
+
+  // keyboard shortcuts for presenter: N next, P prev, R reveal next queued? and deck controls
+  document.addEventListener('keydown', function(e){
+    var ae=document.activeElement;
+    var typing=ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.tagName==='SELECT' || ae.isContentEditable);
+    if(e.key==='Escape'){
+      // close any open dialog first
+      var d1=document.getElementById('dialog-clone'); if(d1 && !d1.classList.contains('hidden')){ closeDialog('dialog-clone'); return; }
+      var d2=document.getElementById('dialog-duration'); if(d2 && !d2.classList.contains('hidden')){ closeDialog('dialog-duration'); return; }
+      var side=document.getElementById('admin-side'); if(side && side.classList.contains('open')){ toggleDrawer(false); return; }
+      return;
+    }
+    if(typing) return;
+    if(!state.selectedId) return;
+    if(e.key==='n' || e.key==='N' || e.key==='ArrowRight'){
+      // Next question if in questions panel, else next slide
+      var qPanel=document.querySelector('[data-panel="questions"]');
+      if(qPanel && !qPanel.classList.contains('hidden')){
+        e.preventDefault(); handleNextQuestion();
+      } else {
+        e.preventDefault(); deckSlideRequest({action:'next'});
+      }
+    } else if(e.key==='p' || e.key==='P' || e.key==='ArrowLeft'){
+      e.preventDefault(); deckSlideRequest({action:'prev'});
+    } else if(e.key==='r' || e.key==='R'){
+      // reveal live question
+      var liveId=null;
+      // try to find live question from last loaded list? fallback to API lookup via questions endpoint
+      e.preventDefault();
+      // fetch and reveal first live/locked
+      api('/api/admin/events/'+state.selectedId+'/questions').then(function(list){
+        var arr=Array.isArray(list)?list:[];
+        var live=arr.find(function(q){return q.status==='live' || q.status==='locked'});
+        if(live) return api('/api/admin/events/'+state.selectedId+'/questions/'+live.id+'/reveal',{method:'POST'}).then(function(){ toast('Revealed'); loadQuestions(state.selectedId); });
+        else toast('No live question to reveal','err');
+      }).catch(function(){});
+    }
+  });
+
+  // polish queue rendering: add class for styling and improve empty state
+  var origRenderQueue=renderQueue;
+  renderQueue=function(list){
+    origRenderQueue(list);
+    // add class to items for styling hook
+    var items=document.querySelectorAll('#queue-list > div');
+    items.forEach(function(it){ it.classList.add('q-queue-item'); });
+  };
 
   // initial boot
   boot();

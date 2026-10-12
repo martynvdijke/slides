@@ -33,14 +33,14 @@ const entries = computed(() => (leaderboard.value || []).slice(0, props.limit))
       <template v-if="connected">No scores yet — answer a question to get on the board.</template>
       <template v-else>No scores yet.</template>
     </div>
-    <ol v-else class="lb-list">
+    <TransitionGroup v-else name="lb-list" tag="ol" class="lb-list">
       <li v-for="e in entries" :key="e.rank + '-' + e.name" class="lb-row">
         <span class="lb-rank">{{ e.rank }}</span>
         <span class="lb-avatar" :style="{ background: e.color }">{{ e.emoji }}</span>
         <span class="lb-name">{{ e.name }}</span>
         <span class="lb-points">{{ e.points }}</span>
       </li>
-    </ol>
+    </TransitionGroup>
   </div>
 </template>
 
@@ -49,23 +49,23 @@ const entries = computed(() => (leaderboard.value || []).slice(0, props.limit))
   min-width: 280px;
   max-width: 420px;
   text-align: left;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255,255,255,0.12);
-  border-radius: 16px;
+  background: var(--surface-1, #181b23);
+  border: 1px solid var(--border, #23252f);
+  border-radius: 14px;
   padding: 16px 18px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.42));
 }
 .lb-title {
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--muted, #9aa0b8);
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .lb-empty {
   font-size: 13px;
-  color: #94a3b8;
-  font-style: italic;
+  color: var(--muted, #9aa0b8);
 }
 .lb-list {
   list-style: none;
@@ -79,24 +79,25 @@ const entries = computed(() => (leaderboard.value || []).slice(0, props.limit))
   display: flex;
   align-items: center;
   gap: 10px;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: var(--surface-2, #1e212b);
+  border: 1px solid var(--border, #23252f);
   border-radius: 10px;
   padding: 8px 10px;
-  transition: transform 0.25s ease, background 0.25s ease;
+  transition: transform 0.25s var(--ease, ease), opacity 0.25s var(--ease, ease), background 0.2s var(--ease, ease);
 }
-.lb-row:hover { background: rgba(255,255,255,0.09); }
+.lb-row:hover { background: var(--surface-3, #272b36); }
 .lb-rank {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  font-size: 13px;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 12px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--muted, #9aa0b8);
   min-width: 20px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
-.lb-row:nth-child(1) .lb-rank { color: #facc15; }
-.lb-row:nth-child(2) .lb-rank { color: #cbd5e1; }
-.lb-row:nth-child(3) .lb-rank { color: #fb923c; }
+.lb-row:nth-child(1) .lb-rank { color: var(--warn, #e6a817); }
+.lb-row:nth-child(2) .lb-rank { color: var(--muted, #9aa0b8); }
+.lb-row:nth-child(3) .lb-rank { color: #c0842a; }
 .lb-avatar {
   width: 28px;
   height: 28px;
@@ -107,21 +108,29 @@ const entries = computed(() => (leaderboard.value || []).slice(0, props.limit))
   font-size: 15px;
   line-height: 1;
   flex-shrink: 0;
-  border: 1px solid rgba(255,255,255,0.18);
+  border: 1px solid var(--border-2, #2c2f3a);
 }
 .lb-name {
   flex: 1;
   font-size: 13px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text, #eceef2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .lb-points {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
   font-size: 13px;
   font-weight: 700;
-  color: #38bdf8;
+  color: var(--accent, #4f7cff);
+  font-variant-numeric: tabular-nums;
+}
+.lb-list-move { transition: transform 0.35s var(--ease, ease); }
+.lb-list-enter-active, .lb-list-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.lb-list-enter-from, .lb-list-leave-to { opacity: 0; transform: translateY(6px); }
+.lb-list-leave-active { position: absolute; }
+@media (prefers-reduced-motion: reduce) {
+  .lb-row, .lb-list-move, .lb-list-enter-active, .lb-list-leave-active { transition: none; }
 }
 </style>

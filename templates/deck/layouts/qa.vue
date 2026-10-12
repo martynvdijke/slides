@@ -29,7 +29,7 @@ const topCount = computed(() => (qa.value ?? []).length)
 
 <style scoped>
 .interactive-slide { display:flex;align-items:center;justify-content:center;padding:28px 32px}
-.interactive-frame{width:min(920px,100%);background:rgba(15,23,42,0.92);border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:var(--radius-card,16px);padding:24px 26px;backdrop-filter:blur(18px);box-shadow:0 12px 36px rgba(0,0,0,0.35),inset 0 1px 0 rgba(255,255,255,0.06)}
+.interactive-frame{width:min(920px,100%);background:var(--surface-1,#181b23);border:1px solid var(--border,#23252f);border-radius:14px;padding:24px 26px;box-shadow:var(--shadow-sm,0 1px 2px rgba(0,0,0,.42))}
 .qa-frame{max-height:82vh;overflow:auto}
 .interactive-kicker{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted,#9AA0B8);font-weight:800}
 .interactive-head{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px}

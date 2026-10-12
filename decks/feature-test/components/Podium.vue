@@ -2,13 +2,6 @@
 import { computed } from 'vue'
 import { useLiveRoom, type LeaderboardEntry } from '../composables/useLiveRoom'
 
-/**
- * Podium — the end-of-quiz top-3 celebration plus the remaining standings.
- *
- * Shows only while the host has switched the event podium on
- * (`event.show_podium`); activating the next question switches it back off
- * server-side. Drop it on a closing slide and it appears when it matters.
- */
 const props = withDefaults(defineProps<{
   event?: string
   room?: string
@@ -37,7 +30,7 @@ const podiumOrder = computed(() => {
 })
 const rest = computed(() => entries.value.slice(3))
 const blockClass = ['second', 'first', 'third']
-const blockMedal = ['🥈', '🥇', '🥉']
+const blockMedal = ['2', '1', '3']
 </script>
 
 <template>
@@ -68,14 +61,14 @@ const blockMedal = ['🥈', '🥇', '🥉']
             </div>
           </div>
         </div>
-        <ol v-if="rest.length" class="podium-rest">
+        <TransitionGroup v-if="rest.length" name="podium-list" tag="ol" class="podium-rest">
           <li v-for="e in rest" :key="e.rank + '-' + e.name" class="podium-row">
             <span class="podium-row-rank">{{ e.rank }}</span>
             <span class="podium-row-avatar" :style="{ background: e.color }">{{ e.emoji }}</span>
             <span class="podium-row-name">{{ e.name }}</span>
             <span class="podium-row-pts">{{ e.points }}</span>
           </li>
-        </ol>
+        </TransitionGroup>
       </template>
     </div>
   </div>
@@ -86,23 +79,23 @@ const blockMedal = ['🥈', '🥇', '🥉']
   min-width: 300px;
   max-width: 480px;
   text-align: left;
-  background: rgba(15, 23, 42, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
+  background: var(--surface-1, #181b23);
+  border: 1px solid var(--border, #23252f);
+  border-radius: 14px;
   padding: 16px 18px;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0,0,0,.42));
 }
 .podium-title {
-  font-size: 12px;
+  font-size: 10px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: #94a3b8;
+  color: var(--muted, #9aa0b8);
   font-weight: 700;
   margin-bottom: 12px;
 }
 .podium-empty {
   font-size: 13px;
-  color: #94a3b8;
-  font-style: italic;
+  color: var(--muted, #9aa0b8);
 }
 .podium-stage {
   display: flex;
@@ -125,14 +118,15 @@ const blockMedal = ['🥈', '🥇', '🥉']
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 21px;
+  font-size: 19px;
   line-height: 1;
-  border: 2px solid rgba(255, 255, 255, 0.25);
+  border: 1px solid var(--border-2, #2c2f3a);
 }
 .podium-name {
+  font-family: var(--font-display, "Space Grotesk", sans-serif);
   font-size: 12px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text, #eceef2);
   max-width: 96px;
   white-space: nowrap;
   overflow: hidden;
@@ -147,14 +141,16 @@ const blockMedal = ['🥈', '🥇', '🥉']
   justify-content: center;
   gap: 2px;
   padding: 8px 6px;
-  color: #0f172a;
+  color: var(--text, #eceef2);
+  border: 1px solid var(--border, #23252f);
 }
-.podium-col.first .podium-block { height: 130px; background: linear-gradient(180deg, #fbbf24, #b45309); }
-.podium-col.second .podium-block { height: 100px; background: linear-gradient(180deg, #d1d5db, #6b7280); }
-.podium-col.third .podium-block { height: 80px; background: linear-gradient(180deg, #f59e0b, #92400e); }
-.podium-medal { font-size: 20px; }
-.podium-rank { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 11px; font-weight: 700; opacity: 0.75; }
-.podium-pts { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 800; }
+.podium-col.first .podium-block { height: 130px; background: var(--surface-2, #1e212b); border-color: var(--accent, #4f7cff); }
+.podium-col.second .podium-block { height: 100px; background: var(--surface-2, #1e212b); }
+.podium-col.third .podium-block { height: 80px; background: var(--surface-2, #1e212b); }
+.podium-medal { font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 18px; font-weight: 700; color: var(--muted, #9aa0b8); line-height: 1; }
+.podium-col.first .podium-medal { color: var(--accent, #4f7cff); }
+.podium-rank { font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 11px; font-weight: 700; opacity: 0.7; color: var(--muted, #9aa0b8); }
+.podium-pts { font-family: var(--font-mono, "JetBrains Mono", monospace); font-size: 14px; font-weight: 800; color: var(--text, #eceef2); }
 .podium-rest {
   list-style: none;
   margin: 0;
@@ -167,18 +163,20 @@ const blockMedal = ['🥈', '🥇', '🥉']
   display: flex;
   align-items: center;
   gap: 9px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 9px;
+  background: var(--surface-2, #1e212b);
+  border: 1px solid var(--border, #23252f);
+  border-radius: 10px;
   padding: 6px 9px;
+  transition: transform 0.25s var(--ease, ease), opacity 0.25s var(--ease, ease);
 }
 .podium-row-rank {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
   font-size: 12px;
   font-weight: 700;
-  color: #94a3b8;
+  color: var(--muted, #9aa0b8);
   min-width: 18px;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .podium-row-avatar {
   width: 24px;
@@ -189,22 +187,30 @@ const blockMedal = ['🥈', '🥇', '🥉']
   justify-content: center;
   font-size: 13px;
   line-height: 1;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid var(--border-2, #2c2f3a);
   flex-shrink: 0;
 }
 .podium-row-name {
   flex: 1;
   font-size: 12px;
   font-weight: 600;
-  color: #e2e8f0;
+  color: var(--text, #eceef2);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .podium-row-pts {
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
   font-size: 12px;
   font-weight: 700;
-  color: #38bdf8;
+  color: var(--accent, #4f7cff);
+  font-variant-numeric: tabular-nums;
+}
+.podium-list-move { transition: transform 0.35s var(--ease, ease); }
+.podium-list-enter-active, .podium-list-leave-active { transition: opacity 0.25s ease, transform 0.25s ease; }
+.podium-list-enter-from, .podium-list-leave-to { opacity: 0; transform: translateY(6px); }
+.podium-list-leave-active { position: absolute; }
+@media (prefers-reduced-motion: reduce) {
+  .podium-row, .podium-list-move, .podium-list-enter-active, .podium-list-leave-active { transition: none; }
 }
 </style>

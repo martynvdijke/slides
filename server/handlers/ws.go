@@ -213,7 +213,6 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 		return false
 	}
 
-	var lastSlideMs int64
 	for {
 		select {
 		case fr, open := <-ch:
@@ -249,10 +248,10 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 			}
 			// intercept slide before dispatch
 			var slidePeek struct {
-				Type  string `json:"type"`
-				Index *int   `json:"index"`
-				Total *int   `json:"total"`
-				Title string `json:"title"`
+				Type     string `json:"type"`
+				Index    *int   `json:"index"`
+				Total    *int   `json:"total"`
+				Title    string `json:"title"`
 				ID       string `json:"id"`
 				DeckSlug string `json:"deck_slug"`
 			}
@@ -270,15 +269,11 @@ func EventWS(w http.ResponseWriter, r *http.Request) {
 				if slidePeek.Total != nil {
 					tot = *slidePeek.Total
 				}
-				s := live.Slide{Index: idx, Total: tot, Title: slidePeek.Title}
-				now := time.Now().UnixMilli()
-				// Always activate (idempotent); throttle only broadcast/storage
-				_ = ActivateQuestionForSlide(ev.ID, idx, slidePeek.ID, slidePeek.DeckSlug)
-				if now-lastSlideMs < 200 {
-					_ = writeWS(ctx, c, okEnvelope("slide"))
-					continue
+				s := live.Slide{Index: idx, Total: tot, Title: slidePeek.Title, SlideID: slidePeek.ID, DeckSlug: slidePeek.DeckSlug}
+				if qid := resolveSlideQuestionID(ev.ID, slidePeek.ID, slidePeek.DeckSlug); qid != 0 {
+					s.QuestionID = qid
 				}
-				lastSlideMs = now
+				_ = ActivateQuestionForSlide(ev.ID, idx, slidePeek.ID, slidePeek.DeckSlug)
 				Broker.SetSlide(ev.Code, s)
 				Broker.BroadcastSlide(ev.Code, s)
 				_ = writeWS(ctx, c, okEnvelope("slide"))
@@ -484,40 +479,60 @@ func AdminEventStatsWS(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func resolveSlideQuestionID(eventID int64, slideID string, deckSlug string) int64 {
+	if slideID == "" {
+		return 0
+	}
+	if deckSlug != "" {
+		if q, err := db.FindQuestionByExternalID(eventID, deckSlug+":"+slideID); err == nil && q != nil {
+			return q.ID
+		}
+		return 0
+	}
+	var id int64
+	if err := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID).Scan(&id); err == nil {
+		return id
+	}
+	return 0
+}
+
+func lookupQuestionForSlide(eventID int64, slideID string, deckSlug string) (*db.Question, error) {
+	if slideID == "" {
+		return nil, nil
+	}
+	if deckSlug != "" {
+		return db.FindQuestionByExternalID(eventID, deckSlug+":"+slideID)
+	}
+	var id int64
+	if err := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID).Scan(&id); err != nil {
+		return nil, nil
+	}
+	return db.GetQuestion(id)
+}
+
 // Deck interactive slides MUST set frontmatter id; slides without id are ignored.
 // Resolve by deck_slug+slide_id when deck_slug present, else by slide_id among deck questions.
 func ActivateQuestionForSlide(eventID int64, slideIndex int, slideID string, deckSlug string) error {
-    if slideID == "" {
-        return nil
-    }
-    var q *db.Question
-    var err error
-    if deckSlug != "" {
-        q, err = db.FindQuestionByExternalID(eventID, deckSlug+":"+slideID)
-    } else {
-        // Resolve by slide_id alone; if multiple decks share slide_id, pick most recently updated (max id)
-        row := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID)
-        var id int64
-        if e := row.Scan(&id); e == nil {
-            q, err = db.GetQuestion(id)
-        }
-    }
-    if err != nil || q == nil {
-        return nil
-    }
-    if q.Status != "draft" {
-        return nil
-    }
-    if !q.AutoActivate {
-        return nil
-    }
-    if err := db.ActivateQuestion(eventID, q.ID, nil); err != nil {
-        return err
-    }
-    BroadcastEvent(eventID)
-    return nil
+	if slideID == "" {
+		return nil
+	}
+	q, err := lookupQuestionForSlide(eventID, slideID, deckSlug)
+	if err != nil || q == nil {
+		return nil
+	}
+	if q.Status != "draft" {
+		return nil
+	}
+	if !q.AutoActivate {
+		return nil
+	}
+	if err := db.ActivateQuestion(eventID, q.ID, nil); err != nil {
+		return err
+	}
+	BroadcastEvent(eventID)
+	return nil
 }
 
 func OnSlideChange(ev *db.Event, slideIndex int, slideID string) error {
-    return ActivateQuestionForSlide(ev.ID, slideIndex, slideID, "")
+	return ActivateQuestionForSlide(ev.ID, slideIndex, slideID, "")
 }
