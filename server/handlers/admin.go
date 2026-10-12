@@ -399,6 +399,20 @@ func AdminSlideControl(w http.ResponseWriter, r *http.Request) {
 	if s.Total == 0 {
 		s.Total = cur.Total
 	}
+	// Resolve question for this slide index (admin remote mirrors presenter path).
+	if q, err := db.FindQuestionBySlideIndex(ev.ID, idx); err == nil && q != nil {
+		s.SlideID = q.SlideID
+		s.DeckSlug = q.DeckSlug
+		s.QuestionID = q.ID
+		if qid := resolveSlideQuestionID(ev.ID, q.SlideID, q.DeckSlug); qid != 0 {
+			s.QuestionID = qid
+		}
+		_ = ActivateQuestionForSlide(ev.ID, idx, s.SlideID, s.DeckSlug)
+	} else {
+		s.QuestionID = 0
+		s.SlideID = ""
+		s.DeckSlug = ""
+	}
 	Broker.SetSlide(ev.Code, s)
 	Broker.BroadcastSlide(ev.Code, s)
 	_ = Broker.BroadcastNav(ev.Code, idx)

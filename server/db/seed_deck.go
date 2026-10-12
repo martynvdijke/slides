@@ -211,6 +211,13 @@ func syncEventQuestions(eventID int64, deckSlug string, qs []SeedQuestion) (crea
 				log.Printf("seed map %q: %v", key, mErr)
 			}
 		}
+		if questionID != 0 && q.SlideIndex != 0 {
+			if sErr := SetQuestionSlideIndex(questionID, q.SlideIndex); sErr != nil {
+				log.Printf("seed slide_index %q: %v", key, sErr)
+			}
+		} else if questionID != 0 {
+			_ = SetQuestionSlideIndex(questionID, q.SlideIndex)
+		}
 	}
 	return created, updated, nil
 }

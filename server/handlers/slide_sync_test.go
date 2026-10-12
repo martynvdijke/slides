@@ -147,12 +147,12 @@ func TestAdminSlideControlPreservesMapping(t *testing.T) {
 
 	ev, _ := db.CreateEvent("E", "admin-preserve-ev", "", "")
 	q, _ := db.CreateQuestion(ev.ID, "poll", "live", "Q1", []string{"a", "b"}, false, true, 1, "", "")
-	_, _ = db.DB.Exec("UPDATE questions SET external_id=?, deck_slug=?, slide_id=?, auto_activate=1 WHERE id=?", "meetup:s01", "meetup", "s01", q.ID)
+	_, _ = db.DB.Exec("UPDATE questions SET external_id=?, deck_slug=?, slide_id=?, slide_index=?, auto_activate=1, status='draft' WHERE id=?", "meetup:s01", "meetup", "s01", 5, q.ID)
+	Broker.SetSlide(ev.Code, live.Slide{Index: 3, Total: 10, Title: "Intro", SlideID: "intro", DeckSlug: "meetup"})
 
-	// seed broker with enriched slide at index 3
-	Broker.SetSlide(ev.Code, live.Slide{Index: 3, Total: 10, Title: "Hello", QuestionID: q.ID, SlideID: "s01", DeckSlug: "meetup"})
-
-	// admin moves index only — must preserve QuestionID/SlideID/DeckSlug
+	// admin moves to mapped index 5 — must resolve and activate
+	ch, unsub := Broker.Subscribe(ev.Code)
+	defer unsub()
 	body := bytes.NewBufferString(`{"index":5}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/admin/events/"+strconv.FormatInt(ev.ID, 10)+"/slide", body)
 	req.Header.Set("Content-Type", "application/json")
@@ -170,16 +170,50 @@ func TestAdminSlideControlPreservesMapping(t *testing.T) {
 		t.Fatalf("index %d want 5", got.Index)
 	}
 	if got.QuestionID != q.ID {
-		t.Fatalf("QuestionID %d want %d (must be preserved)", got.QuestionID, q.ID)
+		t.Fatalf("QuestionID %d want %d", got.QuestionID, q.ID)
 	}
 	if got.SlideID != "s01" || got.DeckSlug != "meetup" {
-		t.Fatalf("mapping clobbered %+v", got)
+		t.Fatalf("mapping wrong %+v", got)
 	}
 	if got.Total != 10 {
 		t.Fatalf("Total %d want 10", got.Total)
 	}
+	if aq, _ := db.GetActiveQuestion(ev.ID); aq == nil || aq.ID != q.ID {
+		t.Fatalf("active question not activated %+v want %d", aq, q.ID)
+	}
+	// broadcast slide frame must carry question_id/slide_id
+	found := false
+	for {
+		select {
+		case fr := <-ch:
+			if fr.Kind != live.KindSlide {
+				continue
+			}
+			var env struct {
+				Type string          `json:"type"`
+				Data json.RawMessage `json:"data"`
+			}
+			_ = json.Unmarshal(fr.Data, &env)
+			if env.Type != "slide" {
+				continue
+			}
+			var sd live.Slide
+			_ = json.Unmarshal(env.Data, &sd)
+			if sd.Index == 5 && sd.QuestionID == q.ID && sd.SlideID == "s01" {
+				found = true
+			}
+		default:
+			break
+		}
+		if found || len(ch) == 0 {
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("no slide broadcast with question_id")
+	}
 
-	// next/prev also preserve
+	// move to unmapped index 6 — must clear QuestionID and not activate
 	body2 := bytes.NewBufferString(`{"action":"next"}`)
 	req2 := httptest.NewRequest(http.MethodPost, "/api/admin/events/"+strconv.FormatInt(ev.ID, 10)+"/slide", body2)
 	req2.Header.Set("Content-Type", "application/json")
@@ -193,8 +227,11 @@ func TestAdminSlideControlPreservesMapping(t *testing.T) {
 	if got2.Index != 6 {
 		t.Fatalf("next index %d want 6", got2.Index)
 	}
-	if got2.QuestionID != q.ID || got2.SlideID != "s01" {
-		t.Fatalf("next clobbered %+v", got2)
+	if got2.QuestionID != 0 {
+		t.Fatalf("unmapped index should have QuestionID 0 got %d", got2.QuestionID)
+	}
+	if got2.SlideID != "" || got2.DeckSlug != "" {
+		t.Fatalf("unmapped should clear slide_id/deck_slug %+v", got2)
 	}
 }
 

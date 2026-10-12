@@ -133,6 +133,7 @@ type Question struct {
 	ExternalID   string
 	DeckSlug     string
 	SlideID      string
+	SlideIndex   int
 	AutoActivate bool
 }
 
@@ -542,6 +543,9 @@ func migrate() error {
 	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_questions_external ON questions(event_id, external_id) WHERE external_id <> ''"); err != nil {
 		return err
 	}
+	if err := ensureColumn("questions", "slide_index", "slide_index INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
 	if err := ensureColumn("questions", "seed_key", "seed_key TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
@@ -609,10 +613,10 @@ func migrateParticipantsCompositeUnique() error {
 			idxCols = append(idxCols, cname)
 		}
 		info.Close()
-		if len(idxCols)==2 && idxCols[0]=="token" && idxCols[1]=="event_id" {
+		if len(idxCols) == 2 && idxCols[0] == "token" && idxCols[1] == "event_id" {
 			hasComposite = true
 		}
-		if len(idxCols)==1 && idxCols[0]=="token" {
+		if len(idxCols) == 1 && idxCols[0] == "token" {
 			hasUniqueToken = true
 		}
 	}
@@ -625,7 +629,9 @@ func migrateParticipantsCompositeUnique() error {
 		rows, _ := DB.Query("SELECT sql FROM sqlite_master WHERE type='table' AND name='participants'")
 		if rows != nil {
 			var s sql.NullString
-			if rows.Next() { rows.Scan(&s) }
+			if rows.Next() {
+				rows.Scan(&s)
+			}
 			rows.Close()
 			if !s.Valid || !strings.Contains(s.String, "UNIQUE") {
 				return nil
@@ -1290,8 +1296,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	var dur, tl sql.NullInt64
 	var ac, ar sql.NullInt64
 	var extID, deckSlug, slideID sql.NullString
+	var slideIdx sql.NullInt64
 	var autoAct sql.NullInt64
-	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl, &extID, &deckSlug, &slideID, &autoAct)
+	err := rows.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl, &extID, &deckSlug, &slideID, &slideIdx, &autoAct)
 	if err != nil {
 		return nil, err
 	}
@@ -1337,6 +1344,9 @@ func scanQuestionRows(rows *sql.Rows) (*Question, error) {
 	}
 	if slideID.Valid {
 		q.SlideID = slideID.String
+	}
+	if slideIdx.Valid {
+		q.SlideIndex = int(slideIdx.Int64)
 	}
 	if autoAct.Valid {
 		q.AutoActivate = autoAct.Int64 != 0
@@ -1367,8 +1377,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	var dur, tl sql.NullInt64
 	var ac, ar sql.NullInt64
 	var extID, deckSlug, slideID sql.NullString
+	var slideIdx sql.NullInt64
 	var autoAct sql.NullInt64
-	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl, &extID, &deckSlug, &slideID, &autoAct)
+	err := row.Scan(&q.ID, &q.EventID, &q.Kind, &q.Mode, &q.Prompt, &opts, &q.Position, &q.Status, &sr, &fb, &q.MediaURL, &q.MediaType, &ca, &ci, &pb, &aa, &dur, &ac, &ar, &tl, &extID, &deckSlug, &slideID, &slideIdx, &autoAct)
 	if err != nil {
 		return nil, err
 	}
@@ -1415,6 +1426,9 @@ func scanQuestionRow(row *sql.Row) (*Question, error) {
 	if slideID.Valid {
 		q.SlideID = slideID.String
 	}
+	if slideIdx.Valid {
+		q.SlideIndex = int(slideIdx.Int64)
+	}
 	if autoAct.Valid {
 		q.AutoActivate = autoAct.Int64 != 0
 	} else {
@@ -1441,7 +1455,7 @@ func CreateQuestion(eventID int64, kind, mode, prompt string, options []string, 
 }
 
 func ListQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND is_feedback=0 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1464,7 +1478,7 @@ func ListQuestions(eventID int64) ([]Question, error) {
 }
 
 func ListFeedbackQuestions(eventID int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND is_feedback=1 ORDER BY position ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1487,7 +1501,7 @@ func ListFeedbackQuestions(eventID int64) ([]Question, error) {
 }
 
 func GetQuestion(id int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE id=?", id)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE id=?", id)
 	return scanQuestionRow(row)
 }
 
@@ -1615,7 +1629,7 @@ func SetQuestionShowResults(qid int64, show bool) error {
 }
 
 func ListDueQuestions(nowMs int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
 	if err != nil {
 		return nil, err
 	}
@@ -1705,7 +1719,7 @@ func CloseQuestion(eventID, questionID int64) error {
 }
 
 func GetActiveQuestion(eventID int64) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND status IN ('live','locked','revealed') ORDER BY CASE status WHEN 'live' THEN 0 WHEN 'locked' THEN 1 ELSE 2 END, activated_at DESC, id DESC LIMIT 1", eventID)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND status IN ('live','locked','revealed') ORDER BY CASE status WHEN 'live' THEN 0 WHEN 'locked' THEN 1 ELSE 2 END, activated_at DESC, id DESC LIMIT 1", eventID)
 	q, err := scanQuestionRow(row)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -1773,9 +1787,14 @@ func SetQuestionDeckMapping(id int64, externalID, deckSlug, slideID string) erro
 	return err
 }
 
+func SetQuestionSlideIndex(id int64, slideIndex int) error {
+	_, err := DB.Exec("UPDATE questions SET slide_index=? WHERE id=?", slideIndex, id)
+	return err
+}
+
 // GetQuestionBySeedKey returns the question with the given seed key for the event.
 func GetQuestionBySeedKey(eventID int64, key string) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND seed_key=?", eventID, key)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND seed_key=?", eventID, key)
 	return scanQuestionRow(row)
 }
 
@@ -2473,10 +2492,18 @@ func GetParticipantByTokenForEvent(token string, eventID int64) (*Participant, e
 		return nil, err
 	}
 	p.CreatedAt = parseTimePragmatic(ca)
-	if dn.Valid { p.DisplayName = dn.String }
-	if em.Valid { p.Emoji = em.String }
-	if cl.Valid { p.Color = cl.String }
-	if ls.Valid { p.LastSeen = ls.Int64 }
+	if dn.Valid {
+		p.DisplayName = dn.String
+	}
+	if em.Valid {
+		p.Emoji = em.String
+	}
+	if cl.Valid {
+		p.Color = cl.String
+	}
+	if ls.Valid {
+		p.LastSeen = ls.Int64
+	}
 	return &p, nil
 }
 
@@ -3035,8 +3062,8 @@ func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
 		return 0, err
 	}
 	newID, _ := res.LastInsertId()
-	_, err = tx.Exec(`INSERT INTO questions (event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, activated_at, external_id, deck_slug, slide_id, auto_activate)
-		SELECT ?, kind, mode, prompt, options, position, 'draft', 0, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, NULL, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=?`, newID, sourceID)
+	_, err = tx.Exec(`INSERT INTO questions (event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, activated_at, external_id, deck_slug, slide_id, slide_index, auto_activate)
+		SELECT ?, kind, mode, prompt, options, position, 'draft', 0, is_feedback, media_url, media_type, correct_index, points_base, duration_sec, auto_close, auto_reveal, time_limit_s, NULL, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=?`, newID, sourceID)
 	if err != nil {
 		return 0, err
 	}
@@ -3208,17 +3235,17 @@ func DeleteExpiredPasswordResetTokens() error {
 
 // DeckSlide is a single slide synced from a Slidev deck.
 type DeckSlide struct {
-	SlideID     string   `json:"slide_id"`
-	Position    int      `json:"position"`
-	Prompt      string   `json:"prompt"`
-	Kind        string   `json:"kind"`
-	Options     []string `json:"options"`
-	PointsBase  int      `json:"points_base"`
-	CorrectIndex *int    `json:"correct_index"`
-	DurationSec int      `json:"duration_sec"`
-	TimeLimitS  int      `json:"time_limit_s"`
-	ShowResults bool     `json:"show_results"`
-	Activate    string   `json:"activate"`
+	SlideID      string   `json:"slide_id"`
+	Position     int      `json:"position"`
+	Prompt       string   `json:"prompt"`
+	Kind         string   `json:"kind"`
+	Options      []string `json:"options"`
+	PointsBase   int      `json:"points_base"`
+	CorrectIndex *int     `json:"correct_index"`
+	DurationSec  int      `json:"duration_sec"`
+	TimeLimitS   int      `json:"time_limit_s"`
+	ShowResults  bool     `json:"show_results"`
+	Activate     string   `json:"activate"`
 }
 
 func validateGridAnswer(raw string) (string, error) {
@@ -3238,8 +3265,17 @@ func validateGridAnswer(raw string) (string, error) {
 	return string(b), nil
 }
 
+func FindQuestionBySlideIndex(eventID int64, index int) (*Question, error) {
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND external_id<>'' AND slide_index=? ORDER BY id ASC LIMIT 1", eventID, index)
+	q, err := scanQuestionRow(row)
+	if err != nil {
+		return nil, err
+	}
+	return q, nil
+}
+
 func FindQuestionByExternalID(eventID int64, externalID string) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND external_id=?", eventID, externalID)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND external_id=?", eventID, externalID)
 	q, err := scanQuestionRow(row)
 	if err != nil {
 		return nil, err
@@ -3248,7 +3284,7 @@ func FindQuestionByExternalID(eventID int64, externalID string) (*Question, erro
 }
 
 func FindQuestionByPosition(eventID int64, position int) (*Question, error) {
-	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND position=? LIMIT 1", eventID, position)
+	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE event_id=? AND position=? LIMIT 1", eventID, position)
 	q, err := scanQuestionRow(row)
 	if err != nil {
 		return nil, err
@@ -3282,7 +3318,7 @@ func UpsertDeckQuestion(eventID int64, d DeckSlide, deckSlug string) (bool, erro
 	// check existence
 	var exists int
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=? AND external_id=?", eventID, externalID).Scan(&exists)
-	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, external_id, deck_slug, slide_id, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, auto_activate=excluded.auto_activate, status='draft'`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, externalID, deckSlug, d.SlideID, autoAct)
+	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, slide_index=excluded.slide_index, auto_activate=excluded.auto_activate, status='draft'`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, externalID, deckSlug, d.SlideID, d.Position, autoAct)
 	if err != nil {
 		return false, err
 	}
