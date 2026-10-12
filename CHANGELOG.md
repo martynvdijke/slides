@@ -1,3 +1,10 @@
+# [1.20.0](https://github.com/martynvdijke/slides/compare/v1.19.1...v1.20.0) (2026-10-12)
+
+
+### Features
+
+* **ui:** redesign all surfaces, remove "AI" aesthetic, sync questions to slides ([bf6b533](https://github.com/martynvdijke/slides/commit/bf6b533033f9708e0ea5a44bcac32f0bd251ebaf))
+
 ## [1.19.1](https://github.com/martynvdijke/slides/compare/v1.19.0...v1.19.1) (2026-10-12)
 
 # [1.19.0](https://github.com/martynvdijke/slides/compare/v1.18.2...v1.19.0) (2026-10-12)
