@@ -377,6 +377,24 @@ let slidePoll: ReturnType<typeof setInterval> | null = null
 let lastSlideIndex = -1
 let lastSlideKey = ''
 let slidevNav: any = null
+let deckQuestionsByIndex: Record<number, string> = {}
+let deckQuestionsFetched = false
+function ensureDeckQuestions() {
+  if (deckQuestionsFetched) return
+  deckQuestionsFetched = true
+  try {
+    const p = (typeof location !== 'undefined' ? location.pathname : '') || ''
+    let base = ''
+    if (p.includes('/feature-test')) base = '/feature-test/questions.json'
+    else if (p.includes('/meetup')) base = '/meetup/questions.json'
+    else if (p.includes('/opencode')) base = '/opencode/questions.json'
+    else base = '/feature-test/questions.json'
+    fetch(base, { cache: 'no-store' }).then(r=>r.ok?r.json():null).then(j=>{
+      const qs = Array.isArray((j as any)?.questions) ? (j as any).questions : []
+      for (const q of qs) if (typeof q.slide_index === 'number' && typeof q.id === 'string') deckQuestionsByIndex[q.slide_index]=q.id
+    }).catch(()=>{})
+  } catch {}
+}
 
 const autoActivate = ref(true)
 try {
@@ -397,7 +415,8 @@ function getSlideSnapshot(): { index: number; total: number; title: string; id: 
       const total = nav.total ?? nav.slides?.length ?? (nav.slides?.value?.length) ?? 0
       const title = nav.currentSlideRoute?.meta?.slide?.title ?? nav.currentSlide?.title ?? nav.currentSlideRoute?.value?.meta?.slide?.title ?? ''
       const fm = nav.currentSlideRoute?.meta?.slide?.frontmatter ?? nav.currentSlide?.frontmatter ?? nav.currentSlideRoute?.value?.meta?.slide?.frontmatter ?? {}
-      const id = String(fm?.id ?? fm?.slide_id ?? '')
+      let id = String(fm?.id ?? fm?.slide_id ?? '')
+      if (!id && deckQuestionsByIndex[nav.currentPage]) id = deckQuestionsByIndex[nav.currentPage]
       return { index: nav.currentPage, total: total || 1, title: String(title || ''), id }
     }
     if (typeof location !== 'undefined') {
@@ -405,7 +424,10 @@ function getSlideSnapshot(): { index: number; total: number; title: string; id: 
       const m = hash.match(/#\/?(\d+)/)
       if (m) {
         const idx = parseInt(m[1], 10)
-        if (!isNaN(idx)) return { index: idx, total: 1, title: '', id: '' }
+        if (!isNaN(idx)) {
+          const qid = deckQuestionsByIndex[idx] || ''
+          return { index: idx, total: 1, title: '', id: qid }
+        }
       }
       const path = location.pathname || ''
       const pm = path.match(/\/(\d+)(?:\/|$)/)
@@ -433,6 +455,7 @@ function maybeSendSlide() {
 
 function startSlideWatcher() {
   if (staticMode.value) return
+  ensureDeckQuestions()
   // try to capture slidev nav early
   try {
     const g: any = typeof window !== 'undefined' ? (window as any) : (globalThis as any)

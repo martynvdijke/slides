@@ -485,5 +485,5 @@ Stay in touch — three channels, bold prefix as in original.
 <!--
 <LiveReactions />
 <Leaderboard :limit="10" />
-<PresenterPanel />
+PresenterPanel is mounted persistently via global-top.vue.
 -->

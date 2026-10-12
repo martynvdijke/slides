@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useNav } from '@slidev/client'
 import { useLiveRoom } from './composables/useLiveRoom'
+import PresenterPanel from './components/PresenterPanel.vue'
 
 /**
  * Global top — persists across slides. Shows a compact join hint (QR + code)
@@ -269,6 +270,7 @@ try {
 </script>
 
 <template>
+  <PresenterPanel />
   <div class="deck-global-top" aria-hidden="false">
     <!-- join hint — only when configured and not on print -->
     <div v-if="configured && !sessionExpired" class="deck-join-hint">

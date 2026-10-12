@@ -44,9 +44,7 @@ layout: center
 <LiveQa :limit="5" />
 
 <!--
-Opt-in presenter panel: author questions (with photos/video) from the slides.
-Press "p" to toggle, or add `fab` for a small on-screen button.
-<PresenterPanel />
+PresenterPanel is mounted persistently via global-top.vue (press "p" to toggle; add `fab` for a button).
 -->
 
 <!--

@@ -110,10 +110,11 @@ Prompts accept image and video media.
 
 # Presenter overlay
 
-<!-- PresenterPanel is an overlay toggled with the `p` hotkey. -->
+<!-- PresenterPanel is now mounted persistently via global-top.vue (fab). -->
 
-<PresenterPanel fab />
-
+---
+layout: default
+id: ft-ranking
 ---
 
 # Ranking

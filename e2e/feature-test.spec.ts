@@ -390,4 +390,77 @@ test.describe('feature-test deck', () => {
     await deckCtx.close()
     await audCtx.close()
   })
+
+  test('slide-driven auto-activation: host navigating to ft-ranking activates without API', async ({ browser }) => {
+    test.setTimeout(120000)
+    // Authenticated host context — login via its own request so WS is authenticated
+    const hostCtx = await browser.newContext()
+    const hostReq = hostCtx.request
+    await login(hostReq)
+    const ev = await createEvent(hostReq, `E2E FT auto-activate ${Date.now()}`)
+
+    // Sync deck slide ft-ranking (slide 11) as a draft question
+    const syncRes = await hostReq.post(`/api/admin/events/${ev.id}/deck/sync`, {
+      data: {
+        deck_slug: 'feature-test',
+        slides: [
+          {
+            slide_id: 'ft-ranking',
+            kind: 'ranking',
+            prompt: 'Rank these platform capabilities by importance to you.',
+            options: ['Developer experience', 'Reliability', 'Cost efficiency'],
+            position: 11,
+          },
+        ],
+      },
+    })
+    expect(syncRes.ok(), 'deck sync should succeed').toBeTruthy()
+
+    // Host page (same context => authenticated WS) opens at slide 11
+    const hostPage = await hostCtx.newPage()
+    attachFilters(hostPage)
+    await gotoSlide(hostPage, ev.code, 11)
+    // fab should be visible from persistent global-top
+    await expect(hostPage.locator('.pp-fab')).toBeVisible({ timeout: 15000 })
+    // Ensure presenter is authed (open panel, sign in if needed)
+    await hostPage.locator('.pp-fab').click()
+    await expect(hostPage.locator('.pp-overlay[role="dialog"] .pp-panel')).toBeVisible({ timeout: 15000 })
+    const authForm = hostPage.locator('.pp-auth')
+    if (await authForm.isVisible()) {
+      await hostPage.locator('.pp-auth input[placeholder="Username"]').fill('admin')
+      await hostPage.locator('.pp-auth input[placeholder="Password"]').fill('password123')
+      await hostPage.locator('.pp-auth .pp-btn.primary', { hasText: 'Sign in' }).click()
+      await expect(hostPage.locator('textarea.pp-textarea')).toBeVisible({ timeout: 15000 })
+    }
+    await hostPage.keyboard.press('p')
+    await expect(hostPage.locator('.pp-overlay')).toBeHidden({ timeout: 5000 })
+
+    // Poll server state until slide auto-activates (covers WS timing) — nudge slide watcher
+    for (let i = 0; i < 6; i++) {
+      await hostPage.evaluate(() => { try { location.hash = location.hash; window.dispatchEvent(new Event('hashchange')) } catch {} })
+      await hostPage.waitForTimeout(900)
+      const r = await hostReq.get(`/api/events/${ev.code}/state`)
+      const j = await r.json().catch(() => ({}))
+      if (j.active_question?.prompt?.includes('Rank these platform capabilities')) break
+    }
+    await expect.poll(async () => {
+      const r = await hostReq.get(`/api/events/${ev.code}/state`)
+      const j = await r.json().catch(() => ({}))
+      return j.active_question?.prompt || ''
+    }, { timeout: 15000 }).toContain('Rank these platform capabilities')
+    // Without calling activateQuestion, the prompt should become visible via slide auto-activation
+    await expect(hostPage.locator('.live-q-prompt').first()).toContainText('Rank these platform capabilities by importance to you.', { timeout: 20000 })
+
+    // Unauthenticated viewer sees the now-active question too (activation is global)
+    const anonCtx2 = await browser.newContext()
+    const anon2 = await anonCtx2.newPage()
+    attachFilters(anon2)
+    await anon2.goto(`/feature-test/?event=${ev.code}#/11`, { waitUntil: 'domcontentloaded' })
+    await anon2.waitForTimeout(1500)
+    // After host activation, even anon should see the prompt (global active_question)
+    await expect(anon2.locator('.live-q-prompt').first()).toContainText('Rank these platform capabilities', { timeout: 15000 })
+
+    await hostCtx.close()
+    await anonCtx2.close()
+  })
 })
