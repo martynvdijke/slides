@@ -1,3 +1,10 @@
+## [1.20.3](https://github.com/martynvdijke/slides/compare/v1.20.2...v1.20.3) (2026-10-12)
+
+
+### Bug Fixes
+
+* **live:** activate slide questions from the admin deck remote ([c37904c](https://github.com/martynvdijke/slides/commit/c37904c5580e0495bfd65bdd613730aacded7d02))
+
 ## [1.20.2](https://github.com/martynvdijke/slides/compare/v1.20.1...v1.20.2) (2026-10-12)
 
 ## [1.20.1](https://github.com/martynvdijke/slides/compare/v1.20.0...v1.20.1) (2026-10-12)
