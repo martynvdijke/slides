@@ -132,126 +132,211 @@ export function extractQuestions(markdown) {
 
   for (const match of markdown.matchAll(LIVE_QUESTION_RE)) {
     index++
-    const body = match[1]
-    let data
-    try {
-      data = yaml.load(body) ?? {}
-    } catch (e) {
-      console.warn(`Skipping live-question block #${index}: YAML parse error: ${e.message}`)
-      continue
-    }
-    if (data == null || typeof data !== 'object' || Array.isArray(data)) {
-      console.warn(`Skipping live-question block #${index}: YAML did not produce an object`)
-      continue
-    }
-
-    // prompt required
-    const prompt = data.prompt != null ? String(data.prompt).trim() : ''
-    if (!prompt) {
-      console.warn(`Skipping live-question block #${index}: missing or empty prompt`)
-      continue
-    }
-
-    // kind
-    let kind = data.kind != null ? String(data.kind).trim().toLowerCase() : 'poll'
-    if (!VALID_KINDS.has(kind)) {
-      console.warn(`live-question block #${index}: unknown kind "${kind}", defaulting to "poll"`)
-      kind = 'poll'
-    }
-
-    // options
-    let options = []
-    if (Array.isArray(data.options)) {
-      options = data.options.map(o => String(o))
-    } else if (data.options != null) {
-      // if options is not array but present, treat as invalid
-      options = []
-    }
-
-    if (NEEDS_OPTIONS.has(kind)) {
-      if (options.length < 2) {
-        console.warn(`Skipping live-question block #${index} (kind=${kind}): options required (>=2)`)
-        continue
-      }
-    } else {
-      // ignored/empty otherwise — always empty array
-      options = []
-    }
-
-    // correct -> correct_index
-    let correct_index = null
-    if (data.correct !== undefined && data.correct !== null && String(data.correct).trim() !== '') {
-      if (typeof data.correct === 'number' && Number.isInteger(data.correct)) {
-        correct_index = data.correct
-      } else if (typeof data.correct === 'string' && /^-?\d+$/.test(data.correct.trim())) {
-        correct_index = parseInt(data.correct.trim(), 10)
-      } else if (typeof data.correct === 'number') {
-        // non-integer number -> treat as integer truncation? Warn and keep int
-        correct_index = Math.trunc(data.correct)
-      } else {
-        // string match against options
-        const needle = String(data.correct).trim().toLowerCase()
-        const idx = options.findIndex(o => o.trim().toLowerCase() === needle)
-        if (idx >= 0) {
-          correct_index = idx
-        } else {
-          console.warn(`live-question block #${index}: correct value "${data.correct}" did not match any option, leaving null`)
-          correct_index = null
-        }
-      }
-    }
-
-    // id
-    let id
-    if (data.id != null && String(data.id).trim() !== '') {
-      id = String(data.id).trim()
-    } else {
-      const slug = slugify(prompt)
-      id = slug || `q${index}`
-    }
-
-    // deduplicate: suffix -2, -3 ...
-    if (seen.has(id)) {
-      const base = id
-      let suffix = 2
-      // Find next available suffix
-      while (seen.has(`${base}-${suffix}`)) suffix++
-      const newId = `${base}-${suffix}`
-      console.warn(`Duplicate id "${base}" at block #${index}, renaming to "${newId}"`)
-      seen.set(base, (seen.get(base) ?? 1) + 1)
-      seen.set(newId, 1)
-      id = newId
-    } else {
-      seen.set(id, 1)
-    }
-
-    const q = {
-      id,
-      kind,
-      mode: data.mode != null ? String(data.mode) : 'live',
-      prompt,
-      options,
-      correct_index,
-      points_base: data.points != null ? Number(data.points) : 100,
-      show_results: data.show_results != null ? Boolean(data.show_results) : true,
-      time_limit_s: data.time_limit_s != null ? Number(data.time_limit_s) : 0,
-      duration_sec: data.duration_sec != null ? Number(data.duration_sec) : 0,
-      media_url: data.media_url != null ? String(data.media_url) : '',
-      media_type: data.media_type != null ? String(data.media_type) : '',
-    }
-
-    // Normalize NaN fallbacks
-    if (Number.isNaN(q.points_base)) q.points_base = 100
-    if (Number.isNaN(q.time_limit_s)) q.time_limit_s = 0
-    if (Number.isNaN(q.duration_sec)) q.duration_sec = 0
-
-    questions.push(q)
+    const q = buildQuestion(match[1], index, seen)
+    if (q) questions.push(q)
   }
 
   return questions
 }
 
-export function main() {
+/**
+ * Parse one live-question comment body into a question object.
+ * Returns null when the block is invalid (a warning is logged).
+ */
+function buildQuestion(body, index, seen) {
+  let data
+  try {
+    data = yaml.load(body) ?? {}
+  } catch (e) {
+    console.warn(`Skipping live-question block #${index}: YAML parse error: ${e.message}`)
+    return null
+  }
+  if (data == null || typeof data !== 'object' || Array.isArray(data)) {
+    console.warn(`Skipping live-question block #${index}: YAML did not produce an object`)
+    return null
+  }
+
+  // prompt required
+  const prompt = data.prompt != null ? String(data.prompt).trim() : ''
+  if (!prompt) {
+    console.warn(`Skipping live-question block #${index}: missing or empty prompt`)
+    return null
+  }
+
+  // kind
+  let kind = data.kind != null ? String(data.kind).trim().toLowerCase() : 'poll'
+  if (!VALID_KINDS.has(kind)) {
+    console.warn(`live-question block #${index}: unknown kind "${kind}", defaulting to "poll"`)
+    kind = 'poll'
+  }
+
+  // options
+  let options = []
+  if (Array.isArray(data.options)) {
+    options = data.options.map(o => String(o))
+  } else if (data.options != null) {
+    // if options is not array but present, treat as invalid
+    options = []
+  }
+
+  if (NEEDS_OPTIONS.has(kind)) {
+    if (options.length < 2) {
+      console.warn(`Skipping live-question block #${index} (kind=${kind}): options required (>=2)`)
+      return null
+    }
+  } else {
+    // ignored/empty otherwise — always empty array
+    options = []
+  }
+
+  // correct -> correct_index
+  let correct_index = null
+  if (data.correct !== undefined && data.correct !== null && String(data.correct).trim() !== '') {
+    if (typeof data.correct === 'number' && Number.isInteger(data.correct)) {
+      correct_index = data.correct
+    } else if (typeof data.correct === 'string' && /^-?\d+$/.test(data.correct.trim())) {
+      correct_index = parseInt(data.correct.trim(), 10)
+    } else if (typeof data.correct === 'number') {
+      // non-integer number -> treat as integer truncation? Warn and keep int
+      correct_index = Math.trunc(data.correct)
+    } else {
+      // string match against options
+      const needle = String(data.correct).trim().toLowerCase()
+      const idx = options.findIndex(o => o.trim().toLowerCase() === needle)
+      if (idx >= 0) {
+        correct_index = idx
+      } else {
+        console.warn(`live-question block #${index}: correct value "${data.correct}" did not match any option, leaving null`)
+        correct_index = null
+      }
+    }
+  }
+
+  // id
+  let id
+  if (data.id != null && String(data.id).trim() !== '') {
+    id = String(data.id).trim()
+  } else {
+    const slug = slugify(prompt)
+    id = slug || `q${index}`
+  }
+
+  // deduplicate: suffix -2, -3 ...
+  if (seen.has(id)) {
+    const base = id
+    let suffix = 2
+    // Find next available suffix
+    while (seen.has(`${base}-${suffix}`)) suffix++
+    const newId = `${base}-${suffix}`
+    console.warn(`Duplicate id "${base}" at block #${index}, renaming to "${newId}"`)
+    seen.set(base, (seen.get(base) ?? 1) + 1)
+    seen.set(newId, 1)
+    id = newId
+  } else {
+    seen.set(id, 1)
+  }
+
+  const q = {
+    id,
+    kind,
+    mode: data.mode != null ? String(data.mode) : 'live',
+    prompt,
+    options,
+    correct_index,
+    points_base: data.points != null ? Number(data.points) : 100,
+    show_results: data.show_results != null ? Boolean(data.show_results) : true,
+    time_limit_s: data.time_limit_s != null ? Number(data.time_limit_s) : 0,
+    duration_sec: data.duration_sec != null ? Number(data.duration_sec) : 0,
+    media_url: data.media_url != null ? String(data.media_url) : '',
+    media_type: data.media_type != null ? String(data.media_type) : '',
+  }
+
+  // Normalize NaN fallbacks
+  if (Number.isNaN(q.points_base)) q.points_base = 100
+  if (Number.isNaN(q.time_limit_s)) q.time_limit_s = 0
+  if (Number.isNaN(q.duration_sec)) q.duration_sec = 0
+
+  return q
+}
+
+/**
+ * Compute the 1-based Slidev slide number containing a character offset.
+ * Headmatter (a leading --- block) is not a slide and does not count.
+ */
+function slideIndexAt(markdown, offset) {
+  const lines = markdown.split(/\r?\n/)
+  let pos = 0
+  let slide = 1
+  let inHeadmatter = false
+  let firstLine = true
+  for (const line of lines) {
+    if (line.trim() === '---') {
+      if (firstLine) inHeadmatter = true
+      else if (inHeadmatter) inHeadmatter = false
+      else slide++
+    }
+    if (offset < pos + line.length + 1) return slide
+    pos += line.length + 1
+    firstLine = false
+  }
+  return slide
+}
+
+/**
+ * Like extractQuestions, but also tags each question with `slide_index` (the
+ * 1-based Slidev slide that contains it). Decks use this mapping to send the
+ * question id when landing on a slide, which auto-activates the question for
+ * the audience (see server handlers.ActivateQuestionForSlide).
+ *
+ * Uses @slidev/parser when available: its slides[].start/end are 0-based line
+ * numbers of each slide, so a comment's line locates its slide exactly.
+ * Falls back to scanning `---` separators, which covers comment-authored decks.
+ */
+export async function extractQuestionsWithSlides(markdown) {
+  let slideRanges = null // [{ startLine, endLine }] 0-based, end exclusive
+  try {
+    const mod = await import('@slidev/parser')
+    const parse = mod?.parse ?? mod?.default?.parse
+    if (typeof parse === 'function') {
+      const parsed = await parse(markdown, 'slides.md')
+      const slides = parsed?.slides
+      if (
+        Array.isArray(slides) &&
+        slides.length > 0 &&
+        slides.every(s => Number.isFinite(s?.start) && Number.isFinite(s?.end))
+      ) {
+        slideRanges = slides.map(s => ({ start: Number(s.start), end: Number(s.end) }))
+      }
+    }
+  } catch {}
+
+  const questions = []
+  const seen = new Map() // id -> count
+  let index = 0 // 1-based overall block index
+  let line = 0 // 0-based line of the current match
+  let lineCursor = 0 // offset already scanned for newlines
+
+  for (const match of markdown.matchAll(LIVE_QUESTION_RE)) {
+    index++
+    const q = buildQuestion(match[1], index, seen)
+    if (!q) continue
+    const offset = match.index ?? 0
+    for (let i = lineCursor; i < offset && i < markdown.length; i++) {
+      if (markdown[i] === '\n') line++
+    }
+    lineCursor = offset
+    if (slideRanges) {
+      const ri = slideRanges.findIndex(r => line >= r.start && line < r.end)
+      q.slide_index = ri >= 0 ? ri + 1 : slideIndexAt(markdown, offset)
+    } else {
+      q.slide_index = slideIndexAt(markdown, offset)
+    }
+    questions.push(q)
+  }
+  return questions
+}
+
+export async function main() {
   const dist = 'dist'
   if (!existsSync(dist)) {
     console.warn('No dist/ found. Skipping question extraction (run `npm run build --workspaces` first).')
@@ -279,7 +364,7 @@ export function main() {
       console.warn(`Deck "${deck}" has no slides.md at ${slidesPath}; writing empty manifest`)
     }
 
-    const questions = markdown ? extractQuestions(markdown) : []
+    const questions = markdown ? await extractQuestionsWithSlides(markdown) : []
     const event_name = frontmatter.title || deck
     const manifest = {
       deck,
@@ -305,6 +390,9 @@ export function main() {
   }
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main()
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((e) => {
+    console.error(e)
+    process.exit(1)
+  })
 }

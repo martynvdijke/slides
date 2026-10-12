@@ -83,7 +83,7 @@ func TestSeedDeckQuestionsFromDir(t *testing.T) {
 		EventCode: "feature-test",
 		EventName: "Feature test",
 		Questions: []SeedQuestion{
-			{ID: "k8s-control-plane", Kind: "multi", Mode: "live", Prompt: "What is it?", Options: []string{"A", "B"}, CorrectIndex: &ci, PointsBase: 100, ShowResults: &sr, TimeLimitS: 30},
+			{ID: "k8s-control-plane", Kind: "multi", Mode: "live", Prompt: "What is it?", Options: []string{"A", "B"}, CorrectIndex: &ci, PointsBase: 100, ShowResults: &sr, TimeLimitS: 30, SlideIndex: 5},
 		},
 	}
 	// Ensure JSON shape matches frozen spec.
@@ -105,6 +105,27 @@ func TestSeedDeckQuestionsFromDir(t *testing.T) {
 	if len(qs) != 1 {
 		t.Fatalf("questions count %d want 1", len(qs))
 	}
+	// Deck mapping must be filled so slide broadcasts (id-only) can resolve it.
+	if qs[0].ExternalID != "feature-test:k8s-control-plane" {
+		t.Fatalf("external_id %q want feature-test:k8s-control-plane", qs[0].ExternalID)
+	}
+	if qs[0].DeckSlug != "feature-test" {
+		t.Fatalf("deck_slug %q want feature-test", qs[0].DeckSlug)
+	}
+	if qs[0].SlideID != "k8s-control-plane" {
+		t.Fatalf("slide_id %q want k8s-control-plane", qs[0].SlideID)
+	}
+	if !qs[0].AutoActivate {
+		t.Fatalf("auto_activate false want true")
+	}
+	// The ws.go fallback resolves by slide_id alone (presenter frames carry no deck_slug).
+	var resolvedID int64
+	if err := DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>''", ev.ID, "k8s-control-plane").Scan(&resolvedID); err != nil {
+		t.Fatalf("slide_id fallback lookup: %v", err)
+	}
+	if resolvedID != qs[0].ID {
+		t.Fatalf("fallback resolved %d want %d", resolvedID, qs[0].ID)
+	}
 	// No duplicates on second run.
 	if err := SeedDeckQuestionsFromDir(decksDir); err != nil {
 		t.Fatalf("SeedDeckQuestionsFromDir 2: %v", err)
@@ -115,5 +136,8 @@ func TestSeedDeckQuestionsFromDir(t *testing.T) {
 	}
 	if qs[0].ID != qs2[0].ID {
 		t.Fatalf("ID changed on second run %d -> %d", qs[0].ID, qs2[0].ID)
+	}
+	if qs2[0].ExternalID != "feature-test:k8s-control-plane" || qs2[0].SlideID != "k8s-control-plane" {
+		t.Fatalf("mapping lost on second run: external_id=%q slide_id=%q", qs2[0].ExternalID, qs2[0].SlideID)
 	}
 }

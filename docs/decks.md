@@ -383,7 +383,8 @@ It discovers every built deck (`dist/<deck>/index.html`), parses the
       "time_limit_s": 0,
       "duration_sec": 0,
       "media_url": "",
-      "media_type": ""
+      "media_type": "",
+      "slide_index": 3
     }
   ]
 }
@@ -398,6 +399,15 @@ Seeding is **idempotent by question `id`** (stored in `questions.seed_key`):
 re-importing updates the existing row in place rather than duplicating it, and
 the markdown stays the **source of truth** — edits to `slides.md` are applied on
 the next container start / upgrade.
+
+Each question also carries `slide_index` — the 1-based Slidev slide that
+contains its `<!-- live-question -->` block. Seeding stores it as the deck
+mapping (`external_id`, `deck_slug`, `slide_id`, with `auto_activate` enabled),
+and the deck's `questions.json` lets the presenter panel translate the current
+slide into that question's id. When the presenter lands on the slide, the deck
+broadcasts the id and the server opens the question for the audience, so a
+QR-joined participant sees and can answer the multi-choice question in sync
+with the presented slide.
 
 !!! tip "Feature-test event"
     With `SEED_FEATURE_TEST` truthy (also set to `1` in the published image) the

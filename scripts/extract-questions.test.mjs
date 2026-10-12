@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test'
 import assert from 'node:assert/strict'
-import { extractQuestions, parseFrontmatter, parseFeaturesValue, CANONICAL_FEATURES } from './extract-questions.mjs'
+import { extractQuestions, extractQuestionsWithSlides, parseFrontmatter, parseFeaturesValue, CANONICAL_FEATURES } from './extract-questions.mjs'
 
 describe('extractQuestions', () => {
   it('parses a comment block with options + int correct + kinds', () => {
@@ -223,6 +223,78 @@ options:
     assert.equal(qs[0].duration_sec, 0)
     assert.equal(qs[0].media_url, '')
     assert.equal(qs[0].media_type, '')
+  })
+})
+
+describe('extractQuestionsWithSlides', () => {
+  it('tags each question with the 1-based slide that contains it', async () => {
+    const md = `---
+title: Deck
+---
+
+# One
+
+---
+
+# Two
+
+<!-- live-question
+id: first
+prompt: First question?
+kind: poll
+options:
+  - A
+  - B
+-->
+
+---
+
+# Three
+
+<!-- live-question
+id: second
+prompt: Second question?
+kind: poll
+options:
+  - A
+  - B
+-->
+`
+    const qs = await extractQuestionsWithSlides(md)
+    assert.equal(qs.length, 2)
+    assert.equal(qs[0].id, 'first')
+    assert.equal(qs[0].slide_index, 2)
+    assert.equal(qs[1].id, 'second')
+    assert.equal(qs[1].slide_index, 3)
+  })
+
+  it('keeps ids and count identical to extractQuestions', async () => {
+    const md = `<!-- live-question
+id: dup
+prompt: First
+kind: poll
+options:
+  - A
+  - B
+-->
+
+---
+
+<!-- live-question
+id: dup
+prompt: Second
+kind: poll
+options:
+  - A
+  - B
+-->`
+    const sync = extractQuestions(md)
+    const withSlides = await extractQuestionsWithSlides(md)
+    assert.deepEqual(withSlides.map(q => q.id), sync.map(q => q.id))
+    assert.equal(withSlides.length, sync.length)
+    // duplicate suffixing still applies across slides
+    assert.deepEqual(withSlides.map(q => q.id), ['dup', 'dup-2'])
+    assert.equal(withSlides[1].slide_index, 2)
   })
 })
 

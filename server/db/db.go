@@ -1761,6 +1761,15 @@ func SetQuestionSeedKey(id int64, key string) error {
 	return err
 }
 
+// SetQuestionDeckMapping links a question to a deck slide: externalID is the
+// deck-scoped key (deck_slug:slide_id) and slideID is the id carried by slide
+// broadcasts. auto_activate is enabled so landing on the slide opens it.
+func SetQuestionDeckMapping(id int64, externalID, deckSlug, slideID string) error {
+	_, err := DB.Exec("UPDATE questions SET external_id=?, deck_slug=?, slide_id=?, auto_activate=1 WHERE id=?",
+		externalID, deckSlug, slideID, id)
+	return err
+}
+
 // GetQuestionBySeedKey returns the question with the given seed key for the event.
 func GetQuestionBySeedKey(eventID int64, key string) (*Question, error) {
 	row := DB.QueryRow("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, auto_activate FROM questions WHERE event_id=? AND seed_key=?", eventID, key)

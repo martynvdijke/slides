@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -223,4 +224,63 @@ func TestActivationThrottleCoalescing(t *testing.T) {
     if q2.Status != "live" { t.Fatalf("q2 not live %s", q2.Status) }
     // q1 should be closed not draft, proving it was activated
     if q1.Status == "draft" { t.Fatalf("q1 still draft, throttle dropped activation") }
+}
+
+// Comment-authored decks are seeded from dist/<deck>/questions.json instead of
+// deck/sync; landing on the containing slide must still auto-activate the
+// question when the presenter broadcasts only its id.
+func TestSeedManifestSlideAutoActivation(t *testing.T) {
+	if err := db.Init(filepath.Join(t.TempDir(), "seed-slide.db")); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	Broker.Close()
+	Broker = live.New()
+
+	dir := t.TempDir()
+	deckDir := filepath.Join(dir, "feature-test")
+	if err := os.MkdirAll(deckDir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	manifest := map[string]any{
+		"deck":       "feature-test",
+		"event_code": "feature-test",
+		"event_name": "Feature test",
+		"questions": []map[string]any{
+			{"id": "k8s-control-plane", "kind": "multi", "mode": "live", "prompt": "Which are control-plane components?", "options": []string{"kube-apiserver", "etcd", "kubelet"}, "correct_index": 0, "points_base": 100, "time_limit_s": 30, "slide_index": 5},
+		},
+	}
+	b, _ := json.Marshal(manifest)
+	if err := os.WriteFile(filepath.Join(deckDir, "questions.json"), b, 0o644); err != nil {
+		t.Fatalf("write: %v", err)
+	}
+	if err := db.SeedDeckQuestionsFromDir(dir); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	ev, err := db.GetEventByCode("feature-test")
+	if err != nil {
+		t.Fatalf("event: %v", err)
+	}
+	q, _ := db.GetQuestionBySeedKey(ev.ID, "k8s-control-plane")
+	if q == nil || q.Status != "draft" {
+		t.Fatalf("seeded question want draft, got %+v", q)
+	}
+
+	// Presenter lands on the question's slide: the deck broadcasts only the id
+	// (no deck_slug), so the slide_id fallback must resolve it.
+	if err := ActivateQuestionForSlide(ev.ID, 5, "k8s-control-plane", ""); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	q2, _ := db.GetQuestion(q.ID)
+	if q2.Status != "live" {
+		t.Fatalf("status %s want live", q2.Status)
+	}
+	// Landing again is a no-op (question already live).
+	if err := ActivateQuestionForSlide(ev.ID, 5, "k8s-control-plane", ""); err != nil {
+		t.Fatalf("re-activate: %v", err)
+	}
+	// Unknown ids stay failing silently.
+	if err := ActivateQuestionForSlide(ev.ID, 6, "no-such-slide", ""); err != nil {
+		t.Fatalf("unknown id: %v", err)
+	}
 }

@@ -100,6 +100,7 @@ export interface SlideInfo {
   index: number
   total: number
   title?: string
+  id?: string
 }
 
 type Value<T> = T | Ref<T>
@@ -178,7 +179,7 @@ class RoomClient {
 
   private syncCurrentSlide(data: any) {
     if (data && typeof data === 'object' && data.current_slide && typeof data.current_slide.index === 'number' && typeof data.current_slide.total === 'number') {
-      this.currentSlide.value = { index: data.current_slide.index, total: data.current_slide.total, title: data.current_slide.title || '' }
+      this.currentSlide.value = { index: data.current_slide.index, total: data.current_slide.total, title: data.current_slide.title || '', id: data.current_slide.id || '' }
     } else if (data && data.current_slide === null) {
       this.currentSlide.value = null
     } else if (!data?.current_slide) {
@@ -253,7 +254,7 @@ class RoomClient {
             // slide frame: {type:"slide", data:{index,total,title}} or {type:"slide", index,total,title}
             const d = (m.data && typeof m.data.index === 'number') ? m.data : m
             if (typeof d.index === 'number' && typeof d.total === 'number') {
-              this.currentSlide.value = { index: d.index, total: d.total, title: d.title || '' }
+              this.currentSlide.value = { index: d.index, total: d.total, title: d.title || '', id: d.id || '' }
             }
           } else if (m.type === 'reactions' && Array.isArray(m.data)) {
             this.reactions.value = m.data as ReactionCount[]
@@ -321,16 +322,16 @@ class RoomClient {
     } catch {}
   }
 
-  sendSlide(index: number, total: number, title?: string) {
+  sendSlide(index: number, total: number, title?: string, id?: string) {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return
-    const payload: SlideInfo = { index, total, title: title || '' }
+    const payload: SlideInfo = { index, total, title: title || '', id: id || '' }
     const now = Date.now()
     const doSend = (p: SlideInfo) => {
       try {
-        this.ws!.send(JSON.stringify({ type: 'slide', index: p.index, total: p.total, title: p.title || '' }))
+        this.ws!.send(JSON.stringify({ type: 'slide', index: p.index, total: p.total, title: p.title || '', id: p.id || '' }))
         this.lastSlideSent = Date.now()
         // optimistically update local slide
-        this.currentSlide.value = { index: p.index, total: p.total, title: p.title || '' }
+        this.currentSlide.value = { index: p.index, total: p.total, title: p.title || '', id: p.id || '' }
       } catch {}
     }
     // throttle / coalesce ~200ms
@@ -486,8 +487,8 @@ export function useLiveRoom(options: {
     client.value?.sendIdentity(name, emoji, color)
   }
 
-  function sendSlide(index: number, total: number, title?: string) {
-    client.value?.sendSlide(index, total, title)
+  function sendSlide(index: number, total: number, title?: string, id?: string) {
+    client.value?.sendSlide(index, total, title, id)
   }
 
   return {

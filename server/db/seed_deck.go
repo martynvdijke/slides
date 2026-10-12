@@ -24,6 +24,7 @@ type SeedQuestion struct {
 	DurationSec  int      `json:"duration_sec"`
 	MediaURL     string   `json:"media_url"`
 	MediaType    string   `json:"media_type"`
+	SlideIndex   int      `json:"slide_index"`
 }
 
 // SeedManifest is the frozen shape produced by scripts/extract-questions.mjs.
@@ -77,7 +78,11 @@ func SeedDeckQuestionsFromDir(decksDir string) error {
 			log.Printf("seed deck %s: EnsureEvent: %v", e.Name(), err)
 			continue
 		}
-		created, updated, err := SyncEventQuestions(ev.ID, m.Questions)
+		deckSlug := m.Deck
+		if deckSlug == "" {
+			deckSlug = e.Name()
+		}
+		created, updated, err := SyncEventQuestionsForDeck(ev.ID, deckSlug, m.Questions)
 		if err != nil {
 			log.Printf("seed deck %s: SyncEventQuestions: %v", e.Name(), err)
 			continue
@@ -107,6 +112,19 @@ func SeedDeckQuestionsFromDir(decksDir string) error {
 // SyncEventQuestions idempotently creates or updates questions for an event.
 // It keys by SeedQuestion.ID (falling back to q<N>) via the questions.seed_key column.
 func SyncEventQuestions(eventID int64, qs []SeedQuestion) (created, updated int, err error) {
+	return syncEventQuestions(eventID, "", qs)
+}
+
+// SyncEventQuestionsForDeck is SyncEventQuestions plus deck mapping: when
+// deckSlug is set, every seeded question also gets its external_id
+// (deck_slug:question_id), deck_slug and slide_id columns filled in, so a
+// slide broadcast that carries only the question id can auto-activate it
+// (see handlers.ActivateQuestionForSlide).
+func SyncEventQuestionsForDeck(eventID int64, deckSlug string, qs []SeedQuestion) (created, updated int, err error) {
+	return syncEventQuestions(eventID, deckSlug, qs)
+}
+
+func syncEventQuestions(eventID int64, deckSlug string, qs []SeedQuestion) (created, updated int, err error) {
 	for i, q := range qs {
 		key := q.ID
 		if key == "" {
@@ -134,6 +152,7 @@ func SyncEventQuestions(eventID int64, qs []SeedQuestion) (created, updated int,
 			mode = "live"
 		}
 
+		var questionID int64
 		existing, err := GetQuestionBySeedKey(eventID, key)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return created, updated, err
@@ -159,6 +178,7 @@ func SyncEventQuestions(eventID int64, qs []SeedQuestion) (created, updated int,
 			if _, uErr := UpdateQuestion(createdQ.ID, fields); uErr != nil {
 				log.Printf("seed update extras %q: %v", key, uErr)
 			}
+			questionID = createdQ.ID
 			created++
 		} else {
 			// Update existing in place.
@@ -180,7 +200,16 @@ func SyncEventQuestions(eventID int64, qs []SeedQuestion) (created, updated int,
 				log.Printf("seed update %q: %v", key, uErr)
 				continue
 			}
+			questionID = existing.ID
 			updated++
+		}
+
+		// Deck mapping (external_id/deck_slug/slide_id) — mandatory for
+		// slide-driven auto-activation of comment-authored questions.
+		if deckSlug != "" && questionID != 0 {
+			if mErr := SetQuestionDeckMapping(questionID, deckSlug+":"+key, deckSlug, key); mErr != nil {
+				log.Printf("seed map %q: %v", key, mErr)
+			}
 		}
 	}
 	return created, updated, nil
