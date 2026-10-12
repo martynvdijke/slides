@@ -1,3 +1,10 @@
+# [1.19.0](https://github.com/martynvdijke/slides/compare/v1.18.2...v1.19.0) (2026-10-12)
+
+
+### Features
+
+* update slides ([b7b233f](https://github.com/martynvdijke/slides/commit/b7b233fd512d355c38349de06ca22351adc50afa))
+
 ## [1.18.2](https://github.com/martynvdijke/slides/compare/v1.18.1...v1.18.2) (2026-10-12)
 
 
