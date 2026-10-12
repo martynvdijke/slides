@@ -1,3 +1,10 @@
+## [1.18.2](https://github.com/martynvdijke/slides/compare/v1.18.1...v1.18.2) (2026-10-12)
+
+
+### Bug Fixes
+
+* **live:** auto-activate comment-authored questions on their slide ([a185b73](https://github.com/martynvdijke/slides/commit/a185b734b1ca034ffd7fd4de92804fe5a9143486))
+
 ## [1.18.1](https://github.com/martynvdijke/slides/compare/v1.18.0...v1.18.1) (2026-10-11)
 
 
