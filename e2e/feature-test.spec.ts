@@ -463,4 +463,45 @@ test.describe('feature-test deck', () => {
     await hostCtx.close()
     await anonCtx2.close()
   })
+
+  test('slide-driven auto-activation: unauthenticated viewer does NOT auto-activate', async ({ browser, request }) => {
+    test.setTimeout(120000)
+    // Fresh event via host-authenticated request fixture — isolation from other tests
+    await login(request)
+    const ev = await createEvent(request, `E2E FT no-auto-anon ${Date.now()}`)
+
+    const syncRes = await request.post(`/api/admin/events/${ev.id}/deck/sync`, {
+      data: {
+        deck_slug: 'feature-test',
+        slides: [
+          {
+            slide_id: 'ft-ranking',
+            kind: 'ranking',
+            prompt: 'Rank these platform capabilities by importance to you.',
+            options: ['Developer experience', 'Reliability', 'Cost efficiency'],
+            position: 11,
+          },
+        ],
+      },
+    })
+    expect(syncRes.ok(), 'deck sync should succeed').toBeTruthy()
+
+    // Fresh, cookie-less browser context — no session cookie
+    const anonCtx = await browser.newContext()
+    const anon = await anonCtx.newPage()
+    attachFilters(anon)
+
+    await gotoSlide(anon, ev.code, 11)
+
+    // Deck should show waiting state, not the question prompt
+    await expect(anon.locator('.live-q-waiting').first()).toContainText('Waiting for a live question', { timeout: 15000 })
+
+    // Prompt must not appear — wait ~4s to cover any delayed auto-activation
+    await expect(anon.locator('.live-q-prompt')).toHaveCount(0, { timeout: 1000 })
+    await anon.waitForTimeout(4000)
+    await expect(anon.locator('.live-q-prompt')).toHaveCount(0)
+    await expect(anon.locator('.live-q-waiting').first()).toContainText('Waiting for a live question')
+
+    await anonCtx.close()
+  })
 })
