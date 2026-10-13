@@ -67,6 +67,16 @@ url: https://commit-history.com/martynvdijke
 ---
 
 ---
+layout: iframe
+url: https://sandwitches.vandijke.xyz/
+---
+
+---
+layout: iframe
+url: https://heat.vandijke.xyz/
+---
+
+---
 layout: center
 ---
 
@@ -77,9 +87,9 @@ layout: center
 
 <div class="text-[13px] leading-relaxed text-zinc-600 mt-3">
 
-The **open source AI coding agent by Anomaly.**
-Source code https://github.com/anomalyco/opencode
-Its a open-source agent harness.
+The **open source AI coding agent by Anomaly.** <br>
+Source code https://github.com/anomalyco/opencode <br>
+Its a open-source agent harness, bring your own model.
 
 A harness is the "wrapper" layer around a model, file interactions, tool interactions etc.
 
@@ -109,6 +119,22 @@ A harness is the "wrapper" layer around a model, file interactions, tool interac
 
 </div>
 
+---
+layout: two-cols
+class: gap-6 px-2
+---
+
+![mobile](./images/mobile-1.jpg)
+
+::right::
+
+![mobile](./images/mobile2.jpg)
+
+---
+layout: center
+---
+
+![mobile](./images/opencode-web.png)
 
 <!--
 Notes: OpenCode is the agent; Go/Zen are just gateway entries. Emphasize Anomaly as builder and provider-agnostic design.
@@ -288,7 +314,7 @@ Notes: OpenCode is the orchestration layer, not the model host. Requests route t
 
 ---
 layout: center
-class: text-center
+class: text-center 
 ---
 
 <div class="max-w-3xl mx-auto">
@@ -298,7 +324,7 @@ class: text-center
   The problem with “just use Antprohic / OpenAI”
 </div>
 
-## Frontier models are <span class="font-serif italic font-normal">amazing</span> — and <span class="text-zinc-400 line-through decoration-amber-400 decoration-2">unpredictable to pay for</span>
+## Frontier models are <span class="font-serif italic font-normal">amazing</span> — and <span class="text-zinc-400 line-through decoration-amber-400 decoration-2">expensive</span>
 
 <div class="grid grid-cols-3 gap-4 text-left mt-8">
 
@@ -331,6 +357,16 @@ url: https://artificialanalysis.ai/models#cost-tabs
 ---
 
 ---
+layout: iframe
+url: https://artificialanalysis.ai/models#intelligence
+---
+
+---
+layout: iframe
+url: https://artificialanalysis.ai/models#intelligence-category-tabs
+---
+
+---
 layout: default
 ---
 
@@ -340,14 +376,9 @@ layout: default
 
 <div class="text-[11px] text-zinc-500 -mt-1 mb-4">List may change — check <span class="font-mono text-xs">opencode.ai/go</span> and <span class="font-mono text-xs">GET /zen/go/v1/models</span>.</div>
 
-<div class="grid md:grid-cols-3 gap-3">
+<div class="grid md:grid-cols-1 gap-3">
 
 <div class="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
-  <div class="flex items-center justify-between">
-    <span class="text-xs font-bold tracking-wide">$60<span class="font-normal text-zinc-500">/mo tier</span></span>
-    <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-violet-600 text-white">higher usage</span>
-  </div>
-  <div class="text-[11px] text-zinc-500 mt-1">Most headroom per window.</div>
   <div class="mt-3 flex flex-wrap gap-1.5">
     <span class="model-chip">GLM-5.3-Flash</span>
     <span class="model-chip">Kimi K2.7 Code</span>
@@ -382,7 +413,7 @@ layout: default
 
 ---
 layout: section
-class: text-center
+class: gap-6 px-2
 ---
 
 <div class="text-[11px] tracking-[0.3em] uppercase font-mono text-white/50 mb-4">At home</div>
@@ -398,7 +429,7 @@ Home server · mini-PC · Raspberry Pi · NAS. A headless <code class="text-whit
 <div class="mt-8 inline-flex flex-wrap items-center justify-center gap-2 px-4 py-2 rounded-full bg-white text-zinc-900 font-mono text-sm shadow-xl">
   <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> opencode serve
   <span class="text-zinc-400">+</span> opencode web
-  <span class="text-zinc-400">→</span> <span class="text-zinc-500">http://opencode.vandijke.xyz</span>
+  <span class="text-zinc-400">→</span> <span class="text-zinc-500">http://localhost:4096</span>
 </div>
 
 <!--
