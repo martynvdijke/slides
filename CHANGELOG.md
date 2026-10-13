@@ -1,3 +1,15 @@
+# [1.21.0](https://github.com/martynvdijke/slides/compare/v1.20.3...v1.21.0) (2026-10-13)
+
+
+### Bug Fixes
+
+* thank you ([9b750a7](https://github.com/martynvdijke/slides/commit/9b750a7f87588e2b51da3cc0ba83b3d219257302))
+
+
+### Features
+
+* finish slides ([684d015](https://github.com/martynvdijke/slides/commit/684d0150eedcf89a9aaa2eb23345a425ff6fbd55))
+
 ## [1.20.3](https://github.com/martynvdijke/slides/compare/v1.20.2...v1.20.3) (2026-10-12)
 
 
