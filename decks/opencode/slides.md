@@ -72,11 +72,6 @@ url: https://sandwitches.vandijke.xyz/
 ---
 
 ---
-layout: iframe
-url: https://heat.vandijke.xyz/
----
-
----
 layout: center
 ---
 
