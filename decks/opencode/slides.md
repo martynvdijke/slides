@@ -494,3 +494,14 @@ OPENCODE_SERVER_PASSWORD=secret opencode web
 <div class="text-[11px] text-zinc-600 leading-relaxed">Enables HTTP basic auth. Use it whenever you bind beyond localhost.</div>
 </div>
 
+---
+layout: center
+class: "text-center bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-800 text-white"
+---
+
+<div class="flex flex-col items-center justify-center h-full">
+  <div class="text-[64px] font-black tracking-tight leading-none">Thank you</div>
+  <div class="mt-6 text-[32px] font-medium text-indigo-200">for your attention</div>
+  <div class="mt-12 w-24 h-1 rounded-full bg-white/80"></div>
+  <div class="mt-8 text-[18px] uppercase tracking-[0.25em] text-slate-300">Questions?</div>
+</div>
