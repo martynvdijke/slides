@@ -1,4 +1,4 @@
-import { expect, type APIRequestContext } from '@playwright/test'
+import { expect, type APIRequestContext, type Page } from '@playwright/test'
 
 export const ADMIN = { username: 'admin', password: 'password123' }
 
@@ -76,6 +76,28 @@ export async function activateQuestion(
 ): Promise<void> {
   const res = await request.post(`/api/admin/events/${eventId}/questions/${questionId}/activate`)
   expect(res.ok(), 'activate question should succeed').toBeTruthy()
+}
+
+/**
+ * First-visit gate: audience pages ask for a display name (or anon) before the
+ * app becomes interactive. Safe to call on every page load — it is a no-op when
+ * the gate is absent (e.g. a returning visitor in the same browser context).
+ */
+export async function enterAudience(page: Page, name = 'TestPlayer'): Promise<void> {
+  const gate = page.locator('#join-gate')
+  const nameInput = page.locator('#gate-name')
+  try {
+    await nameInput.waitFor({ state: 'visible', timeout: 5000 })
+  } catch {
+    return
+  }
+  if (name) {
+    await nameInput.fill(name)
+    await page.locator('#gate-submit').click()
+  } else {
+    await page.locator('#gate-anon').click()
+  }
+  await expect(gate).toBeHidden()
 }
 
 /** Upload a tiny PNG and return its public media path + type. */

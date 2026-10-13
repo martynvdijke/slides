@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { activateQuestion, createEvent, createQuestion, login } from './helpers'
+import { activateQuestion, createEvent, createQuestion, enterAudience, login } from './helpers'
 
 test.describe('leaderboard', () => {
   test('correct answer shows quiz feedback and leaderboard', async ({ page, request }) => {
@@ -14,16 +14,11 @@ test.describe('leaderboard', () => {
     })
     await activateQuestion(request, ev.id, q.id)
 
-    // Set identity before joining so leaderboard shows our name
+    // Set the display name at the join gate so the leaderboard shows it.
     await page.goto(`/e/${ev.code}`)
+    await enterAudience(page)
     // Wait for live card to show the question
     await expect(page.locator('#live-card .prompt')).toContainText('Capital of France?', { timeout: 15000 })
-
-    // Set identity name (bottom-sheet flow)
-    await page.locator('#identity-open').click()
-    await page.locator('#sheet-name').fill('TestPlayer')
-    await page.locator('#sheet-save').click()
-    await expect(page.locator('#toast-root')).toContainText(/profile saved/i, { timeout: 5000 })
 
     // Answer the correct option (Paris)
     await page.locator('#live-card .option-btn', { hasText: 'Paris' }).click()

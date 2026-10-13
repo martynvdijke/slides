@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { activateQuestion, createEvent, createQuestion, login } from './helpers'
+import { activateQuestion, createEvent, createQuestion, enterAudience, login } from './helpers'
 
 test.describe('reactions', () => {
   test('audience can send a reaction and sees float animation', async ({ page, request }) => {
@@ -13,6 +13,7 @@ test.describe('reactions', () => {
     await activateQuestion(request, ev.id, q.id)
 
     await page.goto(`/e/${ev.code}`)
+    await enterAudience(page)
     await expect(page.locator('#live-card .prompt')).toContainText('React test?', { timeout: 15000 })
 
     // Reaction bar should be visible with buttons

@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { ADMIN, activateQuestion, createEvent, createQuestion, login } from './helpers'
+import { ADMIN, activateQuestion, createEvent, createQuestion, enterAudience, login } from './helpers'
 
 const MAIL_URL = process.env.E2E_MAIL_URL || 'http://127.0.0.1:4174'
 
@@ -43,6 +43,7 @@ test.describe('post-event recap', () => {
     const audCtx = await browser.newContext()
     const aud = await audCtx.newPage()
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('Best cloud?', { timeout: 15000 })
     await aud.locator('#live-card .option-btn', { hasText: 'GCP' }).click()
     await expect(aud.locator('#live-card .thanks')).toBeVisible({ timeout: 10000 })
@@ -83,11 +84,15 @@ test.describe('post-event recap', () => {
     const audCtx = await browser.newContext()
     const aud = await audCtx.newPage()
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('Say hi', { timeout: 15000 })
     await aud.locator('#live-card textarea').fill('hello recap')
     await aud.locator('#live-card button', { hasText: 'Submit' }).click()
     await expect(aud.locator('#live-card .thanks')).toBeVisible({ timeout: 10000 })
 
+    // The recap opt-in lives inside the profile sheet now.
+    await aud.locator('#identity-open').click()
+    await expect(aud.locator('#identity-sheet')).toBeVisible({ timeout: 5000 })
     await aud.fill('#recap-email', 'attendee@example.com')
     await aud.locator('#recap-form button[type="submit"]').click()
     await expect(aud.locator('#recap-status')).toContainText('attendee@example.com', { timeout: 10000 })

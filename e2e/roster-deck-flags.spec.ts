@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { login, createEvent } from './helpers'
+import { login, createEvent, enterAudience } from './helpers'
 
 async function findFeatureTestEvent(request: any) {
   const res = await request.get('/api/admin/events')
@@ -156,6 +156,7 @@ test.describe('roster, deck and feature flags', () => {
 
       // check audience tab gating in browser
       await page.goto('/e/feature-test', { waitUntil: 'domcontentloaded' })
+      await enterAudience(page)
       // wait for app.js to render state
       await page.waitForTimeout(1500)
 

@@ -337,10 +337,22 @@
 
   var REACTION_EMOJIS=['👏','🔥','❤️','😂','🤯','👍'];
   var COLOR_LIST=["#6366F1","#EC4899","#F59E0B","#10B981","#38BDF8","#F43F5E","#A855F7","#84CC16"];
-  function loadIdentity(){ try{ var raw=localStorage.getItem('qt_identity'); if(raw){var j=JSON.parse(raw); if(j && typeof j.name==='string') return j;}}catch(e){} return {name:'', emoji:'🙂', color:'#6366F1'}; }
+  function loadIdentity(){
+    try{
+      var raw=localStorage.getItem('qt_identity');
+      if(raw){ var j=JSON.parse(raw); if(j && typeof j.name==='string'){
+        // migrate pre-gate identities: anyone who already picked a name is considered joined
+        if(j.joined===undefined) j.joined=!!(j.name&&j.name.trim());
+        return j;
+      }}
+    }catch(e){}
+    return {name:'', emoji:'🙂', color:'#6366F1', joined:false};
+  }
   var identity=loadIdentity();
   if(!identity.emoji) identity.emoji='🙂';
+  if(identity.joined===undefined) identity.joined=false;
   if(COLOR_LIST.indexOf(identity.color)===-1) identity.color='#6366F1';
+  function identityLabel(){ return (identity.name&&identity.name.trim()) || (identity.joined?'Anonymous':'Set your name'); }
   function saveIdentity(){ try{ localStorage.setItem('qt_identity', JSON.stringify(identity));}catch(e){} }
   function sendIdentity(){ if(!identity) return; var em=REACTION_EMOJIS.indexOf(identity.emoji)!==-1?identity.emoji:''; var col=COLOR_LIST.indexOf(identity.color)!==-1?identity.color:''; var nm=(identity.name||'').trim().slice(0,24); if(isOpen()) wsSend({type:'identity', name:nm, emoji:em||identity.emoji, color:col||identity.color}); }
 
@@ -356,8 +368,10 @@
     var saveBtn=document.getElementById('sheet-save');
     function refresh(){
       if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
-      if(displayName) displayName.textContent= identity.name ? identity.name : 'Tap to set your name';
+      if(displayName) displayName.textContent=identityLabel();
       if(sheetName && document.activeElement!==sheetName) sheetName.value=identity.name||'';
+      var legacyName=document.getElementById('identity-name');
+      if(legacyName) legacyName.value=identity.name||'';
     }
     refresh();
     if(sheetName) sheetName.value=identity.name||'';
@@ -379,18 +393,60 @@
     }
     function openSheet(){ if(!dlg) return; if(typeof dlg.showModal==='function'){ try{ dlg.showModal(); }catch(e){ dlg.setAttribute('open',''); } } else dlg.setAttribute('open',''); if(backdrop) backdrop.classList.add('open'); if(sheetName) sheetName.focus(); }
     function closeSheet(){ if(dlg && dlg.open){ try{ dlg.close(); }catch(e){ dlg.removeAttribute('open'); }} if(backdrop) backdrop.classList.remove('open'); }
-    function doSave(){ var v=sheetName.value.trim().slice(0,24); identity.name=v; saveIdentity(); refresh(); sendIdentity(); var qaAuthor=document.getElementById('qa-author'); if(qaAuthor && !qaAuthor.value) qaAuthor.placeholder=v? v:'Anonymous'; toast('Profile saved'); vibrate(40); closeSheet(); }
+    function doSave(){ var v=sheetName?sheetName.value.trim().slice(0,24):''; identity.name=v; identity.joined=true; saveIdentity(); refresh(); sendIdentity(); toast('Profile saved'); vibrate(40); closeSheet(); }
     if(openBtn) openBtn.addEventListener('click', openSheet);
     if(avatar) avatar.addEventListener('click', openSheet);
     if(displayName) displayName.addEventListener('click', openSheet);
     if(backdrop) backdrop.addEventListener('click', closeSheet);
     if(saveBtn) saveBtn.addEventListener('click', doSave);
+    var closeBtn=document.getElementById('sheet-close');
+    if(closeBtn) closeBtn.addEventListener('click', closeSheet);
+    var cancelBtn=document.getElementById('sheet-cancel');
+    if(cancelBtn) cancelBtn.addEventListener('click', closeSheet);
+    if(dlg) dlg.addEventListener('close', function(){ if(backdrop) backdrop.classList.remove('open'); });
     if(sheetName) sheetName.addEventListener('keydown', function(e){ if(e.key==='Enter'){ e.preventDefault(); doSave(); }});
-    // sync legacy hidden inputs for compat
-    var legacyName=document.getElementById('identity-name');
-    if(legacyName) legacyName.value=identity.name||'';
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initIdentityUI); else initIdentityUI();
+
+  function initJoinGate(){
+    var gate=document.getElementById('join-gate');
+    if(!gate) return;
+    if(identity.joined){ gate.classList.add('hidden'); document.body.classList.remove('gated'); return; }
+    document.body.classList.add('gated');
+    var nameInput=document.getElementById('gate-name');
+    var form=document.getElementById('gate-form');
+    var anonBtn=document.getElementById('gate-anon');
+    var submitBtn=document.getElementById('gate-submit');
+    function finish(name){
+      identity.name=(name||'').trim().slice(0,24);
+      identity.joined=true;
+      saveIdentity();
+      var avatar=document.getElementById('identity-avatar');
+      var displayName=document.getElementById('identity-display-name');
+      if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
+      if(displayName) displayName.textContent=identityLabel();
+      var legacyName=document.getElementById('identity-name'); if(legacyName) legacyName.value=identity.name||'';
+      gate.classList.add('hidden');
+      document.body.classList.remove('gated');
+      sendIdentity();
+      toast(identity.name ? 'Welcome, '+identity.name+'!' : 'Joining anonymously');
+      vibrate(40);
+    }
+    if(nameInput){
+      nameInput.addEventListener('input', function(){ if(submitBtn) submitBtn.disabled=!nameInput.value.trim(); });
+      // Sync immediately: autofill (or a pre-listener fill) sets the value without firing input.
+      if(submitBtn) submitBtn.disabled=!nameInput.value.trim();
+      setTimeout(function(){ try{ nameInput.focus(); }catch(e){} }, 80);
+    }
+    if(form) form.addEventListener('submit', function(e){
+      e.preventDefault();
+      var v=nameInput?nameInput.value.trim():'';
+      if(!v) return;
+      finish(v);
+    });
+    if(anonBtn) anonBtn.addEventListener('click', function(){ finish(''); });
+  }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', initJoinGate); else initJoinGate();
 
   function applyMe(me){
     if(!me) return;
@@ -400,10 +456,8 @@
     saveIdentity();
     var avatar=document.getElementById('identity-avatar');
     var displayName=document.getElementById('identity-display-name');
-    if(displayName) displayName.textContent= identity.name || 'Tap to set your name';
+    if(displayName) displayName.textContent= identityLabel();
     if(avatar){ avatar.textContent=identity.emoji||'🙂'; avatar.style.background=identity.color||'#6366F1'; }
-    var qaAuthor=document.getElementById('qa-author');
-    if(qaAuthor) qaAuthor.placeholder=identity.name||'Anonymous';
     var legacy=document.getElementById('identity-name'); if(legacy) legacy.value=identity.name||'';
     applyRecap(me);
     updateJoinCountdown(me);
@@ -684,9 +738,17 @@
     setTimeout(function(){ el.style.display='none'; el.classList.remove('show'); }, 3200);
   }
 
+  var renderedQid=null;
   function renderLive(active){
     var card=document.getElementById('live-card');
+    // Preserve an in-progress typed answer: state broadcasts rebuild the card.
+    var draft=null;
+    if(active){
+      var draftTa=card.querySelector('textarea');
+      if(draftTa && draftTa.value.trim()) draft={qid:renderedQid, value:draftTa.value, focused:document.activeElement===draftTa};
+    }
     card.textContent='';
+    renderedQid= active ? (active.id||null) : null;
     card.setAttribute('aria-busy','false');
     if(!active){
       if(stateCache && stateCache._fetchError){
@@ -840,6 +902,7 @@
         var ta=document.createElement('textarea'); ta.className='textarea'; ta.placeholder='Type your answer…'; ta.required=true; ta.rows=3; ta.maxLength=500;
         var btn=document.createElement('button'); btn.className='btn btn-primary'; btn.type='submit'; btn.style.minHeight='46px'; btn.textContent='Submit';
         form.appendChild(ta); form.appendChild(btn);
+        if(draft && draft.qid===active.id){ ta.value=draft.value; if(draft.focused){ try{ ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); }catch(e){} } }
         form.addEventListener('submit', function(e){ e.preventDefault(); if(sessionExpired){showSessionSheet('expired',code);return;} if(!ta.value.trim()) return; submitAnswer(active.id, ta.value.trim(), btn); });
         card.appendChild(form);
       }
@@ -850,6 +913,7 @@
         var ta2=document.createElement('textarea'); ta2.className='textarea'; ta2.placeholder='One or two words…'; ta2.required=true; ta2.rows=2; ta2.maxLength=200;
         var b2=document.createElement('button'); b2.className='btn btn-primary'; b2.type='submit'; b2.style.minHeight='46px'; b2.textContent='Send';
         form2.appendChild(ta2); form2.appendChild(b2);
+        if(draft && draft.qid===active.id){ ta2.value=draft.value; if(draft.focused){ try{ ta2.focus(); ta2.setSelectionRange(ta2.value.length, ta2.value.length); }catch(e){} } }
         form2.addEventListener('submit', function(e){ e.preventDefault(); if(sessionExpired){showSessionSheet('expired',code);return;} if(!ta2.value.trim()) return; submitAnswer(active.id, ta2.value.trim(), b2); });
         card.appendChild(form2);
       }
@@ -1174,7 +1238,7 @@
         var pa=pendingAnswers[m.id||m.question_id]; if(pa){ delete pendingAnswers[m.id||m.question_id]; if(m.status==='flagged'){ toast('Answer sent — under review'); } else if(typeof m.is_correct==='boolean'){ if(m.is_correct){ toast('Correct! +'+(m.points_awarded||0)+' pts'); showQuizBanner(true, m.points_awarded||0); if(!prefersReduced) vibrate([20,30,20]); } else { toast('Not this time'); showQuizBanner(false,0); } } else { toast('Answer sent!'); } pa.btn.textContent='Sent ✓'; var qid=m.id||m.question_id; var qq=loadQueue().filter(function(x){ return !(x.type==='answer' && x.question_id===qid); }); saveQueue(qq); } return;
       }
       if(m.for==='qa'){
-        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; document.getElementById('qa-author').value=''; // clear optimistic
+        if(pendingQA){ var btn=pendingQA.btn; pendingQA=null; document.getElementById('qa-body').value=''; // clear optimistic
           pendingQaCards=[]; var pw=document.getElementById('qa-pending'); if(pw) pw.textContent='';
           toast(m.status==='flagged' ? 'Question submitted — under review' : 'Question submitted — awaiting approval'); vibrate(40); btn.disabled=false; btn.textContent='Submit question'; var qq2=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq2); fetchState(); }
         return;
@@ -1246,8 +1310,7 @@
       if(sessionExpired){ showSessionSheet('expired', code); return; }
       if(spectatorMode){ toast('Spectator mode — rejoin to ask','err'); return; }
       var body=document.getElementById('qa-body').value.trim();
-      var authorRaw=document.getElementById('qa-author').value.trim();
-      var author = authorRaw || (identity.name||'');
+      var author = (identity.name||'').trim();
       if(!body) return;
       var btn=qaForm.querySelector('button[type="submit"]'); btn.disabled=true; btn.textContent='Submitting…';
       // optimistic pending card
@@ -1268,7 +1331,7 @@
         if(r.status===429){ return r.json().then(function(j){ saveQueue(loadQueue().filter(function(x){ return x.type!=='qa'; })); startQACooldown(j.retry_after_s||0, j.error||'Slow mode'); pendingQaCards=[]; if(pw) pw.classList.add('hidden'); throw {handled:true}; }); }
         if(!r.ok) throw new Error('qa failed'); return r.json();
       }).then(function(j){
-        document.getElementById('qa-body').value=''; document.getElementById('qa-author').value='';
+        document.getElementById('qa-body').value='';
         toast(j.flagged ? 'Question submitted — under review' : (j.status==='pending' ? 'Question submitted — awaiting approval' : 'Question posted!')); vibrate(40);
         var qq=loadQueue().filter(function(x){ return x.type!=='qa'; }); saveQueue(qq);
         pendingQaCards=[]; if(pw) pw.classList.add('hidden');
@@ -1277,9 +1340,20 @@
     });
   }
 
+  var lastActiveQid=null;
   function applyState(data){
     if(!data) return;
     try{ stateCache=data; }catch(e){ console.error('applyState init', e); throw e; }
+    try{
+      var activeQ=data.active_question||null;
+      var activeQid=activeQ? (activeQ.id||activeQ.question_id||null):null;
+      if(activeQid && activeQid!==lastActiveQid && !(data.event && (data.event.show_podium || data.event.feature_live===false))){
+        var ae=document.activeElement;
+        var typing=ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.isContentEditable);
+        if(!typing && !sessionExpired && !spectatorMode) selectTab('live');
+      }
+      lastActiveQid=activeQid;
+    }catch(e){}
     try{ if(data.join_session) updateJoinCountdown(data); }catch(e){ console.error('updateJoinCountdown', e); throw e; }
     if(data.event) renderEvent(data.event);
     if(data.event && data.event.show_podium){ renderPodium(data.leaderboard || []); }

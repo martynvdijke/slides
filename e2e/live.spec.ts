@@ -3,6 +3,7 @@ import {
   activateQuestion,
   createEvent,
   createQuestion,
+  enterAudience,
   login,
   uploadTinyPng,
 } from './helpers'
@@ -28,6 +29,7 @@ test.describe('audience live flow', () => {
     await page.locator('#join-form button[type="submit"]').click()
 
     await expect(page).toHaveURL(new RegExp(`/e/${ev.code}$`))
+    await enterAudience(page)
     await expect(page.locator('#live-card .prompt')).toContainText('Which cloud?')
 
     await page.locator('#live-card .option-btn', { hasText: 'AWS' }).click()
@@ -49,6 +51,7 @@ test.describe('audience live flow', () => {
     await activateQuestion(request, ev.id, q.id)
 
     await page.goto(`/e/${ev.code}`)
+    await enterAudience(page)
     await expect(page.locator('#live-card .prompt')).toContainText('Pick one')
     await expect(page.locator('#live-card .q-media img')).toBeVisible()
   })

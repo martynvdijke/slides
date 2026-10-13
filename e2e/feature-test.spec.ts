@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, activateQuestion, createEvent, createQuestion, login, uploadTinyPng } from './helpers'
+import { ADMIN, activateQuestion, createEvent, createQuestion, enterAudience, login, uploadTinyPng } from './helpers'
 
 test.describe('feature-test deck', () => {
   function attachFilters(page: any) {
@@ -47,6 +47,7 @@ test.describe('feature-test deck', () => {
     const aud = await audCtx.newPage()
     attachFilters(aud)
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('FT wiring prompt?', { timeout: 15000 })
     const proj = await (await browser.newContext()).newPage()
     attachFilters(proj)
@@ -76,6 +77,7 @@ test.describe('feature-test deck', () => {
     const proj = await projCtx.newPage()
     attachFilters(proj)
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await proj.goto(`/live/${ev.code}`)
 
     const kinds: Array<{
@@ -233,6 +235,7 @@ test.describe('feature-test deck', () => {
     const proj = await projCtx.newPage()
     attachFilters(proj)
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await proj.goto(`/live/${ev.code}`)
 
     const media = await uploadTinyPng(request, ev.id)
@@ -289,6 +292,7 @@ test.describe('feature-test deck', () => {
     const aud = await audCtx.newPage()
     attachFilters(aud)
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('Leaderboard seed?', { timeout: 15000 })
     await aud.locator('#live-card button.option-btn', { hasText: 'A' }).click()
     await expect(aud.locator('#live-card .thanks')).toBeVisible({ timeout: 10000 })
@@ -379,6 +383,7 @@ test.describe('feature-test deck', () => {
     const aud = await audCtx.newPage()
     attachFilters(aud)
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText(uniquePrompt, { timeout: 15000 })
     // Also verify in-slide prompt reflects it (still on slide 10? need to go to slide 3)
     const checkDeck = await browser.newPage()

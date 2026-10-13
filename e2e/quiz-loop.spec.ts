@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { ADMIN, activateQuestion, createEvent, createQuestion, login } from './helpers'
+import { ADMIN, activateQuestion, createEvent, createQuestion, enterAudience, login } from './helpers'
 
 /**
  * Quiz game loop: a timed question counts down, auto-locks, the host reveals
@@ -25,6 +25,7 @@ test.describe('quiz game loop', () => {
     const audCtx = await browser.newContext()
     const aud = await audCtx.newPage()
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('Capital of France?', { timeout: 15000 })
     await expect(aud.locator('#countdown-pill')).toBeVisible()
     await expect(aud.locator('#countdown-pill')).toContainText('⏱')
@@ -113,6 +114,7 @@ test.describe('quiz game loop', () => {
     const ctx = await browser.newContext()
     const aud = await ctx.newPage()
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud)
     await expect(aud.locator('#live-card .prompt')).toContainText('What is 2+2?', { timeout: 15000 })
     // Untimed questions never show the countdown pill.
     await expect(aud.locator('#countdown-pill')).toBeHidden()

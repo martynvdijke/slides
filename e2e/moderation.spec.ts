@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
-import { ADMIN, activateQuestion, createEvent, createQuestion, login } from './helpers'
+import { ADMIN, activateQuestion, createEvent, createQuestion, enterAudience, login } from './helpers'
 
 async function signInAdmin(page: Page): Promise<void> {
   await page.goto('/admin')
@@ -42,6 +42,7 @@ test.describe('audience moderation', () => {
     const cleanCtx = await browser.newContext()
     const clean = await cleanCtx.newPage()
     await clean.goto(`/e/${ev.code}`)
+    await enterAudience(clean)
     await expect(clean.locator('#live-card .prompt')).toContainText('Say something', { timeout: 15000 })
     await clean.locator('#live-card textarea').fill('hello world')
     await clean.locator('#live-card button', { hasText: 'Submit' }).click()
@@ -51,6 +52,7 @@ test.describe('audience moderation', () => {
     const flagCtx = await browser.newContext()
     const flagged = await flagCtx.newPage()
     await flagged.goto(`/e/${ev.code}`)
+    await enterAudience(flagged)
     await expect(flagged.locator('#live-card .prompt')).toContainText('Say something', { timeout: 15000 })
     await flagged.locator('#live-card textarea').fill('this is badword')
     await flagged.locator('#live-card button', { hasText: 'Submit' }).click()
@@ -108,10 +110,10 @@ test.describe('audience moderation', () => {
     const audCtx = await browser.newContext()
     const aud = await audCtx.newPage()
     await aud.goto(`/e/${ev.code}`)
+    await enterAudience(aud, 'Ana')
     await aud.locator('#tab-qa').click()
     await expect(aud.locator('#qa-form')).toBeVisible({ timeout: 15000 })
     await aud.fill('#qa-body', 'first question')
-    await aud.fill('#qa-author', 'Ana')
     await aud.locator('#qa-form button[type="submit"]').click()
     await expect(aud.locator('#toast-root')).toContainText(/awaiting approval/i, { timeout: 10000 })
 
