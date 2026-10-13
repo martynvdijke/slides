@@ -1,3 +1,10 @@
+## [1.22.1](https://github.com/martynvdijke/slides/compare/v1.22.0...v1.22.1) (2026-10-13)
+
+
+### Bug Fixes
+
+* Update slides.md ([07c7b18](https://github.com/martynvdijke/slides/commit/07c7b18a2e47e73305d60e3f6e80dd652745f8d5))
+
 # [1.22.0](https://github.com/martynvdijke/slides/compare/v1.21.0...v1.22.0) (2026-10-13)
 
 
