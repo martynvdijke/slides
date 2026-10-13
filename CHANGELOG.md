@@ -1,3 +1,10 @@
+# [1.22.0](https://github.com/martynvdijke/slides/compare/v1.21.0...v1.22.0) (2026-10-13)
+
+
+### Features
+
+* **audience:** name gate, question-first layout, bottom nav ([ae27c3c](https://github.com/martynvdijke/slides/commit/ae27c3c796a4ea63ad3ca14cfdeb06c33f079cb2))
+
 # [1.21.0](https://github.com/martynvdijke/slides/compare/v1.20.3...v1.21.0) (2026-10-13)
 
 
