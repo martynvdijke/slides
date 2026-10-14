@@ -1,3 +1,10 @@
+## [1.23.2](https://github.com/martynvdijke/slides/compare/v1.23.1...v1.23.2) (2026-10-14)
+
+
+### Bug Fixes
+
+* keep the iframe fallback PDF slide to a single link ([d11aa8b](https://github.com/martynvdijke/slides/commit/d11aa8bac159dc4f457db77bfd111b8eb6b2521a))
+
 ## [1.23.1](https://github.com/martynvdijke/slides/compare/v1.23.0...v1.23.1) (2026-10-14)
 
 
