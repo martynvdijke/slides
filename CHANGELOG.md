@@ -1,3 +1,10 @@
+## [1.23.1](https://github.com/martynvdijke/slides/compare/v1.23.0...v1.23.1) (2026-10-14)
+
+
+### Bug Fixes
+
+* neutralize unresponsive external iframe slides in the PDF export ([e2080d5](https://github.com/martynvdijke/slides/commit/e2080d57f41a02c2bc37baaa6b6d265213a232fc))
+
 # [1.23.0](https://github.com/martynvdijke/slides/compare/v1.22.1...v1.23.0) (2026-10-14)
 
 
