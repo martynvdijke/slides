@@ -81,8 +81,7 @@ release workflows, and where things live.
 | --- | --- |
 | `ci.yaml` | `npm ci`, test/build the Go server, build all decks, run Playwright e2e, validate the Dockerfile and `compose.yaml` |
 | `release.yaml` | semantic-release + build/push Docker images + Gotify notify |
-| `deploy-gh-pages.yml` | Build and deploy the decks to GitHub Pages |
-| `docs.yml` | Build and deploy this Zensical documentation site |
+| `deploy-gh-pages.yml` | Build and deploy the decks (and per-deck PDFs) to GitHub Pages |
 | `renovate.yml` | Self-hosted Renovate using `renovate.json` |
 | `stale-branches.yml` | Close stale branches |
 | `workflow-lint.yml` | actionlint + zizmor + pinact |

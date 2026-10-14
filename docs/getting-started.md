@@ -11,8 +11,8 @@ deck, build everything and add your own deck.
 | [Go](https://go.dev) | 1.27 | building and running the server |
 | [Docker](https://docs.docker.com) | recent | the all-in-one image and Compose |
 
-The backend also needs Python ≥ 3.11 only if you build this documentation site
-with [Zensical](https://zensical.org) — see [Deployment](deployment.md).
+Python ≥ 3.11 is only needed if you build the documentation in `docs/` with
+[Zensical](https://zensical.org) — see [Contributing](contributing.md).
 
 ## Install dependencies
 
