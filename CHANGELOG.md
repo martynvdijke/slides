@@ -1,3 +1,10 @@
+# [1.23.0](https://github.com/martynvdijke/slides/compare/v1.22.1...v1.23.0) (2026-10-14)
+
+
+### Features
+
+* export decks to PDF and publish them on GitHub Pages ([67869cf](https://github.com/martynvdijke/slides/commit/67869cf4486b23f083cef1d4ced45d63a690e0e8))
+
 ## [1.22.1](https://github.com/martynvdijke/slides/compare/v1.22.0...v1.22.1) (2026-10-13)
 
 
