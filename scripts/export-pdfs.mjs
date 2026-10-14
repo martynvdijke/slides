@@ -57,7 +57,7 @@ console.log(`[export-pdfs] exporting ${decks.length} deck(s): ${decks.join(', ')
 const IFRAME_SLIDE = /^---[ \t]*\n(?:(?!---)[^\n]*\n)*?[ \t]*layout:[ \t]*iframe[ \t]*\n(?:(?!---)[^\n]*\n)*?[ \t]*url:[ \t]*(\S+)[ \t]*\n(?:(?!---)[^\n]*\n)*?^---[ \t]*\n/gm
 
 function fallbackSlide(url) {
-  const safe = url.replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+  const safe = url.replace(/&/g, '&amp;')
   return [
     '---',
     'layout: center',
@@ -66,7 +66,10 @@ function fallbackSlide(url) {
     '',
     '<div class="text-xs tracking-[0.25em] uppercase opacity-50">External link</div>',
     '',
-    `<a href="${safe}" class="text-xl font-medium underline decoration-dotted">${safe}</a>`,
+    // Markdown link (not a raw <a>): markdown-it's linkify turns a bare URL after
+    // a raw anchor into a second anchor, which nests the tags. Inside a markdown
+    // link the label is left alone, so this stays a single element.
+    `[${safe}](<${safe}>){.text-xl .font-medium .underline .decoration-dotted}`,
     '',
   ].join('\n')
 }
