@@ -23,3 +23,6 @@ e2e/.tmp/
 
 # Zensical build output
 site/
+
+# Temporary Slidev entry written by scripts/export-pdfs.mjs
+decks/*/.pdf-export.md

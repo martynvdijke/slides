@@ -124,6 +124,8 @@ env:
 
 The Pages workflow also emits a per-deck PDF at `dist/<deck>/slides.pdf` (served at `/<repo>/<deck>/slides.pdf`). Locally, run `npm run build:pdf` after `npm run build` to produce them; it requires the Playwright Chromium browser (`npx playwright install chromium`).
 
+Slidev's exporter waits for every frame on a slide to finish loading, so a slide whose `layout: iframe` points at a slow or unresponsive external site can hang the export. For the PDF variant only, `scripts/export-pdfs.mjs` replaces such slides with a static "External link" card and writes the result to a temporary `decks/<deck>/.pdf-export.md`. The deck source and the deployed site keep their real iframes; only the PDF shows the link cards. The temporary entry is git-ignored and removed after the export.
+
 ### Wiring a hosted backend
 
 For a cross-origin GitHub Pages deck with a live presenter panel, the backend
@@ -138,25 +140,13 @@ COOKIE_SECURE=true
 See [Configuration](configuration.md) for why credentialed calls need an exact
 origin.
 
-## Publishing this documentation site
+## Documentation site
 
-The docs are built with [Zensical](https://zensical.org) from `docs/` and
-`zensical.toml`. On CI run:
-
-```bash
-pip install zensical
-zensical build --strict --clean
-```
-
-Zensical requires **Python ≥ 3.11**. The generated site is written to `site/`
-(git-ignored). The `.github/workflows/docs.yml` workflow publishes it to GitHub
-Pages with the official Zensical Pages recipe.
-
-!!! note "Preview locally"
-    ```bash
-    python3 -m venv .venv && . .venv/bin/activate && pip install zensical
-    zensical serve            # http://localhost:8000
-    ```
+The docs in `docs/` are written for [Zensical](https://zensical.org) and can be
+built or previewed locally (Zensical requires **Python ≥ 3.11**; the generated
+`site/` output is git-ignored). They are no longer deployed to GitHub Pages —
+Pages serves the decks and their PDFs from `deploy-gh-pages.yml` instead. See
+[Contributing](contributing.md) for the local build commands.
 
 ## Container images
 
