@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces --if-present && node scripts/extract-questions.mjs && node scripts/build-index.mjs",
+    "build:index": "node scripts/build-index.mjs",
+    "build:pdf": "node scripts/export-pdfs.mjs",
     "test:scripts": "node --test scripts/",
     "test:e2e": "playwright test -c e2e/playwright.config.ts",
     "test:load": "node e2e/load.mjs"
@@ -16,6 +18,10 @@
     "@playwright/test": "^1.63.0",
     "@slidev/cli": "^53.0.0",
     "@slidev/theme-default": "^0.25.0",
-    "@slidev/theme-seriph": "^0.25.0"
+    "@slidev/theme-seriph": "^0.25.0",
+    "playwright-chromium": "^1.63.0"
+  },
+  "allowScripts": {
+    "playwright-chromium@1.63.0": true
   }
 }

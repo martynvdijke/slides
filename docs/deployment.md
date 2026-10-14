@@ -122,6 +122,8 @@ env:
 - `VITE_LIVE_BASE_URL` wires the deck's live components to the hosted backend.
 - `BASE_PATH` rewrites asset URLs for a sub-path deploy.
 
+The Pages workflow also emits a per-deck PDF at `dist/<deck>/slides.pdf` (served at `/<repo>/<deck>/slides.pdf`). Locally, run `npm run build:pdf` after `npm run build` to produce them; it requires the Playwright Chromium browser (`npx playwright install chromium`).
+
 ### Wiring a hosted backend
 
 For a cross-origin GitHub Pages deck with a live presenter panel, the backend

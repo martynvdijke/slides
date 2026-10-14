@@ -89,17 +89,16 @@ const cards = decks
   .map(deck => {
     const date = formatDate(deck.date)
     const tags = deck.tags.map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('')
-    return `      <a class="card" href="./${encodeURIComponent(deck.name)}/">
-        <div class="card-body">
-          <h2>${escapeHtml(deck.title)}</h2>
-          ${deck.info ? `<p class="info">${escapeHtml(deck.info)}</p>` : ''}
-          ${tags ? `<div class="tags">${tags}</div>` : ''}
-        </div>
-        <div class="card-foot">
-          ${date ? `<time>${escapeHtml(date)}</time>` : '<span></span>'}
-          <span class="open">Open deck →</span>
-        </div>
-      </a>`
+    const hasPdf = existsSync(join(dist, deck.name, 'slides.pdf'))
+    const deckHref = `./${encodeURIComponent(deck.name)}/`
+    const pdfHref = `./${encodeURIComponent(deck.name)}/slides.pdf`
+    const titleEsc = escapeHtml(deck.title)
+    const body = `          <div class="card-body">\n            <h2>${titleEsc}</h2>\n            ${deck.info ? `<p class="info">${escapeHtml(deck.info)}</p>` : ''}\n            ${tags ? `<div class="tags">${tags}</div>` : ''}\n          </div>`
+    const timeHtml = date ? `<time>${escapeHtml(date)}</time>` : '<span></span>'
+    if (hasPdf) {
+      return `      <article class="card">\n        <a class="card-link" href="${deckHref}">\n${body}\n        </a>\n        <div class="card-foot">\n          ${timeHtml}\n          <span class="card-actions">\n            <a class="pdf" href="${pdfHref}" aria-label="Download PDF for ${titleEsc}" download>PDF <span aria-hidden="true">↓</span></a>\n            <a class="open" href="${deckHref}">Open deck →</a>\n          </span>\n        </div>\n      </article>`
+    }
+    return `      <article class="card">\n        <a class="card-link" href="${deckHref}">\n${body}\n        </a>\n        <div class="card-foot">\n          ${timeHtml}\n          <span class="card-actions">\n            <a class="open" href="${deckHref}">Open deck →</a>\n          </span>\n        </div>\n      </article>`
   })
   .join('\n')
 
@@ -131,17 +130,30 @@ ${umami}  <style>
     .tagline { margin: .3rem 0 0; color: #8b949e; font-size: .95rem; }
     .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
     .card { display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem;
-            padding: 1.5rem; border: 1px solid #30363d; border-radius: 12px; text-decoration: none;
-            color: inherit; background: #161b22; transition: border-color .15s, transform .15s; min-height: 120px; }
+            padding: 0; border: 1px solid #30363d; border-radius: 12px;
+            color: inherit; background: #161b22; transition: border-color .15s, transform .15s; min-height: 120px; overflow: hidden; }
     .card:hover { border-color: #58a6ff; transform: translateY(-2px); }
+    .card:focus-within { border-color: #58a6ff; }
+    .card-link { display: flex; flex-direction: column; justify-content: space-between; gap: 1.25rem; flex: 1;
+                 padding: 1.5rem 1.5rem 0 1.5rem; text-decoration: none; color: inherit; }
+    .card-link:focus-visible { outline: none; }
     .card h2 { margin: 0; font-size: 1.25rem; }
     .info { margin: .5rem 0 0; color: #8b949e; font-size: .875rem; line-height: 1.4; }
     .tags { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .85rem; }
     .tag { font-size: .7rem; letter-spacing: .04em; text-transform: uppercase; color: #79c0ff;
            background: #1f2937; border: 1px solid #30363d; border-radius: 999px; padding: .15rem .55rem; }
     .card-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem;
-                 font-size: .8rem; color: #8b949e; }
-    .open { color: #58a6ff; }
+                 font-size: .8rem; color: #8b949e; padding: 0 1.5rem 1.5rem 1.5rem; }
+    .card-actions { display: flex; align-items: center; gap: .5rem; }
+    .pdf { display: inline-flex; align-items: center; gap: .25rem; font-size: .7rem; font-weight: 600;
+           letter-spacing: .04em; text-transform: uppercase; color: #e6edf3; background: #21262d;
+           border: 1px solid #30363d; border-radius: 999px; padding: .28rem .6rem; text-decoration: none;
+           transition: border-color .15s, background .15s; }
+    .pdf:hover { border-color: #58a6ff; background: #30363d; }
+    .pdf:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; }
+    .open { color: #58a6ff; text-decoration: none; }
+    a.open:hover { text-decoration: underline; }
+    a.open:focus-visible { outline: 2px solid #58a6ff; outline-offset: 2px; border-radius: 2px; }
     footer { margin-top: 3rem; color: #8b949e; font-size: .8rem; }
     footer a { color: #58a6ff; }
   </style>

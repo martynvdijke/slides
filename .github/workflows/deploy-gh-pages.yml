@@ -17,6 +17,15 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      BASE_PATH: /${{ github.event.repository.name }}/
+      # Shared by the deck build and the PDF export (which re-builds each deck).
+      VITE_STATIC_EXPORT: ${{ vars.LIVE_BASE_URL == '' && '1' || '' }}
+      VITE_LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL }}
+      VITE_UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
+      VITE_UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
+      UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
+      UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -32,16 +41,15 @@ jobs:
 
       - name: Build all decks (GitHub Pages base path)
         run: npm run build
-        env:
-          BASE_PATH: /${{ github.event.repository.name }}/
-          # Public backend that hosts the live questions (GitHub Pages can't run it).
-          # Set these as repository Variables; leave empty to keep slides static-only.
-          VITE_STATIC_EXPORT: ${{ vars.LIVE_BASE_URL == '' && '1' || '' }}
-          VITE_LIVE_BASE_URL: ${{ vars.LIVE_BASE_URL }}
-          VITE_UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
-          VITE_UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
-          UMAMI_SCRIPT_URL: ${{ vars.UMAMI_SCRIPT_URL }}
-          UMAMI_WEBSITE_ID: ${{ vars.UMAMI_WEBSITE_ID }}
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Export PDFs
+        run: npm run build:pdf
+
+      - name: Regenerate index (with PDF links)
+        run: npm run build:index
 
       - name: Setup Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6

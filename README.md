@@ -461,6 +461,8 @@ Actions → Variables):
 
 Leave `LIVE_BASE_URL` empty for a fully static, presentation-only deploy.
 
+The Pages workflow also emits a per-deck PDF at `dist/<deck>/slides.pdf` (downloadable at `/<repo>/<deck>/slides.pdf`). Locally, run `npm run build:pdf` after `npm run build` to produce them; it requires the Playwright Chromium browser (`npx playwright install chromium`).
+
 ## Docker
 
 One image contains the Go server, the admin/audience app and all built decks:
