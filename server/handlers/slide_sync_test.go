@@ -312,3 +312,37 @@ func TestPresenterSlideActivatesAndBroadcastsConsistently(t *testing.T) {
 		t.Fatalf("second broadcast QuestionID %d want %d", sd2.QuestionID, q.ID)
 	}
 }
+
+func TestSlideReactivatesUsedQuestion(t *testing.T) {
+	if err := db.Init(filepath.Join(t.TempDir(), "reactivate.db")); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	Broker.Close()
+	Broker = live.New()
+
+	ev, _ := db.CreateEvent("E", "reactivate-ev", "", "")
+	q, _ := db.CreateQuestion(ev.ID, "poll", "live", "Q-used", []string{"a", "b"}, false, true, 1, "", "")
+	// Already used/closed question, still mapped + auto_activate.
+	_, _ = db.DB.Exec("UPDATE questions SET external_id=?, deck_slug=?, slide_id=?, slide_index=?, auto_activate=1, status='closed' WHERE id=?", "meetup:s07", "meetup", "s07", 7, q.ID)
+
+	// Navigating to the slide must re-activate the previously used question.
+	if err := ActivateQuestionForSlide(ev.ID, 7, "s07", "meetup"); err != nil {
+		t.Fatalf("activate: %v", err)
+	}
+	if aq, _ := db.GetActiveQuestion(ev.ID); aq == nil || aq.ID != q.ID {
+		t.Fatalf("used question not re-activated: %+v want %d", aq, q.ID)
+	}
+
+	// An already-live question must be a no-op (no timer reset on repeated frames).
+	var firstActivated int64
+	_ = db.DB.QueryRow("SELECT activated_at FROM questions WHERE id=?", q.ID).Scan(&firstActivated)
+	if err := ActivateQuestionForSlide(ev.ID, 7, "s07", "meetup"); err != nil {
+		t.Fatalf("second activate: %v", err)
+	}
+	var secondActivated int64
+	_ = db.DB.QueryRow("SELECT activated_at FROM questions WHERE id=?", q.ID).Scan(&secondActivated)
+	if secondActivated != firstActivated {
+		t.Fatalf("live question re-activated (activated_at changed %d -> %d)", firstActivated, secondActivated)
+	}
+}

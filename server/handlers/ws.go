@@ -530,10 +530,14 @@ func ActivateQuestionForSlide(eventID int64, slideIndex int, slideID string, dec
 	if err != nil || q == nil {
 		return nil
 	}
-	if q.Status != "draft" {
+	if !q.AutoActivate {
 		return nil
 	}
-	if !q.AutoActivate {
+	// Landing on a slide always (re)activates its mapped question — including ones
+	// that were already used/closed/revealed — so the audience can answer again.
+	// Skip only when it is already the live question, to avoid resetting its timer
+	// on repeated slide frames.
+	if q.Status == "live" {
 		return nil
 	}
 	if err := db.ActivateQuestion(eventID, q.ID, nil); err != nil {
