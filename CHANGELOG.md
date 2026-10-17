@@ -1,3 +1,10 @@
+## [1.23.3](https://github.com/martynvdijke/slides/compare/v1.23.2...v1.23.3) (2026-10-17)
+
+
+### Bug Fixes
+
+* **live:** (re)activate a slide's question on navigation ([0384085](https://github.com/martynvdijke/slides/commit/03840856c566fe7c760694cff3a2cc74c664bc4f))
+
 ## [1.23.2](https://github.com/martynvdijke/slides/compare/v1.23.1...v1.23.2) (2026-10-14)
 
 
