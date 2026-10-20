@@ -40,7 +40,7 @@ func GetEventResults(w http.ResponseWriter, r *http.Request) {
 	code := r.PathValue("code")
 	ev, err := db.GetEventByCode(code)
 	if err != nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	if !ev.ResultsPublished {

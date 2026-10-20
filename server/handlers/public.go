@@ -202,7 +202,7 @@ type QARequest struct {
 func GetEvent(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	brand, _ := db.GetBranding()
@@ -220,7 +220,7 @@ func GetEvent(w http.ResponseWriter, r *http.Request) {
 func GetEventState(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	pid, _, ok := checkJoin(w, r, ev)
@@ -244,7 +244,7 @@ func GetEventState(w http.ResponseWriter, r *http.Request) {
 func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	var req AnswerRequest
@@ -283,7 +283,7 @@ func SubmitAnswer(w http.ResponseWriter, r *http.Request) {
 func ListPublicQA(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	pid := participantID(w, r, ev.ID)
@@ -324,7 +324,7 @@ func ListPublicQA(w http.ResponseWriter, r *http.Request) {
 func CreateQA(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	var req QARequest
@@ -366,7 +366,7 @@ func CreateQA(w http.ResponseWriter, r *http.Request) {
 func VoteQA(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	pid, _, ok := checkJoin(w, r, ev)
@@ -392,7 +392,7 @@ func VoteQA(w http.ResponseWriter, r *http.Request) {
 func ListPublicPresentations(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	rows, err := db.ListPresentations(ev.ID)
@@ -422,7 +422,7 @@ func ListPublicPresentations(w http.ResponseWriter, r *http.Request) {
 func DownloadPresentation(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	pid := pathID(r, "id")
@@ -432,7 +432,7 @@ func DownloadPresentation(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := db.GetPresentation(pid)
 	if err != nil || p == nil {
-		jsonError(w, "presentation not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "presentation not found")
 		return
 	}
 	if p.EventID != ev.ID {
@@ -492,7 +492,7 @@ func ServeMedia(w http.ResponseWriter, r *http.Request) {
 func EventQR(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	base := os.Getenv("PUBLIC_BASE_URL")
@@ -524,7 +524,7 @@ func EventQR(w http.ResponseWriter, r *http.Request) {
 func ResolveRoom(w http.ResponseWriter, r *http.Request) {
 	ev, err := db.GetEventByRoomCode(r.PathValue("room"))
 	if err != nil || ev == nil {
-		jsonError(w, "room not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "room not found")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -537,7 +537,7 @@ func ResolveRoom(w http.ResponseWriter, r *http.Request) {
 func PublicListParticipants(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	parts, err := db.ListParticipants(ev.ID)
@@ -568,7 +568,7 @@ func PublicListParticipants(w http.ResponseWriter, r *http.Request) {
 func PublicGetLeaderboard(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	entries, err := db.GetLeaderboard(ev.ID)

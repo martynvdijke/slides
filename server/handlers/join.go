@@ -121,7 +121,7 @@ func joinExpiredResponse(w http.ResponseWriter, r *http.Request, ev *db.Event) {
 func JoinEvent(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	// presenter bypass just returns ok

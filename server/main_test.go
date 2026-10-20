@@ -107,6 +107,24 @@ func TestCORSWildcardHasNoCredentials(t *testing.T) {
 	}
 }
 
+func TestSecurityHeaders(t *testing.T) {
+	resetCORS()
+	rec := corsRequest(t, http.MethodGet, "")
+	for _, header := range []string{
+		"Content-Security-Policy",
+		"X-Content-Type-Options",
+		"Referrer-Policy",
+		"Permissions-Policy",
+	} {
+		if got := rec.Header().Get(header); got == "" {
+			t.Errorf("%s is missing", header)
+		}
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+}
+
 func TestCORSPreflight(t *testing.T) {
 	resetCORS()
 	t.Setenv("CORS_ORIGINS", "https://martynvdijke.github.io")

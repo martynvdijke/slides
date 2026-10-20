@@ -7,6 +7,7 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
@@ -188,6 +189,24 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 
 func jsonError(w http.ResponseWriter, msg string, status int) {
 	writeJSON(w, status, map[string]string{"error": msg})
+}
+
+// writeLookupFailure reports a missing row as 404 but keeps genuine database
+// failures as 500 so an outage or schema problem is never disguised as a
+// missing resource. err may be nil when the store returns (nil, nil).
+func writeLookupFailure(w http.ResponseWriter, err error, entity string) {
+	writeLookupFailureMessage(w, err, entity+" not found")
+}
+
+// writeLookupFailureMessage is writeLookupFailure with a caller-supplied
+// message, for handlers whose 404 text differs from "<entity> not found".
+func writeLookupFailureMessage(w http.ResponseWriter, err error, message string) {
+	if err == nil || errors.Is(err, sql.ErrNoRows) {
+		jsonError(w, message, http.StatusNotFound)
+		return
+	}
+	log.Printf("db lookup failed (%s): %v", message, err)
+	jsonError(w, "internal server error", http.StatusInternalServerError)
 }
 
 func decodeJSON(r *http.Request, v any) error {

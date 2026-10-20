@@ -326,6 +326,19 @@ func withMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+		// The embedded UI uses inline scripts/styles, and the app is loaded both
+		// standalone and inside deck iframes, so framing is intentionally not
+		// restricted here. Everything else is limited to same-origin resources.
+		w.Header().Set("Content-Security-Policy",
+			"default-src 'self'; "+
+				"script-src 'self' 'unsafe-inline' https:; "+
+				"style-src 'self' 'unsafe-inline' https:; "+
+				"img-src 'self' data: blob: https:; "+
+				"media-src 'self' blob:; "+
+				"font-src 'self' data: https://fonts.gstatic.com; "+
+				"connect-src 'self' ws: wss:; "+
+				"object-src 'none'; base-uri 'self'; form-action 'self'")
 		if origin := r.Header.Get("Origin"); origin != "" {
 			normalized := strings.TrimRight(origin, "/")
 			w.Header().Add("Vary", "Origin")

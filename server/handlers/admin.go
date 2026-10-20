@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/csv"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -191,7 +192,7 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	existing, err := db.GetEventByID(id)
 	if err != nil || existing == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	var raw map[string]json.RawMessage
@@ -308,7 +309,11 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	// handle code update via direct SQL if provided and different
 	if codeProvided && newCode != "" && newCode != existing.Code {
-		_, _ = db.DB.Exec("UPDATE events SET code=? WHERE id=?", newCode, id)
+		if _, err := db.DB.Exec("UPDATE events SET code=? WHERE id=?", newCode, id); err != nil {
+			log.Printf("update event code %d: %v", id, err)
+			jsonError(w, "failed to update event code", http.StatusInternalServerError)
+			return
+		}
 	}
 	if len(fields) > 0 {
 		if _, err := db.UpdateEvent(id, fields); err != nil {
@@ -318,7 +323,7 @@ func AdminUpdateEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	ev, err := db.GetEventByID(id)
 	if err != nil || ev == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	brand := ensureBranding(ev)
@@ -333,7 +338,7 @@ func AdminListParticipants(w http.ResponseWriter, r *http.Request) {
 	id := pathID(r, "id")
 	ev, err := db.GetEventByID(id)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	parts, err := db.ListParticipants(id)
@@ -361,7 +366,7 @@ func AdminSlideControl(w http.ResponseWriter, r *http.Request) {
 	id := pathID(r, "id")
 	ev, err := db.GetEventByID(id)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	var body struct {
@@ -428,7 +433,7 @@ func AdminListAnswers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := db.GetEventByID(id); err != nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "not found")
 		return
 	}
 	status := strings.TrimSpace(r.URL.Query().Get("status"))
@@ -743,34 +748,47 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "failed to create question", http.StatusInternalServerError)
 		return
 	}
+	updateQuestion := func(fields map[string]any) bool {
+		if _, err := db.UpdateQuestion(q.ID, fields); err != nil {
+			log.Printf("update question %d: %v", q.ID, err)
+			jsonError(w, "failed to update question", http.StatusInternalServerError)
+			return false
+		}
+		updated, err := db.GetQuestion(q.ID)
+		if err != nil || updated == nil {
+			log.Printf("reload question %d: %v", q.ID, err)
+			jsonError(w, "failed to update question", http.StatusInternalServerError)
+			return false
+		}
+		q = updated
+		return true
+	}
 	if body.DurationSec != nil {
 		if err := validateDurationSec(*body.DurationSec); err != nil {
-			_ = db.DeleteQuestion(q.ID)
+			if delErr := db.DeleteQuestion(q.ID); delErr != nil {
+				log.Printf("delete invalid question %d: %v", q.ID, delErr)
+			}
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"duration_sec": *body.DurationSec})
-		q, _ = db.GetQuestion(q.ID)
+		if !updateQuestion(map[string]any{"duration_sec": *body.DurationSec}) {
+			return
+		}
 	}
-	if body.AutoClose != nil {
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"auto_close": body.AutoClose.boolValue()})
-		q, _ = db.GetQuestion(q.ID)
+	if body.AutoClose != nil && !updateQuestion(map[string]any{"auto_close": body.AutoClose.boolValue()}) {
+		return
 	}
-	if body.AutoReveal != nil {
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"auto_reveal": body.AutoReveal.boolValue()})
-		q, _ = db.GetQuestion(q.ID)
+	if body.AutoReveal != nil && !updateQuestion(map[string]any{"auto_reveal": body.AutoReveal.boolValue()}) {
+		return
 	}
-	if body.CorrectIndex != nil {
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"correct_index": *body.CorrectIndex})
-		q, _ = db.GetQuestion(q.ID)
+	if body.CorrectIndex != nil && !updateQuestion(map[string]any{"correct_index": *body.CorrectIndex}) {
+		return
 	}
-	if body.PointsBase != nil {
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"points_base": *body.PointsBase})
-		q, _ = db.GetQuestion(q.ID)
+	if body.PointsBase != nil && !updateQuestion(map[string]any{"points_base": *body.PointsBase}) {
+		return
 	}
-	if body.TimeLimitS != nil {
-		_, _ = db.UpdateQuestion(q.ID, map[string]any{"time_limit_s": *body.TimeLimitS})
-		q, _ = db.GetQuestion(q.ID)
+	if body.TimeLimitS != nil && !updateQuestion(map[string]any{"time_limit_s": *body.TimeLimitS}) {
+		return
 	}
 	writeJSON(w, http.StatusOK, questionDTO(*q, true))
 	BroadcastEvent(eid)
@@ -795,7 +813,7 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 	}
 	q, err := db.GetQuestion(qid)
 	if err != nil || q == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "question")
 		return
 	}
 	if q.EventID != eid {
@@ -1030,7 +1048,7 @@ func AdminUploadQuestionMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if ev, err := db.GetEventByID(eid); err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	if err := r.ParseMultipartForm(128 << 20); err != nil {
@@ -1176,6 +1194,9 @@ func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 		webhook.Notify(ev.Code, "question.activated", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": qid})
 	}
 	q, err := db.GetQuestion(qid)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("load activated question %d: %v", qid, err)
+	}
 	if err == nil && q != nil {
 		scheduleAutoLock(q)
 	}
@@ -1519,7 +1540,13 @@ func AdminUploadPresentation(w http.ResponseWriter, r *http.Request) {
 	// Fix: update presentation row's filename to storedName while keeping original for response.
 	// Do direct update if we stored original.
 	if p.Filename != storedName {
-		_, _ = db.DB.Exec("UPDATE presentations SET filename=? WHERE id=?", storedName, p.ID)
+		if _, err := db.DB.Exec("UPDATE presentations SET filename=? WHERE id=?", storedName, p.ID); err != nil {
+			log.Printf("update presentation %d filename: %v", p.ID, err)
+			_ = os.Remove(filepath.Join(MediaDir, storedName))
+			_ = db.DeletePresentation(p.ID)
+			jsonError(w, "failed to save presentation", http.StatusInternalServerError)
+			return
+		}
 	}
 	// Return DTO with original filename for display but URL still works
 	dto := presentationDTO(*p, code)
@@ -1541,7 +1568,7 @@ func AdminDeletePresentation(w http.ResponseWriter, r *http.Request) {
 	pid := pathID(r, "pid")
 	p, err := db.GetPresentation(pid)
 	if err != nil || p == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "presentation")
 		return
 	}
 	if err := db.DeletePresentation(pid); err != nil {
@@ -1566,7 +1593,7 @@ func AdminExportCSV(w http.ResponseWriter, r *http.Request) {
 	eid := pathID(r, "id")
 	ev, err := db.GetEventByID(eid)
 	if err != nil || ev == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
@@ -1600,6 +1627,10 @@ func AdminExportCSV(w http.ResponseWriter, r *http.Request) {
 		_ = cw.Write([]string{"qa", "", qa.Body, qa.Author, fmt.Sprintf("%d", qa.Votes), "", qa.CreatedAt.Format(time.RFC3339)})
 	}
 	cw.Flush()
+	if err := cw.Error(); err != nil {
+		// Headers are already committed, so log rather than attempting a new status.
+		log.Printf("export csv %d: %v", eid, err)
+	}
 }
 
 // AdminGetAnalyticsSettings gets analytics settings.
@@ -1732,7 +1763,11 @@ func AdminUpdateBranding(w http.ResponseWriter, r *http.Request) {
 		jsonError(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	_ = db.UpdateBranding(body.Brand)
+	if err := db.UpdateBranding(body.Brand); err != nil {
+		log.Printf("update branding: %v", err)
+		jsonError(w, "failed to update branding", http.StatusInternalServerError)
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]string{"brand": body.Brand})
 }
 
@@ -1837,7 +1872,7 @@ func AdminCloneEvent(w http.ResponseWriter, r *http.Request) {
 	id := pathID(r, "id")
 	src, err := db.GetEventByID(id)
 	if err != nil || src == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "not found")
 		return
 	}
 	var body struct {
@@ -2011,7 +2046,7 @@ func AdminEventReport(w http.ResponseWriter, r *http.Request) {
 	id := pathID(r, "id")
 	ev, err := db.GetEventByID(id)
 	if err != nil || ev == nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	brand, _ := db.GetBranding()

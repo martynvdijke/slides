@@ -9,7 +9,7 @@ import (
 )
 
 type deckSyncRequest struct {
-	DeckSlug string          `json:"deck_slug"`
+	DeckSlug string         `json:"deck_slug"`
 	Slides   []db.DeckSlide `json:"slides"`
 }
 
@@ -20,7 +20,7 @@ func AdminDeckSync(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if _, err := db.GetEventByID(eid); err != nil {
-		jsonError(w, "not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "not found")
 		return
 	}
 	var req deckSyncRequest

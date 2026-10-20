@@ -215,7 +215,7 @@ type recapSubscribeRequest struct {
 func RecapSubscribe(w http.ResponseWriter, r *http.Request) {
 	ev, err := db.GetEventByCode(r.PathValue("code"))
 	if err != nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	var req recapSubscribeRequest
@@ -254,7 +254,7 @@ func RecapSubscribe(w http.ResponseWriter, r *http.Request) {
 func RecapUnsubscribe(w http.ResponseWriter, r *http.Request) {
 	ev, err := db.GetEventByCode(r.PathValue("code"))
 	if err != nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	pid, _, ok := checkJoin(w, r, ev)
@@ -301,7 +301,7 @@ func recapEvent(w http.ResponseWriter, r *http.Request) (*db.Event, bool) {
 	}
 	ev, err := db.GetEventByID(id)
 	if err != nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return nil, false
 	}
 	return ev, true

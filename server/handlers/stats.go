@@ -134,7 +134,7 @@ func AdminGetStats(w http.ResponseWriter, r *http.Request) {
 func AdminGetEventStats(w http.ResponseWriter, r *http.Request) {
 	ev, err := db.GetEventByID(pathID(r, "id"))
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailureMessage(w, err, "event not found")
 		return
 	}
 	dto, err := buildEventStats(ev)

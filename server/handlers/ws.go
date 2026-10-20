@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strings"
@@ -131,7 +133,7 @@ func broadcastParticipants(ev *db.Event) {
 func EventWS(w http.ResponseWriter, r *http.Request) {
 	ev, err := eventByCode(r)
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 
@@ -406,7 +408,10 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 					color = p.Color
 				}
 			}
-			_ = db.UpdateParticipantIdentity(pid, name, emoji, color)
+			if err := db.UpdateParticipantIdentity(pid, name, emoji, color); err != nil {
+				log.Printf("update participant %d identity: %v", pid, err)
+				return wsEnvelope{Type: "error", Error: "failed to update identity"}
+			}
 			db.InvalidateLeaderboard(ev.ID)
 			BroadcastEvent(ev.ID)
 			broadcastParticipants(ev)
@@ -428,7 +433,7 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 func AdminEventStatsWS(w http.ResponseWriter, r *http.Request) {
 	ev, err := db.GetEventByID(pathID(r, "id"))
 	if err != nil || ev == nil {
-		jsonError(w, "event not found", http.StatusNotFound)
+		writeLookupFailure(w, err, "event")
 		return
 	}
 	ctx := r.Context()
@@ -500,8 +505,12 @@ func resolveSlideQuestionID(eventID int64, slideID string, deckSlug string) int6
 		return 0
 	}
 	var id int64
-	if err := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID).Scan(&id); err == nil {
+	err := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID).Scan(&id)
+	if err == nil {
 		return id
+	}
+	if !errors.Is(err, sql.ErrNoRows) {
+		log.Printf("resolve slide question (event %d, slide %q): %v", eventID, slideID, err)
 	}
 	return 0
 }
@@ -515,7 +524,10 @@ func lookupQuestionForSlide(eventID int64, slideID string, deckSlug string) (*db
 	}
 	var id int64
 	if err := db.DB.QueryRow("SELECT id FROM questions WHERE event_id=? AND slide_id=? AND external_id<>'' ORDER BY id DESC LIMIT 1", eventID, slideID).Scan(&id); err != nil {
-		return nil, nil
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return db.GetQuestion(id)
 }
