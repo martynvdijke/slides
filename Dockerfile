@@ -13,7 +13,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- deck build stage ----
-FROM node:24-alpine AS decks
+FROM node:26-alpine AS decks
 WORKDIR /app
 
 COPY package.json package-lock.json ./
