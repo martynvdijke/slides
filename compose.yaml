@@ -92,7 +92,7 @@ services:
   # OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318 in .env, restart the
   # slides service, and telemetry shows up in the collector logs.
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.161.0
+    image: otel/opentelemetry-collector-contrib:0.162.0
     container_name: otel-collector
     profiles: [observability]
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
