@@ -1,3 +1,10 @@
+## [1.23.6](https://github.com/martynvdijke/slides/compare/v1.23.5...v1.23.6) (2026-11-01)
+
+
+### Bug Fixes
+
+* **deps:** update all non-major dependencies ([#21](https://github.com/martynvdijke/slides/issues/21)) ([9e7b47c](https://github.com/martynvdijke/slides/commit/9e7b47cc8777d325828b5f0d9701272265aa0eac))
+
 ## [1.23.5](https://github.com/martynvdijke/slides/compare/v1.23.4...v1.23.5) (2026-10-31)
 
 ## [1.23.4](https://github.com/martynvdijke/slides/compare/v1.23.3...v1.23.4) (2026-10-28)
