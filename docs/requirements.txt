@@ -7,4 +7,4 @@
 #   pip install -r docs/requirements.txt
 #   zensical build --strict --clean
 #   zensical serve   # http://localhost:8000
-zensical>=0.0.68,<0.1
+zensical>=0.1,<0.2
