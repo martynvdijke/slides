@@ -1,3 +1,10 @@
+## [1.23.9](https://github.com/martynvdijke/slides/compare/v1.23.8...v1.23.9) (2026-11-10)
+
+
+### Bug Fixes
+
+* **renovate:** let Renovate merge green PRs instead of GitHub native auto-merge ([e9e0f11](https://github.com/martynvdijke/slides/commit/e9e0f115510b854f37cebd4f28905ee3ed735a4d))
+
 ## [1.23.8](https://github.com/martynvdijke/slides/compare/v1.23.7...v1.23.8) (2026-11-03)
 
 ## [1.23.7](https://github.com/martynvdijke/slides/compare/v1.23.6...v1.23.7) (2026-11-02)
