@@ -1,3 +1,10 @@
+## [1.23.11](https://github.com/martynvdijke/slides/compare/v1.23.10...v1.23.11) (2026-11-11)
+
+
+### Bug Fixes
+
+* **deps:** update module golang.org/x/crypto to v0.59.0 ([#26](https://github.com/martynvdijke/slides/issues/26)) ([b6f2fa0](https://github.com/martynvdijke/slides/commit/b6f2fa006995d4a514eec72d10235e37c7c22c78))
+
 ## [1.23.10](https://github.com/martynvdijke/slides/compare/v1.23.9...v1.23.10) (2026-11-10)
 
 
