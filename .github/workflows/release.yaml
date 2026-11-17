@@ -78,8 +78,8 @@ jobs:
             ghcr.io/${{ github.repository }}
             martynvandijke/slides
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ steps.semantic.outputs.new_release_version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ steps.semantic.outputs.new_release_version }}
             type=raw,value=latest
 
       - name: Build and push
