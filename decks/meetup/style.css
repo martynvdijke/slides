@@ -235,7 +235,7 @@ body::after {
   color: #64748b;
   font-weight: 500;
 }
-.pizza-icon-wrap {
+.beverage-icon-wrap {
   width: 92px;
   height: 92px;
   border-radius: 50%;
@@ -246,7 +246,7 @@ body::after {
   place-items: center;
   margin: 0 auto 14px;
 }
-.pizza-icon {
+.beverage-icon {
   width: 62px;
   height: 62px;
   display: block;

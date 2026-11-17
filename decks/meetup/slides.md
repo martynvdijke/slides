@@ -2,7 +2,7 @@
 theme: default
 title: "Dutch Kubernetes/Cloud Native Meetup"
 info: Cloud Native Amsterdam meetup deck with live audience Q&A and polls.
-date: 2026-09-28
+date: 2026-1-17
 tags: [kubernetes, cloud-native, cncf, live-questions]
 routerMode: hash
 transition: slide-left
@@ -70,10 +70,11 @@ class: "bg-white px-12 py-8"
 <h2 class="text-[28px] font-bold tracking-tight text-[#0f172a] mb-4">Agenda:</h2>
 
 <ul class="agenda-list">
+  <li><strong>17:00 - 18:00</strong> Food</li>
   <li><strong>18:00 - 18:05</strong> Welcome</li>
-  <li><strong>18:05 - 18:50</strong> 1st Talk: Pascal Widdershoven & Luk van den Borne (Kabisa) Running k8s at sea</li>
-  <li><strong>18:50 - 19:30</strong> Pizzas</li>
-  <li><strong>19:30 - 20:15</strong> 2nd Talk: Manuel Mascarenhas & Ronald van Zandvoort (ASML): Taking flight with Cilium eBPF – Is that you Icarus?</li>
+  <li><strong>18:05 - 19:00</strong> 1st talk: We've got GitHub Copilot at home by Mark Hu (ASML)</li>
+  <li><strong>19:00 - 19:15</strong> Break </li>
+  <li><strong>19:15 - 20:15</strong> 2nd talk: Making PRs from the bathroom by Sjuul Jannsen (Arrakis Technologies)</li>
   <li><strong>20:15 - 21:30</strong> Networking & drinks</li>
   <li><strong>21:30</strong> End</li>
 </ul>
@@ -115,7 +116,7 @@ class: "bg-white text-center"
   <div class="text-[56px] font-extrabold tracking-tight text-[#0f172a]">Thank you</div>
   <div class="mt-8 text-[12px] uppercase tracking-[0.25em] text-[#64748b]">Today's company</div>
   <div class="mt-3 inline-flex items-center rounded-2xl bg-[#0f2a4a] px-10 py-6 shadow-lg">
-    <img src="/kabisa-logo.svg" class="w-[240px]" alt="Kabisa" />
+    <img src="https://upload.wikimedia.org/wikipedia/fr/archive/e/e2/20130114190635%21LOGO-CGI.svg" class="w-[240px]" alt="Kabisa" />
   </div>
 </div>
 
@@ -270,22 +271,10 @@ class: "bg-white text-center"
 <div class="flex items-center justify-center gap-2">
   <span class="event-eyebrow">Upcoming event</span>
   <span class="event-dot">·</span>
-  <span class="event-time">29 – 30 October 2026</span>
+  <span class="event-time">Feburary 2027</span>
 </div>
 
-<h2 class="event-title mt-4">Dutch Cloud Native Day</h2>
-
-<div class="event-divider"></div>
-
-<p class="event-subline mt-4">Jaarbeurs, Utrecht, The Netherlands</p>
-
-<p class="text-[13.5px] leading-relaxed text-[#475569] mt-3">
-Reposting our cousins' event! Two full days of talks, workshops and hallway conversations — sign up as the agenda is insanely good and the event will be memorable as always.
-</p>
-
-<div class="mt-4">
-  <span class="event-company-pill">Discount code: DCND26-CLOU-TH47</span>
-</div>
+<h2 class="event-title mt-4">ASML & Docker AI</h2>
 
 </div>
 
@@ -299,17 +288,17 @@ class: "bg-white text-center"
 <div class="flex items-center justify-center gap-2">
   <span class="event-eyebrow">1st Talk</span>
   <span class="event-dot">·</span>
-  <span class="event-time">18:05 – 18:50</span>
+  <span class="event-time">18:05 – 19:00</span>
 </div>
 
-<h2 class="event-title mt-4">Running k8s at sea</h2>
+<h2 class="event-title mt-4">We've got GitHub Copilot at home</h2>
 
 <div class="event-divider"></div>
 
-<div class="event-speakers mt-4">Pascal Widdershoven & Luk van den Borne</div>
+<div class="event-speakers mt-4">by Mark Hu</div>
 
 <div class="mt-3">
-  <span class="event-company-pill">Kabisa</span>
+  <span class="event-company-pill">ASML</span>
 </div>
 
 </div>
@@ -321,40 +310,26 @@ class: "bg-white text-center"
 
 <div class="event-card">
 
-<div class="pizza-icon-wrap" aria-hidden="true">
-<svg class="pizza-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <!-- crust -->
-  <path d="M12 22 Q50 2 88 22 L84 32 Q50 12 16 32 Z" fill="#E8A33D" stroke="#0f172a" stroke-width="2.2" stroke-linejoin="round"/>
-  <!-- cheese slice -->
-  <path d="M16 32 L50 92 L84 32 Q50 12 16 32 Z" fill="#FFF7CC" stroke="#0f172a" stroke-width="2.2" stroke-linejoin="round"/>
-  <!-- melted cheese highlight -->
-  <path d="M28 38 Q32 42 28 46 Q30 42 28 38" stroke="#E8A33D" stroke-width="1.4" stroke-linecap="round" opacity="0.9"/>
-  <path d="M68 42 Q72 46 68 50 Q70 46 68 42" stroke="#E8A33D" stroke-width="1.4" stroke-linecap="round" opacity="0.9"/>
-  <!-- pepperoni -->
-  <circle cx="38" cy="49" r="7.2" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
-  <circle cx="62" cy="53" r="6.4" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
-  <circle cx="50" cy="71" r="5.8" fill="#C0392B" stroke="#0f172a" stroke-width="1.6"/>
-  <!-- pepperoni shine -->
-  <circle cx="36.2" cy="47.2" r="1.1" fill="white" opacity="0.85"/>
-  <circle cx="60.5" cy="51.2" r="1" fill="white" opacity="0.85"/>
-  <circle cx="48.6" cy="69.2" r="0.9" fill="white" opacity="0.85"/>
-  <!-- cheese dots -->
-  <circle cx="46" cy="38" r="1.3" fill="#E8A33D" opacity="0.9"/>
-  <circle cx="54" cy="44" r="1.1" fill="#E8A33D" opacity="0.9"/>
-  <circle cx="42" cy="62" r="1.1" fill="#E8A33D" opacity="0.9"/>
-  <circle cx="58" cy="64" r="1.2" fill="#E8A33D" opacity="0.9"/>
+<div class="beverage-icon-wrap" aria-hidden="true">
+<svg class="beverage-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <path d="M23 32c-5-6 5-8 0-14M34 32c-5-6 5-8 0-14M66 32c-5-6 5-8 0-14M77 32c-5-6 5-8 0-14" stroke="#94a3b8" stroke-width="3" stroke-linecap="round"/>
+  <path d="M40 47h4a7 7 0 0 1 0 14h-5M13 41h29l-3 27a8 8 0 0 1-8 7h-7a8 8 0 0 1-8-7z" fill="#fff7ed" stroke="#0f172a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M14 43c6-4 21-4 27 0-6 4-21 4-27 0" fill="#7c4a24" stroke="#0f172a" stroke-width="2"/>
+  <path d="M10 80c7 5 29 5 36 0" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M84 47h4a7 7 0 0 1 0 14h-5M57 41h29l-3 27a8 8 0 0 1-8 7h-7a8 8 0 0 1-8-7z" fill="#fff7ed" stroke="#0f172a" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M58 43c6-4 21-4 27 0-6 4-21 4-27 0" fill="#d99a32" stroke="#0f172a" stroke-width="2"/>
+  <path d="M54 80c7 5 29 5 36 0" stroke="#0f172a" stroke-width="2.5" stroke-linecap="round"/>
 </svg>
 </div>
 
 <div class="flex items-center justify-center gap-2">
   <span class="event-eyebrow">Break</span>
   <span class="event-dot">·</span>
-  <span class="event-time">18:50 – 19:30</span>
+  <span class="event-time">19:00 – 19:15</span>
 </div>
 
-<h2 class="event-title mt-3">Pizza break</h2>
+<h2 class="event-title mt-3">Break</h2>
 
-<div class="event-subline mt-2">Grab a slice and mingle</div>
 
 </div>
 
@@ -368,17 +343,17 @@ class: "bg-white text-center"
 <div class="flex items-center justify-center gap-2">
   <span class="event-eyebrow">2nd Talk</span>
   <span class="event-dot">·</span>
-  <span class="event-time">19:30 – 20:15</span>
+  <span class="event-time">19:15 – 20:15</span>
 </div>
 
-<h2 class="event-title event-title--sm mt-4">Taking flight with Cilium eBPF<br/><span class="font-extrabold">– Is that you Icarus?</span></h2>
+<h2 class="event-title event-title--sm mt-4">Making PRs from the bathroom</h2>
 
 <div class="event-divider"></div>
 
-<div class="event-speakers mt-4">Manuel Mascarenhas & Ronald van Zandvoort</div>
+<div class="event-speakers mt-4">Sjuul Jannsen</div>
 
 <div class="mt-3">
-  <span class="event-company-pill">ASML</span>
+  <span class="event-company-pill">Arrakis Technologies</span>
 </div>
 
 </div>
@@ -416,50 +391,6 @@ class: "bg-white text-center"
 
 </div>
 
-<!--
-Call to action — recruit speakers and hosts for the next meetup.
--->
-
----
-layout: poll
-interactive: true
-id: meetup-poll-journey
-prompt: "Where are you on your cloud-native journey?"
-options: ["Exploring","Running in prod","Scaling platform"]
-points: 100
-timeLimit: 30
----
-
-<!--
-Demo poll — synced to the backend via `npm run sync:deck` (external_id = "{deck_slug}:meetup-poll-journey").
--->
-
----
-layout: wordcloud
-interactive: true
-id: meetup-wordcloud-buzz
-prompt: "One word — what buzzword are you tired of?"
-timeLimit: 45
----
-
-<!--
-Demo wordcloud — size = count. Port of the audience app's cloud renderer.
--->
-
----
-layout: center
----
-
-# Ask me anything
-
-<!-- Live questions are wired from the environment: set VITE_ROOM_CODE (short
-     room code) or VITE_EVENT_CODE when building, or pass room="ABC12" here.
-     Leave `base` off to use the same origin (all-in-one container) or the
-     VITE_LIVE_BASE_URL baked in at build time (GitHub Pages). -->
-<LiveJoin />
-<div class="mt-8">
-  <LiveQuestion />
-</div>
 
 ---
 layout: default
