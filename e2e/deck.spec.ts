@@ -18,12 +18,11 @@ test.describe('slides deck', () => {
     await page.goto('/meetup/')
     await expect(page).toHaveTitle(/meetup/i)
 
-    // Slidev mounts every slide (inactive ones are hidden), so the live
-    // components are best asserted as present in the DOM. With no room code
-    // baked in they render the "not configured" setup hint.
-    const live = page.locator('.live-join')
-    await expect(live.first()).toBeAttached()
-    await expect(page.getByText(/not configured/i).first()).toBeAttached()
+    // The meetup deck is a plain content deck (no in-slide live widgets), so
+    // assert its own content renders. Live widget coverage lives in
+    // static-export.spec.ts against the dedicated feature-test deck.
+    await expect(page.locator('.slidev-page').first()).toBeAttached()
+    await expect(page.getByText(/Dutch Kubernetes\/Cloud Native/i).first()).toBeAttached()
 
     expect(errors, `page errors: ${errors.join('; ')}`).toEqual([])
   })
