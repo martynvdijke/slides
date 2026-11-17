@@ -1,3 +1,10 @@
+## [1.24.1](https://github.com/martynvdijke/slides/compare/v1.24.0...v1.24.1) (2026-11-17)
+
+
+### Bug Fixes
+
+* **release:** tag container images with the released version ([b9506f3](https://github.com/martynvdijke/slides/commit/b9506f35cbdccf23d9c09573dd6f400fe78d0e8e))
+
 # [1.24.0](https://github.com/martynvdijke/slides/compare/v1.23.13...v1.24.0) (2026-11-17)
 
 
