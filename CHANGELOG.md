@@ -1,3 +1,15 @@
+# [1.24.0](https://github.com/martynvdijke/slides/compare/v1.23.13...v1.24.0) (2026-11-17)
+
+
+### Bug Fixes
+
+* **e2e:** assert live widgets on the feature-test deck ([a4d05e9](https://github.com/martynvdijke/slides/commit/a4d05e97e34a13d46dc9b496c6116e16c640dce7))
+
+
+### Features
+
+* add meetup ([9df4884](https://github.com/martynvdijke/slides/commit/9df4884c4688f4f3be37434742b6e078ab5ca177))
+
 ## [1.23.13](https://github.com/martynvdijke/slides/compare/v1.23.12...v1.23.13) (2026-11-16)
 
 ## [1.23.12](https://github.com/martynvdijke/slides/compare/v1.23.11...v1.23.12) (2026-11-14)
