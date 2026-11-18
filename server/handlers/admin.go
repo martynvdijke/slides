@@ -669,6 +669,16 @@ func validateDurationSec(v int) error {
 	return nil
 }
 
+// validatePointsBase bounds a scored question's base so a host cannot award
+// negative points (which would subtract from a participant's total) or an
+// absurd score. Zero keeps its historical meaning: "unset", scored as 100.
+func validatePointsBase(v int) error {
+	if v < 0 || v > 10000 {
+		return fmt.Errorf("points_base must be between 0 and 10000")
+	}
+	return nil
+}
+
 func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	eid := pathID(r, "id")
 	var body struct {
@@ -706,6 +716,12 @@ func AdminCreateQuestion(w http.ResponseWriter, r *http.Request) {
 	if body.TimeLimitS != nil && *body.TimeLimitS < 0 {
 		jsonError(w, "time_limit_s must be a non-negative integer", http.StatusBadRequest)
 		return
+	}
+	if body.PointsBase != nil {
+		if err := validatePointsBase(*body.PointsBase); err != nil {
+			jsonError(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 	// trim options
 	var opts []string
@@ -909,6 +925,10 @@ func AdminUpdateQuestion(w http.ResponseWriter, r *http.Request) {
 		case "points_base":
 			var n int
 			_ = json.Unmarshal(v, &n)
+			if err := validatePointsBase(n); err != nil {
+				jsonError(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			fields["points_base"] = n
 		case "duration_sec":
 			var n int

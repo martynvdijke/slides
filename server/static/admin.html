@@ -295,7 +295,7 @@ details[open] .chev{transform:rotate(180deg)}
             <div class="details-body">
               <div id="aq-scoring-wrap" class="form-row cols2">
                 <div class="field"><label for="aq-correct">Correct answer</label><select id="aq-correct" class="select"><option value="">— Not scored —</option></select></div>
-                <div class="field"><label for="aq-points">Base points</label><input id="aq-points" class="input" type="number" min="10" max="10000" step="10" value="100" placeholder="100"></div>
+                <div class="field"><label for="aq-points">Base points</label><input id="aq-points" class="input" type="number" min="10" max="10000" step="1" value="100" placeholder="100"></div>
               </div>
             </div>
           </details>
@@ -307,7 +307,7 @@ details[open] .chev{transform:rotate(180deg)}
                 <div class="field"><label for="aq-duration">Timer</label><select id="aq-duration" class="select"><option value="0">Untimed</option><option value="5">5s</option><option value="10">10s</option><option value="15">15s</option><option value="30">30s</option><option value="45">45s</option><option value="60">60s</option><option value="90">90s</option><option value="120">120s</option><option value="180">180s</option></select></div>
                 <label class="inline gap-2 cursor-pointer" style="align-self:end;padding-bottom:8px"><input type="checkbox" id="aq-auto-reveal"> <span class="text-[0.88rem]">Auto-reveal results</span></label>
               </div>
-              <div class="field"><label for="aq-timelimit">Time limit (seconds — 0 = untimed)</label><input id="aq-timelimit" class="input" type="number" min="0" max="3600" step="5" value="0" placeholder="0"></div>
+              <div class="field"><label for="aq-timelimit">Time limit (seconds — 0 = untimed)</label><input id="aq-timelimit" class="input" type="number" min="0" max="3600" step="1" value="0" placeholder="0"></div>
               <div class="form-row cols2">
                 <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-feedback"> <span class="text-[0.88rem]">Is feedback</span></label>
                 <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="aq-show" checked> <span class="text-[0.88rem]">Show results</span></label>
@@ -422,7 +422,7 @@ details[open] .chev{transform:rotate(180deg)}
             <div class="field"><label for="es-status">Status</label><select id="es-status" class="select"><option value="open">open</option><option value="closed">closed</option></select></div>
           </div>
           <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="es-feedback"> <span>Feedback open</span></label>
-          <div class="field"><label for="es-slowmode">Q&amp;A slow mode (seconds per participant — 0 = off)</label><input id="es-slowmode" class="input" type="number" min="0" max="3600" step="5" value="0" placeholder="0"></div>
+          <div class="field"><label for="es-slowmode">Q&amp;A slow mode (seconds per participant — 0 = off)</label><input id="es-slowmode" class="input" type="number" min="0" max="3600" step="1" value="0" placeholder="0"></div>
           <label class="inline gap-2 cursor-pointer"><input type="checkbox" id="es-publish"> <span>Publish results page</span></label>
           <button class="btn btn-primary" type="submit">Save event</button>
         </form>
