@@ -318,9 +318,18 @@
     if(countdownTimer){clearInterval(countdownTimer);countdownTimer=null;}
     var hasTimer = active && typeof active.remaining_sec==='number' && active.remaining_sec!==null;
     if(!hasTimer){ clearCountdown(); return; }
-    countdownRemaining=Math.max(0,Math.floor(active.remaining_sec));
-    countdownDuration = (typeof active.duration_sec==='number' && active.duration_sec>0) ? active.duration_sec : countdownRemaining;
-    if(!countdownDuration && active.expires_at) countdownDuration=countdownRemaining;
+    // Two timers can be present at once: the event/duration countdown
+    // (remaining_sec) and the answer-window deadline (deadline_at). While the
+    // question is live and answers are accepted, the deadline drives the timer.
+    var answerDeadline = (active.status==='live' && active.deadline_at) ? deadlineMs(active) : null;
+    if(answerDeadline!==null){
+      countdownRemaining=Math.max(0,Math.ceil((answerDeadline-Date.now())/1000));
+      countdownDuration = (typeof active.time_limit_s==='number' && active.time_limit_s>0) ? active.time_limit_s : countdownRemaining;
+    } else {
+      countdownRemaining=Math.max(0,Math.floor(active.remaining_sec));
+      countdownDuration = (typeof active.duration_sec==='number' && active.duration_sec>0) ? active.duration_sec : countdownRemaining;
+      if(!countdownDuration && active.expires_at) countdownDuration=countdownRemaining;
+    }
     countdownActiveId=active.id; updateCountdownUI();
     if(countdownRemaining<=0){ applyCountdownExpired(); return; }
     var oldNote=document.getElementById('countdown-expired-note'); if(oldNote&&oldNote.parentNode) oldNote.parentNode.removeChild(oldNote);
@@ -780,9 +789,18 @@
     var topRow=document.createElement('div'); topRow.style.display='flex'; topRow.style.gap='12px'; topRow.style.alignItems='flex-start';
     var prompt=document.createElement('h2'); prompt.className='prompt'; prompt.textContent=active.prompt; prompt.style.flex='1';
     topRow.appendChild(prompt);
-    // timer ring if has countdown
+    // timer ring if has countdown (answer-window deadline wins while live)
     if(typeof active.remaining_sec==='number' && active.status==='live' && !locked){
-      var ring=createTimerRing(Math.max(0, active.remaining_sec), active.duration_sec||active.remaining_sec);
+      var ringRemaining=Math.max(0, active.remaining_sec);
+      var ringDuration=active.duration_sec||active.remaining_sec;
+      if(active.deadline_at){
+        var ringDeadline=deadlineMs(active);
+        if(ringDeadline!==null){
+          ringRemaining=Math.max(0, Math.ceil((ringDeadline-Date.now())/1000));
+          ringDuration=(typeof active.time_limit_s==='number' && active.time_limit_s>0) ? active.time_limit_s : ringRemaining;
+        }
+      }
+      var ring=createTimerRing(ringRemaining, ringDuration);
       ring.id='live-ring'; topRow.appendChild(ring);
     }
     card.appendChild(topRow);

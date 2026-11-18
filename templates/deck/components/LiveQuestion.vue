@@ -60,11 +60,24 @@ const isCorrect = computed(() => {
 })
 const myPoints = computed(() => (active.value as any)?.my_points ?? answerResult.value?.points_awarded ?? null)
 
-const hasCountdown = computed(() => remainingSec.value !== null && remainingSec.value !== undefined)
-const expired = computed(() => hasCountdown.value && remainingSec.value === 0)
+// A live question can carry two timers: the event/duration countdown
+// (remaining_sec) and the answer-window deadline (deadline_at). While answers
+// are still accepted the deadline is the one that matters, so it wins.
+const hasDeadline = computed(() => deadlineAt.value !== null && deadlineAt.value !== undefined)
+const deadlineCountdown = computed(() => active.value?.status === 'live' && hasDeadline.value)
+const hasCountdown = computed(() => {
+  if (deadlineCountdown.value) return remaining.value !== null
+  return remainingSec.value !== null && remainingSec.value !== undefined
+})
+const countdownSec = computed<number | null>(() => {
+  if (deadlineCountdown.value) return remaining.value
+  if (remainingSec.value === null || remainingSec.value === undefined) return null
+  return Math.max(0, remainingSec.value)
+})
+const expired = computed(() => hasCountdown.value && countdownSec.value === 0)
 const countdownLabel = computed(() => {
-  if (remainingSec.value === null || remainingSec.value === undefined) return ''
-  const s = Math.max(0, remainingSec.value)
+  const s = countdownSec.value
+  if (s === null) return ''
   const m = Math.floor(s / 60)
   const sec = s % 60
   return m > 0 ? `${m}:${String(sec).padStart(2, '0')}` : `${sec}s`
@@ -122,7 +135,6 @@ function isCorrectRow(label: string, idx: number): boolean {
       <div class="live-q-top">
         <div class="live-q-prompt">{{ active.prompt }}</div>
         <span v-if="hasCountdown" class="live-q-timer" :class="{ 'is-expired': expired }">{{ expired ? '0s' : countdownLabel }}</span>
-        <span v-else-if="remaining !== null" class="live-q-timer">{{ remaining }}s</span>
         <span v-else-if="active.status === 'locked'" class="live-q-timer locked">locked</span>
       </div>
 
