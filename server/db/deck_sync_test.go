@@ -98,3 +98,63 @@ func TestSyncDeckQuestionsPreservesStatusOnResync(t *testing.T) {
 		t.Fatalf("status after third sync=%q want live", stillLive.Status)
 	}
 }
+
+// Deck sync must carry a slide's media the same way the seed path does: on the
+// first insert and on every re-sync update (including clearing it).
+func TestSyncDeckQuestionsCarriesMedia(t *testing.T) {
+	tmpDB(t)
+	ev, _, err := EnsureEvent("deck-media", "Deck media", "seeded")
+	if err != nil {
+		t.Fatalf("EnsureEvent: %v", err)
+	}
+	slides := []DeckSlide{
+		{SlideID: "m1", Position: 1, Prompt: "With media", Kind: "poll", Options: []string{"A", "B"}, ShowResults: true, MediaURL: "/media/first.png", MediaType: "image"},
+	}
+
+	created, updated, _, err := SyncDeckQuestions(ev.ID, "deck-media", slides)
+	if err != nil {
+		t.Fatalf("SyncDeckQuestions 1: %v", err)
+	}
+	if created != 1 || updated != 0 {
+		t.Fatalf("first sync: created=%d updated=%d want 1,0", created, updated)
+	}
+	q, err := FindQuestionByExternalID(ev.ID, "deck-media:m1")
+	if err != nil {
+		t.Fatalf("FindQuestionByExternalID: %v", err)
+	}
+	if q.MediaURL != "/media/first.png" || q.MediaType != "image" {
+		t.Fatalf("insert media=%q/%q want /media/first.png/image", q.MediaURL, q.MediaType)
+	}
+
+	// Re-sync with different media: the update must overwrite it.
+	slides[0].MediaURL = "/media/second.mp4"
+	slides[0].MediaType = "video"
+	created2, updated2, _, err := SyncDeckQuestions(ev.ID, "deck-media", slides)
+	if err != nil {
+		t.Fatalf("SyncDeckQuestions 2: %v", err)
+	}
+	if created2 != 0 || updated2 != 1 {
+		t.Fatalf("second sync: created=%d updated=%d want 0,1", created2, updated2)
+	}
+	q2, err := FindQuestionByExternalID(ev.ID, "deck-media:m1")
+	if err != nil {
+		t.Fatalf("FindQuestionByExternalID after resync: %v", err)
+	}
+	if q2.MediaURL != "/media/second.mp4" || q2.MediaType != "video" {
+		t.Fatalf("resync media=%q/%q want /media/second.mp4/video", q2.MediaURL, q2.MediaType)
+	}
+
+	// Dropping the media from the slide must clear it, not keep the stale value.
+	slides[0].MediaURL = ""
+	slides[0].MediaType = ""
+	if _, _, _, err := SyncDeckQuestions(ev.ID, "deck-media", slides); err != nil {
+		t.Fatalf("SyncDeckQuestions 3: %v", err)
+	}
+	q3, err := FindQuestionByExternalID(ev.ID, "deck-media:m1")
+	if err != nil {
+		t.Fatalf("FindQuestionByExternalID after clear: %v", err)
+	}
+	if q3.MediaURL != "" || q3.MediaType != "" {
+		t.Fatalf("cleared media=%q/%q want empty", q3.MediaURL, q3.MediaType)
+	}
+}

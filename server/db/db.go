@@ -3260,6 +3260,8 @@ type DeckSlide struct {
 	CorrectIndex *int     `json:"correct_index"`
 	DurationSec  int      `json:"duration_sec"`
 	TimeLimitS   int      `json:"time_limit_s"`
+	MediaURL     string   `json:"media_url"`
+	MediaType    string   `json:"media_type"`
 	ShowResults  bool     `json:"show_results"`
 	Activate     string   `json:"activate"`
 }
@@ -3338,7 +3340,7 @@ func UpsertDeckQuestion(eventID int64, d DeckSlide, deckSlug string) (bool, erro
 	// question must not be demoted to draft while it is on screen. An archived
 	// ('closed') row still restarts as draft when it is re-added to the deck.
 	// Fresh inserts start as 'draft' (INSERT column value).
-	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, slide_index=excluded.slide_index, auto_activate=excluded.auto_activate, status=CASE WHEN questions.status='closed' THEN 'draft' ELSE questions.status END`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, externalID, deckSlug, d.SlideID, d.Position, autoAct)
+	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, media_url, media_type, external_id, deck_slug, slide_id, slide_index, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, media_url=excluded.media_url, media_type=excluded.media_type, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, slide_index=excluded.slide_index, auto_activate=excluded.auto_activate, status=CASE WHEN questions.status='closed' THEN 'draft' ELSE questions.status END`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, d.MediaURL, d.MediaType, externalID, deckSlug, d.SlideID, d.Position, autoAct)
 	if err != nil {
 		return false, err
 	}
@@ -3350,7 +3352,7 @@ func validateQuestionShapeDeck(kind string, opts []string) error {
 		return fmt.Errorf("unknown question kind")
 	}
 	switch kind {
-	case "poll", "multi", "ranking":
+	case "poll", "multi", "ranking", "grid2x2":
 		if len(opts) < 2 {
 			return fmt.Errorf("%s requires at least 2 options", kind)
 		}

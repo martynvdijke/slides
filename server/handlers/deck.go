@@ -45,6 +45,10 @@ func AdminDeckSync(w http.ResponseWriter, r *http.Request) {
 			req.Slides[i].Kind = "poll"
 		}
 		req.Slides[i].Activate = strings.TrimSpace(req.Slides[i].Activate)
+		// Carry slide media through the same way the seed path does: the URL and
+		// type are stored verbatim, only surrounding whitespace is trimmed.
+		req.Slides[i].MediaURL = strings.TrimSpace(req.Slides[i].MediaURL)
+		req.Slides[i].MediaType = strings.TrimSpace(req.Slides[i].MediaType)
 		if req.Slides[i].Options == nil {
 			req.Slides[i].Options = []string{}
 		}
