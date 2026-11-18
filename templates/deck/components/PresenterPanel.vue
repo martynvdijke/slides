@@ -139,11 +139,12 @@ async function logout() {
 }
 
 // ── compose ──
-const optionKinds = ['poll', 'multi', 'ranking']
+const optionKinds = ['poll', 'multi', 'ranking', 'grid2x2']
 const kinds = [
   { value: 'poll', label: 'Poll (pick one)' },
   { value: 'multi', label: 'Multi-select' },
   { value: 'ranking', label: 'Ranking' },
+  { value: 'grid2x2', label: '2×2 grid (quadrants)' },
   { value: 'yesno', label: 'Yes / No' },
   { value: 'rating', label: 'Rating' },
   { value: 'nps', label: 'NPS (0–10)' },
@@ -564,7 +565,7 @@ async function togglePodium() {
 
         <textarea v-model="prompt" class="pp-input pp-textarea" rows="2" placeholder="Ask the room…" />
 
-        <input v-if="needsOptions" v-model="optionsText" class="pp-input" placeholder="Options, comma-separated" />
+        <input v-if="needsOptions" v-model="optionsText" class="pp-input" :placeholder="kind === 'grid2x2' ? 'Quadrants: top-left, top-right, bottom-left, bottom-right' : 'Options, comma-separated'" />
 
         <div class="pp-row">
           <label class="pp-check" for="pp-timelimit">Time limit (s, 0 = untimed)</label>

@@ -238,7 +238,9 @@
     if(active.kind==='wordcloud'){
       renderCloud(cloud, active);
     }
-    if(active.kind==='ranking'){
+    if(active.kind==='grid2x2'){
+      renderGrid(results, active);
+    } else if(active.kind==='ranking'){
       renderRanking(results, active);
     } else {
       if(active.kind==='nps') renderNpsBadge(results, active);
@@ -276,6 +278,40 @@
       requestAnimationFrame(function(){ fill.style.width=((r.score||0)/max*100)+'%'; });
     });
     container.appendChild(wrap);
+  }
+
+  // grid2x2: the question options are the four quadrants in declaration order
+  // (top-left, top-right, bottom-left, bottom-right). Answers are points {x,y}
+  // in 0..1 with y=1 at the top, so the projector tallies them back per quadrant.
+  function gridQuadrantIndex(x, y){ return (y>=0.5?0:2)+(x>=0.5?1:0); }
+  function renderGrid(container, active){
+    if(!canReveal(active)) return;
+    var opts=active.options||[];
+    var counts=[0,0,0,0];
+    (active.results||[]).forEach(function(r){
+      if(typeof r.x!=='number' || typeof r.y!=='number') return;
+      counts[gridQuadrantIndex(r.x,r.y)] += r.count||0;
+    });
+    var total=counts.reduce(function(a,b){ return a+b; },0);
+    if(!total) return;
+    var max=Math.max.apply(null, counts)||1;
+    var grid=document.createElement('div');
+    grid.className='grid2x2-results'; grid.id='grid2x2-results';
+    grid.style.cssText='display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:18px';
+    counts.forEach(function(count, idx){
+      var cell=document.createElement('div');
+      cell.className='grid2x2-result';
+      cell.style.cssText='border:1px solid var(--border);border-radius:12px;padding:14px 16px;background:rgba(255,255,255,.04);display:grid;gap:6px';
+      var lab=document.createElement('div'); lab.className='grid2x2-result-label'; lab.style.cssText='font-size:.78rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)'; lab.textContent=opts[idx]||('Quadrant '+(idx+1));
+      var num=document.createElement('div'); num.className='grid2x2-result-count'; num.style.cssText='font-size:1.6rem;font-weight:800;font-variant-numeric:tabular-nums'; num.textContent=String(count);
+      var track=document.createElement('div'); track.className='track'; track.style.height='8px';
+      var fill=document.createElement('div'); fill.className='fill'; fill.style.height='100%'; fill.style.width='0'; fill.style.background='var(--accent)'; fill.style.transition='width .85s var(--ease)';
+      track.appendChild(fill);
+      cell.appendChild(lab); cell.appendChild(num); cell.appendChild(track);
+      grid.appendChild(cell);
+      requestAnimationFrame(function(){ fill.style.width=(count/max*100)+'%'; });
+    });
+    container.appendChild(grid);
   }
 
   function renderBars(container, active){

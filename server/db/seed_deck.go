@@ -135,8 +135,9 @@ func syncEventQuestions(eventID int64, deckSlug string, qs []SeedQuestion) (crea
 			log.Printf("seed skip %q: invalid kind %q", key, q.Kind)
 			continue
 		}
-		// poll/multi/ranking require >=2 options.
-		if (q.Kind == "poll" || q.Kind == "multi" || q.Kind == "ranking") && len(q.Options) < 2 {
+		// poll/multi/ranking/grid2x2 require >=2 options (a grid2x2's options
+		// are its quadrant labels, in declaration order).
+		if (q.Kind == "poll" || q.Kind == "multi" || q.Kind == "ranking" || q.Kind == "grid2x2") && len(q.Options) < 2 {
 			log.Printf("seed skip %q: kind %q requires >=2 options", key, q.Kind)
 			continue
 		}

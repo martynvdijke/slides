@@ -12,29 +12,32 @@ const props = defineProps<{
 const { active, sessionExpired, configured } = useDeckSlideQuestion()
 const displayPrompt = computed(() => active.value?.prompt ?? props.prompt ?? 'Where do you sit?')
 
-// grid2x2: backend may not have a dedicated kind — degrade gracefully.
-// If active.results exists, render a scatter by label count as a quadrant heatmap.
-// Otherwise show the axes scaffold and hint.
-const hasResults = computed(() => !!(active.value?.results?.length))
+// grid2x2 options are the four quadrants in declaration order:
+// top-left, top-right, bottom-left, bottom-right. Answers are points {x,y} in
+// 0..1 with y=1 at the top, so each point is bucketed back to its quadrant.
+const FALLBACK_LABELS = ['Top-left', 'Top-right', 'Bottom-left', 'Bottom-right']
+
+const options = computed(() => (active.value?.options?.length ? active.value.options : (props.options ?? [])))
+const quadrantLabel = (i: number) => options.value[i] || FALLBACK_LABELS[i]
+
+const counts = computed(() => {
+  const out = [0, 0, 0, 0]
+  for (const r of active.value?.results ?? []) {
+    const x = (r as any).x
+    const y = (r as any).y
+    if (typeof x !== 'number' || typeof y !== 'number') continue
+    out[(y >= 0.5 ? 0 : 2) + (x >= 0.5 ? 1 : 0)] += r.count
+  }
+  return out
+})
 const total = computed(() => active.value?.total ?? 0)
+const hasResults = computed(() => counts.value.some(c => c > 0))
+const maxCount = computed(() => Math.max(1, ...counts.value))
+const pct = (i: number) => (active.value?.total ? Math.round((counts.value[i] / active.value.total) * 100) : 0)
 
 // Axes from frontmatter
 const xAxis = computed(() => props.axes?.x ?? { label: 'Impact', low: 'Low', high: 'High' })
 const yAxis = computed(() => props.axes?.y ?? { label: 'Effort', low: 'Low', high: 'High' })
-
-// If results carry quadrant labels (e.g. "High Impact / Low Effort"), bucket them.
-// Fallback: treat any poll options as points spread across quadrants by hash.
-const quadrants = computed(() => {
-  const res = active.value?.results ?? []
-  if (!res.length) return []
-  // simple bucket: map each label to a quadrant index 0..3 via hash
-  return res.map((r:any) => {
-    const h = [...r.label].reduce((a,c)=>a+c.charCodeAt(0),0) % 4
-    return { label: r.label, count: r.count, q: h }
-  })
-})
-
-const maxCount = computed(() => Math.max(1, ...quadrants.value.map(q=>q.count)))
 </script>
 
 <template>
@@ -52,28 +55,11 @@ const maxCount = computed(() => Math.max(1, ...quadrants.value.map(q=>q.count)))
       <div class="grid-wrap">
         <div class="grid-y-label">{{ yAxis.high }} →</div>
         <div class="grid">
-          <div class="grid-cell">
-            <span class="grid-cell-label">High {{ yAxis.label }} · Low {{ xAxis.label }}</span>
-            <div v-for="q in quadrants.filter(q=>q.q===2)" :key="q.label" class="grid-dot" :style="{ opacity: String(0.35 + (q.count/maxCount)*0.65) }">
-              {{ q.label }} · {{ q.count }}
-            </div>
-          </div>
-          <div class="grid-cell">
-            <span class="grid-cell-label">High · High</span>
-            <div v-for="q in quadrants.filter(q=>q.q===3)" :key="q.label" class="grid-dot top">
-              {{ q.label }} · {{ q.count }}
-            </div>
-          </div>
-          <div class="grid-cell">
-            <span class="grid-cell-label">Low · Low</span>
-            <div v-for="q in quadrants.filter(q=>q.q===0)" :key="q.label" class="grid-dot muted">
-              {{ q.label }} · {{ q.count }}
-            </div>
-          </div>
-          <div class="grid-cell">
-            <span class="grid-cell-label">Low {{ yAxis.label }} · High {{ xAxis.label }}</span>
-            <div v-for="q in quadrants.filter(q=>q.q===1)" :key="q.label" class="grid-dot">
-              {{ q.label }} · {{ q.count }}
+          <div v-for="i in 4" :key="i" class="grid-cell" :class="{ filled: counts[i-1] > 0 }">
+            <span class="grid-cell-label">{{ quadrantLabel(i-1) }}</span>
+            <span class="grid-count">{{ counts[i-1] }}<template v-if="total"> · {{ pct(i-1) }}%</template></span>
+            <div class="grid-track">
+              <div class="grid-fill" :style="{ width: (counts[i-1] / maxCount) * 100 + '%' }"></div>
             </div>
           </div>
         </div>
@@ -81,9 +67,9 @@ const maxCount = computed(() => Math.max(1, ...quadrants.value.map(q=>q.count)))
       </div>
 
       <div v-if="!hasResults" class="grid-hint">
-        <template v-if="sessionExpired">Rejoin to place your dot on the board.</template>
-        <template v-else-if="!active">Responses will scatter live as people answer on their phones.</template>
-        <template v-else>Collecting — dots appear when votes come in. If your backend lacks <code>grid2x2</code>, this degrades to a quadrant tally.</template>
+        <template v-if="sessionExpired">Rejoin to place yourself in a quadrant.</template>
+        <template v-else-if="!active">Responses fill the quadrants live as people answer on their phones.</template>
+        <template v-else>Collecting — quadrants fill as votes come in.</template>
       </div>
     </div>
   </div>
@@ -101,13 +87,15 @@ const maxCount = computed(() => Math.max(1, ...quadrants.value.map(q=>q.count)))
 .grid-wrap{display:grid;gap:6px}
 .grid-y-label{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted,#9AA0B8);font-weight:700}
 .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.grid-cell{min-height:96px;border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:12px;background:rgba(255,255,255,0.04);padding:10px 12px}
-.grid-cell:nth-child(2){background:linear-gradient(135deg, rgba(124,107,255,0.10), rgba(34,211,238,0.06));border-color:rgba(124,107,255,0.18)}
+.grid-cell{min-height:96px;border:1px solid var(--border,rgba(255,255,255,0.12));border-radius:12px;background:rgba(255,255,255,0.04);padding:10px 12px;display:grid;gap:6px;align-content:start}
+.grid-cell.filled{background:linear-gradient(135deg, rgba(124,107,255,0.10), rgba(34,211,238,0.06));border-color:rgba(124,107,255,0.18)}
 .grid-cell-label{font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:var(--muted,#9AA0B8);font-weight:700}
-.grid-dot{font-size:12px;font-weight:600;color:var(--text,#F2F3F8);margin-top:6px;padding:4px 8px;border-radius:999px;background:rgba(255,255,255,0.06);border:1px solid var(--border,rgba(255,255,255,0.10));display:inline-block;margin-right:6px}
-.grid-dot.top{background:var(--grad,linear-gradient(135deg,#6366F1,#A855F7 45%,#EC4899 75%,#22D3EE));color:#fff;border-color:transparent}
-.grid-dot.muted{opacity:0.6}
+.grid-count{font-family:var(--font-mono,"JetBrains Mono",monospace);font-size:20px;font-weight:800;color:var(--text,#F2F3F8);font-variant-numeric:tabular-nums;line-height:1.1}
+.grid-track{height:6px;border-radius:999px;background:rgba(255,255,255,0.08);overflow:hidden;align-self:end}
+.grid-fill{height:100%;border-radius:999px;background:var(--accent,#4f7cff);transition:width 0.4s var(--ease,ease)}
 .grid-x-label{font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--muted,#9AA0B8);font-weight:700;text-align:center}
 .grid-hint{font-size:11px;color:var(--muted,#9AA0B8);font-style:italic;margin-top:12px;text-align:center}
-.grid-hint code{font-family:var(--font-mono,"JetBrains Mono",monospace);color:#93c5fd}
+@media (prefers-reduced-motion: reduce) {
+  .grid-fill { transition: none; }
+}
 </style>

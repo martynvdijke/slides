@@ -559,7 +559,7 @@ func validateQuestionShape(kind string, opts []string) error {
 		return fmt.Errorf("unknown question kind")
 	}
 	switch kind {
-	case "poll", "multi", "ranking":
+	case "poll", "multi", "ranking", "grid2x2":
 		if len(opts) < 2 {
 			return fmt.Errorf("%s requires at least 2 options", kind)
 		}

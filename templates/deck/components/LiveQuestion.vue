@@ -89,6 +89,23 @@ const maxCount = computed(() => {
   return Math.max(1, ...results.map(r => r.count))
 })
 
+// grid2x2: the question options are the four quadrants in declaration order
+// (top-left, top-right, bottom-left, bottom-right). Answers are points {x,y}
+// in 0..1 with y=1 at the top, so results are tallied back per quadrant.
+const isGrid = computed(() => active.value?.kind === 'grid2x2')
+const gridQuadrants = computed(() => {
+  const counts = [0, 0, 0, 0]
+  for (const r of active.value?.results || []) {
+    const x = (r as any).x
+    const y = (r as any).y
+    if (typeof x !== 'number' || typeof y !== 'number') continue
+    const idx = (y >= 0.5 ? 0 : 2) + (x >= 0.5 ? 1 : 0)
+    counts[idx] += r.count
+  }
+  const opts = active.value?.options || []
+  return counts.map((count, i) => ({ label: opts[i] || `Quadrant ${i + 1}`, count }))
+})
+
 function barWidth(count: number): string {
   return ((count / maxCount.value) * 100).toFixed(1) + '%'
 }
@@ -155,7 +172,7 @@ function isCorrectRow(label: string, idx: number): boolean {
 
       <div v-if="expired" class="live-q-expired-note">Time is up — answers closing</div>
 
-      <div v-if="showBars" class="live-q-bars" :class="{ dimmed: expired }">
+      <div v-if="showBars && !isGrid" class="live-q-bars" :class="{ dimmed: expired }">
         <div v-for="(r, idx) in active.results" :key="r.label" class="live-q-row" :class="{ correct: isCorrectRow(r.label, idx) }">
           <div class="live-q-label">
             {{ r.label }}
@@ -177,6 +194,15 @@ function isCorrectRow(label: string, idx: number): boolean {
             · <span :class="isCorrect ? 'live-q-good' : 'live-q-bad'">{{ isCorrect ? 'You got it' : 'Not this time' }}</span>
             <template v-if="myPoints !== null"> · +{{ myPoints }} pts</template>
           </template>
+        </div>
+      </div>
+      <div v-else-if="showBars && isGrid" class="live-q-grid" :class="{ dimmed: expired }">
+        <div v-for="(cell, i) in gridQuadrants" :key="i" class="live-q-grid-cell">
+          <div class="live-q-grid-label">{{ cell.label }}</div>
+          <div class="live-q-grid-count">{{ cell.count }}</div>
+        </div>
+        <div class="live-q-total">
+          {{ active.total }} {{ active.total === 1 ? 'vote' : 'votes' }}
         </div>
       </div>
       <div v-else-if="isLocked" class="live-q-locked">Time is up — answers are locked. Waiting for the reveal.</div>
@@ -268,6 +294,36 @@ function isCorrectRow(label: string, idx: number): boolean {
   gap: 8px;
 }
 .live-q-bars.dimmed, .live-q-hidden.dimmed { opacity: 0.55; pointer-events: none; }
+.live-q-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.live-q-grid.dimmed { opacity: 0.55; pointer-events: none; }
+.live-q-grid .live-q-total { grid-column: 1 / -1; }
+.live-q-grid-cell {
+  border: 1px solid var(--border, #23252f);
+  border-radius: 10px;
+  background: var(--surface-2, #1e212b);
+  padding: 10px 12px;
+}
+.live-q-grid-label {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted, #9aa0b8);
+  line-height: 1.3;
+}
+.live-q-grid-count {
+  font-family: var(--font-mono, "JetBrains Mono", monospace);
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--text, #eceef2);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+  margin-top: 2px;
+}
 .live-q-row {
   display: grid;
   grid-template-columns: 1fr auto;

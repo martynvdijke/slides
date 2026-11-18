@@ -190,6 +190,32 @@ options:
     assert.deepEqual(qs[0].options, [])
   })
 
+  it('keeps grid2x2 blocks with their quadrant options', () => {
+    const md = `
+<!-- live-question
+prompt: Where do you sit?
+kind: grid2x2
+options:
+  - Top-left
+  - Top-right
+  - Bottom-left
+  - Bottom-right
+-->
+`
+    const qs = extractQuestions(md)
+    assert.equal(qs.length, 1)
+    assert.equal(qs[0].kind, 'grid2x2')
+    assert.deepEqual(qs[0].options, ['Top-left', 'Top-right', 'Bottom-left', 'Bottom-right'])
+  })
+
+  it('grid2x2 requires options like the other choice kinds', () => {
+    const md = `<!-- live-question
+prompt: No quadrants
+kind: grid2x2
+-->`
+    assert.equal(extractQuestions(md).length, 0)
+  })
+
   it('correct with no match leaves null', () => {
     const md = `
 <!-- live-question

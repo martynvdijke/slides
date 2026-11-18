@@ -11,8 +11,8 @@ try {
   process.exit(1)
 }
 
-const VALID_KINDS = new Set(['poll', 'multi', 'ranking', 'yesno', 'rating', 'nps', 'open', 'wordcloud'])
-const NEEDS_OPTIONS = new Set(['poll', 'multi', 'ranking'])
+const VALID_KINDS = new Set(['poll', 'multi', 'ranking', 'yesno', 'rating', 'nps', 'open', 'wordcloud', 'grid2x2'])
+const NEEDS_OPTIONS = new Set(['poll', 'multi', 'ranking', 'grid2x2'])
 const LIVE_QUESTION_RE = /<!--\s*live-question\s*\r?\n([\s\S]*?)-->/g
 
 export const CANONICAL_FEATURES = ['live', 'qa', 'slides', 'feedback', 'leaderboard']

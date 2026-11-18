@@ -29,7 +29,7 @@ same store:
 | `nps` | `0`–`10` | no | no | Net Promoter Score with distribution + score |
 | `open` | free text (≤ 500 chars) | no | no | Open text answer |
 | `wordcloud` | free text (≤ 200 chars) | no | no | Aggregated into a word cloud |
-| `grid2x2` | `{ "x": 0–1, "y": 0–1 }` | no | no | A point on a 2×2 board (see below) |
+| `grid2x2` | `{ "x": 0–1, "y": 0–1 }` | yes (4 quadrant labels) | no | Quadrant pick on a 2×2 board; options are the quadrants in order TL, TR, BL, BR, `y=1` at the top (see below) |
 
 !!! tip "Scoring is optional"
     `poll` and `yes/no` *can* carry a correct answer, but they don't have to.
@@ -79,17 +79,22 @@ Free-text answers. `open` allows up to 500 characters; `wordcloud` allows up to
 
 ### Grid 2×2
 
-The `grid2x2` kind places a dot on a two-axis board. An answer is a JSON object
-`{ "x": 0–1, "y": 0–1 }` (both coordinates are required and clamped to the unit
-range). Results are **scatter coordinates**: the server rounds each coordinate to
-two decimals, merges identical points, and returns them sorted by `x` then `y`,
-each with its `count` and its `x`/`y` fields. The `grid2x2` layout renders them
-as a quadrant board.
+The `grid2x2` kind places a respondent in one of four quadrants. Its `options`
+are the quadrant labels in declaration order — top-left, top-right,
+bottom-left, bottom-right — and the audience picks one. An answer is the centre
+point of that quadrant as a JSON object `{ "x": 0–1, "y": 0–1 }` (`y=1` is the
+top; both coordinates are required and must be inside the unit square).
+
+Results are **scatter coordinates**: the server rounds each coordinate to two
+decimals, merges identical points, and returns them sorted by `x` then `y`, each
+with its `count` and its `x`/`y` fields. The deck layout, the audience app and
+the projector all bucket those points back into the four quadrants and show the
+per-quadrant tally next to the option labels.
 
 ## Options
 
-For `poll`, `multi` and `ranking`, provide a list of options (comma-separated in
-the UI, a JSON array through the API):
+For `poll`, `multi`, `ranking` and `grid2x2`, provide a list of options
+(comma-separated in the UI, a JSON array through the API):
 
 ```json
 {

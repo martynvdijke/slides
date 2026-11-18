@@ -158,9 +158,9 @@ time_limit_s: 30
 Fields:
 
 - `id` — stable key for updates (optional, auto-generated if omitted).
-- `kind` — `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud`.
+- `kind` — `poll`, `multi`, `ranking`, `grid2x2`, `yesno`, `rating`, `nps`, `open`, `wordcloud`.
 - `prompt` — question text (required).
-- `options` — list of choices (requires ≥2 for `poll`/`multi`/`ranking`).
+- `options` — list of choices (requires ≥2 for `poll`/`multi`/`ranking`/`grid2x2`; for `grid2x2` they are the quadrant labels in order TL, TR, BL, BR).
 - `correct` — correct answer as index (`0`-based) or exact option text.
 - `points` — maps to `points_base` (default `100`).
 - `mode` — `live` (default) or `feedback`.

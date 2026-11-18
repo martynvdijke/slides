@@ -570,6 +570,55 @@
     });
     return wrap;
   }
+  // grid2x2: the options are the four quadrants in declaration order
+  // (top-left, top-right, bottom-left, bottom-right). Answers are normalized
+  // points {x,y} in 0..1, with y=1 at the top, so picking quadrant i sends the
+  // centre of that quadrant — the shape the server's validateGridAnswer wants.
+  var GRID_QUADRANT_COORDS = [[0.25, 0.75], [0.75, 0.75], [0.25, 0.25], [0.75, 0.25]];
+  function gridQuadrantIndex(x, y) { return (y >= 0.5 ? 0 : 2) + (x >= 0.5 ? 1 : 0); }
+  function gridOptionLabel(active, idx) {
+    var opts = (active && active.options) || [];
+    return opts[idx] || ('Quadrant ' + (idx + 1));
+  }
+  function gridCounts(active) {
+    var counts = [0, 0, 0, 0];
+    ((active && active.results) || []).forEach(function(r){
+      var x = typeof r.x === 'number' ? r.x : null;
+      var y = typeof r.y === 'number' ? r.y : null;
+      if(x === null || y === null) return;
+      counts[gridQuadrantIndex(x, y)] += r.count || 0;
+    });
+    return counts;
+  }
+  function gridAnswerLabel(active, raw) {
+    if(!raw) return '';
+    try {
+      var v = JSON.parse(raw);
+      if(typeof v.x !== 'number' || typeof v.y !== 'number') return raw;
+      return gridOptionLabel(active, gridQuadrantIndex(v.x, v.y));
+    } catch(e) { return raw; }
+  }
+  function createGridResults(active){
+    if(!canReveal(active)) return null;
+    var counts = gridCounts(active);
+    var total = counts.reduce(function(a,b){ return a+b; }, 0);
+    if(!total) return null;
+    var max = Math.max.apply(null, counts) || 1;
+    var grid = document.createElement('div'); grid.className = 'results grid2x2-results';
+    grid.style.display='grid'; grid.style.gridTemplateColumns='1fr 1fr'; grid.style.gap='8px';
+    counts.forEach(function(count, idx){
+      var cell = document.createElement('div'); cell.className='grid-result';
+      cell.style.cssText='border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.04)';
+      var lab = document.createElement('div'); lab.className='grid-result-label'; lab.style.cssText='font-size:.78rem;color:var(--muted);font-weight:700'; lab.textContent=gridOptionLabel(active, idx);
+      var num = document.createElement('div'); num.className='grid-result-count'; num.style.cssText='font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums'; num.textContent=String(count);
+      var track = document.createElement('div'); track.className='track'; track.style.height='6px';
+      var fill = document.createElement('div'); fill.className='fill'; fill.style.height='100%'; fill.style.width=(count/max*100)+'%';
+      track.appendChild(fill);
+      cell.appendChild(lab); cell.appendChild(num); cell.appendChild(track);
+      grid.appendChild(cell);
+    });
+    return grid;
+  }
   function createResultsBars(active){
     var res=active.results||[]; if(!res.length) return null;
     var cl=correctLabel(active); var max=Math.max.apply(null,res.map(function(r){return r.count}))||1;
@@ -830,6 +879,7 @@
       var answerText=active.my_answer||'';
       if(active.kind==='multi') answerText=parseAnswerArray(active.my_answer).join(', ');
       if(active.kind==='ranking') answerText=parseAnswerArray(active.my_answer).join(' › ');
+      if(active.kind==='grid2x2') answerText=gridAnswerLabel(active, active.my_answer);
       var s=document.createElement('span');
       s.textContent= answerText ? ('Thanks — your answer: '+answerText+'. Wait for results.') : 'Thanks — your answer is in. You can wait for results or keep exploring Q&A.';
       th.appendChild(s); card.appendChild(th);
@@ -853,6 +903,26 @@
       if(!disable){ card.appendChild(createQuestionOptions(active, function(opt,b){ submitAnswer(active.id, opt, b); })); }
       var bars=createResultsBars(active); if(bars) card.appendChild(bars);
       if(canReveal(active) && active.correct_index!==null && active.correct_index!==undefined){ var hint=document.createElement('div'); hint.style.color='#6EE7B7'; hint.style.fontSize='.82rem'; hint.style.marginTop='8px'; var correctOpt=opts[active.correct_index]; if(correctOpt) hint.textContent='Correct: '+correctOpt; card.appendChild(hint); }
+    } else if(active.kind==='grid2x2'){
+      if(!disable){
+        var gridWrap=document.createElement('div'); gridWrap.className='ans-grid grid2x2-picker';
+        gridWrap.style.display='grid'; gridWrap.style.gridTemplateColumns='1fr 1fr'; gridWrap.style.gap='8px'; gridWrap.style.marginTop='12px';
+        (active.options||[]).slice(0,4).forEach(function(opt, idx){
+          var gb=document.createElement('button'); gb.type='button'; gb.className='option-card option-btn grid2x2-cell'; gb.style.minHeight='72px'; gb.style.justifyContent='center'; gb.textContent=opt;
+          gb.setAttribute('aria-label','Choose quadrant '+opt);
+          gb.addEventListener('click', function(){
+            gb.classList.add('pressed');
+            Array.prototype.forEach.call(gridWrap.querySelectorAll('.option-btn'), function(x){ if(x!==gb){ x.disabled=true; x.style.opacity='.62'; } });
+            setTimeout(function(){ gb.classList.remove('pressed'); gb.classList.add('selected'); }, 90);
+            vibrate(20);
+            var c=GRID_QUADRANT_COORDS[idx]||[0.5,0.5];
+            submitAnswer(active.id, JSON.stringify({x:c[0], y:c[1]}), gb);
+          });
+          gridWrap.appendChild(gb);
+        });
+        card.appendChild(gridWrap);
+      }
+      var gridResults=createGridResults(active); if(gridResults) card.appendChild(gridResults);
     } else if(active.kind==='rating'){
       if(!disable){
         var stars=document.createElement('div'); stars.className='stars'; stars.style.marginTop='16px'; stars.setAttribute('role','group'); stars.setAttribute('aria-label','Rating 1 to 5');

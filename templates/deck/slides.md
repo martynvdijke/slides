@@ -99,13 +99,19 @@ layout: grid2x2
 interactive: true
 id: demo-grid-priority
 prompt: "Where does platform investment sit?"
+options:
+  - "High effort · low impact"
+  - "High effort · high impact"
+  - "Low effort · low impact"
+  - "Low effort · high impact"
 axes:
   x: { label: "Impact", low: "Low", high: "High" }
   y: { label: "Effort", low: "Low", high: "High" }
 ---
 
 <!--
-grid2x2 — scatter/quadrant. Degrades to a tally when the backend lacks the kind.
+grid2x2 — quadrant pick. Options are the quadrants in declaration order:
+top-left, top-right, bottom-left, bottom-right.
 -->
 
 ---
