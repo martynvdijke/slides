@@ -1,4 +1,4 @@
-import { computed, isRef, ref, shallowRef, watchEffect, type Ref } from 'vue'
+import { computed, getCurrentInstance, isRef, onUnmounted, ref, shallowRef, watchEffect, type Ref } from 'vue'
 
 /**
  * useLiveRoom — a tiny shared client for the slides live-question server.
@@ -325,10 +325,8 @@ class RoomClient {
               const url = m?.data?.rejoin_url || m?.rejoin_url || ''
               this.markSessionExpired(url)
             }
-          } else if (m.type === 'nav') { const d = (m.data && typeof m.data.index === 'number') ? m.data : m; if (typeof d.index === 'number') this.remoteNav.value = { index: d.index } } else if (m.type === 'ping' || m.type === 'pong' || m.type === 'error') {
-            // ignore / keep connected
-          } else {
-            // unknown type — ignore for backward compat
+          } else if (m.type === 'nav') { const d = (m.data && typeof m.data.index === 'number') ? m.data : m; if (typeof d.index === 'number') this.remoteNav.value = { index: d.index } } else {
+            // ping/pong/error are handled above; unknown types ignored for backward compat
           }
         } catch {
           /* ignore malformed frames */
@@ -466,15 +464,39 @@ class RoomClient {
 }
 
 const clients = new Map<string, RoomClient>()
+// How many composable instances currently hold each client. The client is
+// disposed only when the last holder unmounts, so reconnect attempts (which
+// happen while a client is still held) never tear the socket down.
+const clientRefs = new Map<string, number>()
 
-function roomClient(eventCode: string, base: string): RoomClient {
-  const key = base + '|' + eventCode
+function roomClientKey(eventCode: string, base: string): string {
+  return base + '|' + eventCode
+}
+
+function acquireRoomClient(eventCode: string, base: string): RoomClient {
+  const key = roomClientKey(eventCode, base)
   let client = clients.get(key)
   if (!client) {
     client = new RoomClient(eventCode, base)
     clients.set(key, client)
   }
+  clientRefs.set(key, (clientRefs.get(key) || 0) + 1)
   return client
+}
+
+function releaseRoomClient(eventCode: string, base: string) {
+  const key = roomClientKey(eventCode, base)
+  const n = (clientRefs.get(key) || 0) - 1
+  if (n > 0) {
+    clientRefs.set(key, n)
+    return
+  }
+  clientRefs.delete(key)
+  const client = clients.get(key)
+  if (client) {
+    client.dispose()
+    clients.delete(key)
+  }
 }
 
 /** Fetch the public event for a short room code (returns null when unknown). */
@@ -535,13 +557,31 @@ export function useLiveRoom(options: {
   // shallowRef: a deep reactive proxy would auto-unwrap the nested refs on
   // RoomClient (state, answerResult, …) to their raw values, breaking .value.
   const client = shallowRef<RoomClient | null>(null)
+  // Track which (base, event) pair this instance holds so the ref can be
+  // released on unmount and the shared client disposed when the last consumer
+  // goes away.
+  let heldEvent = ''
+  let heldBase = ''
   watchEffect(() => {
-    if (resolvedCode.value) {
-      client.value = roomClient(resolvedCode.value, baseUrl.value)
-    } else {
-      client.value = null
-    }
+    const code = resolvedCode.value
+    const base = baseUrl.value
+    if (code === heldEvent && base === heldBase) return
+    if (heldEvent) releaseRoomClient(heldEvent, heldBase)
+    heldEvent = code
+    heldBase = base
+    client.value = code ? acquireRoomClient(code, base) : null
   })
+
+  if (getCurrentInstance()) {
+    onUnmounted(() => {
+      if (heldEvent) {
+        releaseRoomClient(heldEvent, heldBase)
+        heldEvent = ''
+        heldBase = ''
+      }
+      client.value = null
+    })
+  }
 
   const state = computed(() => client.value?.state.value ?? null)
   const connected = computed(() => client.value?.connected.value ?? false)

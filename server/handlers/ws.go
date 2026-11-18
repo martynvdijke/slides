@@ -420,8 +420,6 @@ func handleEventWSMessage(ev *db.Event, pid int64, raw []byte) wsEnvelope {
 		return env
 	case "ping":
 		return wsEnvelope{Type: "pong"}
-	case "slide":
-		return okEnvelope("slide")
 	case "reaction":
 		// handled in EventWS loop; ignore here
 		return wsEnvelope{Type: "error", Error: "unknown message type"}

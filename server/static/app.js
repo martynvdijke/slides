@@ -1538,10 +1538,8 @@
     document.getElementById('live-card').textContent='No event code in URL. Open /e/YOURCODE';
   } else {
     document.getElementById('event-code').textContent=code;
-    fetchState().then(function(){ connectStream(true); }, function(){ connectStream(true); });
-    // set live badge code
-    // open SSE only after the first state fetch so the participant cookie is
-    // set before the stream binds to an identity
+    // open the WebSocket only after the first state fetch so the participant
+    // cookie is set before the stream binds to an identity
     fetchState().then(connectStream, connectStream);
     fetchParticipants();
   }

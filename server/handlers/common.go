@@ -23,8 +23,9 @@ import (
 	"slides/live"
 )
 
-// Broker fans out "something changed" signals to every SSE connection of an
-// event. Subscribers rebuild their own (participant-specific) state on wake-up.
+// Broker fans out "something changed" signals to every WebSocket connection of
+// an event. Subscribers rebuild their own (participant-specific) state on
+// wake-up.
 var Broker = live.New()
 
 // MediaDir is where uploaded presentations are stored. main sets it.
@@ -357,7 +358,8 @@ func participantID(w http.ResponseWriter, r *http.Request, eventID int64) int64 
 	return id
 }
 
-// BroadcastEvent wakes every SSE subscriber of the event so they rebuild state.
+// BroadcastEvent wakes every WebSocket subscriber of the event so they rebuild
+// state.
 func BroadcastEvent(eventID int64) {
 	ev, err := db.GetEventByID(eventID)
 	if err != nil || ev == nil {
@@ -515,8 +517,8 @@ func analyticsDTO(a *db.AnalyticsSettings) AnalyticsDTO {
 // ── State assembly ──
 
 // BuildState renders the participant-specific view of an event. It is used by
-// GET /state and by every SSE connection, so one audience member's answers and
-// votes are never leaked to another.
+// GET /state and by every WebSocket connection, so one audience member's answers
+// and votes are never leaked to another.
 func BuildState(ev *db.Event, participantID int64) StateDTO {
 	brand, _ := db.GetBranding()
 	state := StateDTO{

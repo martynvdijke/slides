@@ -1174,14 +1174,8 @@ func AdminActivateQuestion(w http.ResponseWriter, r *http.Request) {
 			jsonError(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		// 0 means "no override, keep the question's own duration".
 		if *body.DurationSec != 0 {
-			override = body.DurationSec
-		} else {
-			// 0 means no override; keep existing
-			override = nil
-		}
-		// if value is valid 5..180, pass override
-		if *body.DurationSec >= 5 && *body.DurationSec <= 180 {
 			override = body.DurationSec
 		}
 	}

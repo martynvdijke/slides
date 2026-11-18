@@ -36,16 +36,14 @@ function refreshFm() {
     aIsInteractive.value = false
   }
 }
+// Poll for slide changes: Slidev's nav object is not deeply reactive, so
+// frontmatter is re-read on a timer (cleared on unmount).
+let fmPollTimer: ReturnType<typeof setInterval> | null = null
 onMounted(() => {
   refreshFm()
   try {
     window.addEventListener('hashchange', refreshFm)
-    const iv = setInterval(refreshFm, 800)
-    // cleanup via onMounted return? use window unload guard
-    if (typeof document !== 'undefined') {
-      const obs = new MutationObserver(refreshFm)
-      obs.observe(document.documentElement, { subtree: false, childList: false })
-    }
+    fmPollTimer = setInterval(refreshFm, 800)
   } catch {}
 
   // Umami (preserved)
@@ -241,6 +239,9 @@ onUnmounted(() => {
   window.removeEventListener('pointerdown', onPointerDown, true)
   window.removeEventListener('pointerup', onPointerUp, true)
   window.removeEventListener('click', onClick, true)
+  try { window.removeEventListener('hashchange', refreshFm) } catch {}
+  if (fmPollTimer) clearInterval(fmPollTimer)
+  fmPollTimer = null
 })
 
 // Fallback immediate registration for environments where onMounted timing is off

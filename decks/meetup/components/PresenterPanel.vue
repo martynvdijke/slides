@@ -89,9 +89,6 @@ onMounted(() => {
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeydown)
   stopSlideWatcher()
-})
-onUnmounted(() => {
-  window.removeEventListener('keydown', onKeydown)
   if (clockTimer) clearInterval(clockTimer)
   clockTimer = null
 })
