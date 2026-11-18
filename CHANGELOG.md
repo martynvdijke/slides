@@ -1,3 +1,12 @@
+## [1.26.3](https://github.com/martynvdijke/slides/compare/v1.26.2...v1.26.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* **admin:** validate points_base and stop step attrs blocking saves ([f425119](https://github.com/martynvdijke/slides/commit/f42511946fb5150599c2bdfbd7161b24e1e9750c))
+* **server:** default the test email to the sender ([0d10a44](https://github.com/martynvdijke/slides/commit/0d10a44066dd29d44c6927033e55895b65025ea1))
+* **server:** keep presentation filenames and scope deletes to the event ([bab751a](https://github.com/martynvdijke/slides/commit/bab751a4616731f25cea389c869050b19de44e46))
+
 ## [1.26.2](https://github.com/martynvdijke/slides/compare/v1.26.1...v1.26.2) (2026-11-18)
 
 
