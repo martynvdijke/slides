@@ -1136,9 +1136,19 @@ func sniffMediaType(file multipart.File, filename string) string {
 // @Success  204 "no content"
 // @Router   /api/admin/events/{id}/questions/{qid} [delete]
 func AdminDeleteQuestion(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
 	qid := pathID(r, "qid")
-	if qid == 0 {
+	if eid == 0 || qid == 0 {
 		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
+	q, err := db.GetQuestion(qid)
+	if err != nil || q == nil {
+		writeLookupFailure(w, err, "question")
+		return
+	}
+	if q.EventID != eid {
+		jsonError(w, "question does not belong to event", http.StatusBadRequest)
 		return
 	}
 	if err := db.DeleteQuestion(qid); err != nil {
@@ -1146,7 +1156,6 @@ func AdminDeleteQuestion(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
-	eid := pathID(r, "id")
 	BroadcastEvent(eid)
 }
 
