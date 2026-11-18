@@ -1,3 +1,10 @@
+## [1.26.1](https://github.com/martynvdijke/slides/compare/v1.26.0...v1.26.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **server:** take the write lock at BEGIN to stop the activate race ([401e309](https://github.com/martynvdijke/slides/commit/401e309a38be4126e474d39057a4c7694194ebdc))
+
 # [1.26.0](https://github.com/martynvdijke/slides/compare/v1.25.2...v1.26.0) (2026-11-18)
 
 
