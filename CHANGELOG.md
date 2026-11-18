@@ -1,3 +1,11 @@
+# [1.26.0](https://github.com/martynvdijke/slides/compare/v1.25.2...v1.26.0) (2026-11-18)
+
+
+### Features
+
+* **deck:** carry frontmatter media through deck sync ([45289a8](https://github.com/martynvdijke/slides/commit/45289a836313756d8f89cc4c0db52a547905ee11))
+* **feature-test:** exercise the grid2x2 kind in the fixture deck ([5a31779](https://github.com/martynvdijke/slides/commit/5a3177984963b0421994d76523bce0ebef2abe5d))
+
 ## [1.25.2](https://github.com/martynvdijke/slides/compare/v1.25.1...v1.25.2) (2026-11-18)
 
 
