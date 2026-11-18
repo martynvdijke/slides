@@ -1,3 +1,15 @@
+# [1.25.0](https://github.com/martynvdijke/slides/compare/v1.24.5...v1.25.0) (2026-11-18)
+
+
+### Bug Fixes
+
+* **server:** carry slide media and grid2x2 options through deck sync ([761beea](https://github.com/martynvdijke/slides/commit/761beea70da25555969a5db7ad1c6cfa10763648))
+
+
+### Features
+
+* **live:** complete the grid2x2 question kind end to end ([fc83de9](https://github.com/martynvdijke/slides/commit/fc83de944fb3a72a2c4298ddb47443925b199def))
+
 ## [1.24.5](https://github.com/martynvdijke/slides/compare/v1.24.4...v1.24.5) (2026-11-18)
 
 ## [1.24.4](https://github.com/martynvdijke/slides/compare/v1.24.3...v1.24.4) (2026-11-18)
