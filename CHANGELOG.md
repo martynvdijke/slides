@@ -1,3 +1,10 @@
+## [1.24.3](https://github.com/martynvdijke/slides/compare/v1.24.2...v1.24.3) (2026-11-18)
+
+
+### Bug Fixes
+
+* **server:** keep auto-reveal questions on screen when they expire ([d4c8c45](https://github.com/martynvdijke/slides/commit/d4c8c45690f861f2a941a2d695e66caabe51a093))
+
 ## [1.24.2](https://github.com/martynvdijke/slides/compare/v1.24.1...v1.24.2) (2026-11-17)
 
 ## [1.24.1](https://github.com/martynvdijke/slides/compare/v1.24.0...v1.24.1) (2026-11-17)
