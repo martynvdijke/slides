@@ -26,10 +26,9 @@ func StartReaper(ctx context.Context, interval time.Duration) {
 					continue
 				}
 				for _, q := range due {
-					_ = db.CloseQuestion(q.EventID, q.ID)
-					if q.AutoReveal {
-						_ = db.SetQuestionShowResults(q.ID, true)
-					}
+					// Auto-reveal questions expiring by duration stay on screen
+					// as 'revealed' with their results; everything else closes.
+					_ = db.ExpireQuestion(q.EventID, q.ID, q.AutoReveal)
 					BroadcastEvent(q.EventID)
 					if ev, _ := db.GetEventByID(q.EventID); ev != nil {
 						webhook.Notify(ev.Code, "question.closed", map[string]any{"event_code": ev.Code, "event_name": ev.Name, "question_id": q.ID})

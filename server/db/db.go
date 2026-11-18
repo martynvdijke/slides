@@ -1629,7 +1629,7 @@ func SetQuestionShowResults(qid int64, show bool) error {
 }
 
 func ListDueQuestions(nowMs int64) ([]Question, error) {
-	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE status='live' AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
+	rows, err := DB.Query("SELECT id, event_id, kind, mode, prompt, options, position, status, show_results, is_feedback, media_url, media_type, created_at, correct_index, points_base, activated_at, duration_sec, auto_close, auto_reveal, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate FROM questions WHERE status IN ('live','locked') AND duration_sec>0 AND activated_at IS NOT NULL AND activated_at + duration_sec*1000 <= ?", nowMs)
 	if err != nil {
 		return nil, err
 	}
@@ -1684,7 +1684,9 @@ func NextQueuedQuestion(eventID int64) (*Question, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, err = tx.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='live'", eventID)
+	// A new question replaces every lingering phase, including a revealed one:
+	// otherwise an older revealed question would resurface once the new one ends.
+	_, err = tx.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status IN ('live','locked','revealed')", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1702,7 +1704,7 @@ func NextQueuedQuestion(eventID int64) (*Question, error) {
 }
 
 func SkipLiveQuestion(eventID int64) error {
-	_, err := DB.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='live'", eventID)
+	_, err := DB.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status IN ('live','locked','revealed')", eventID)
 	return err
 }
 
@@ -1752,6 +1754,8 @@ func LockQuestionIfExpired(eventID, questionID, nowMs int64) (bool, error) {
 
 // RevealQuestion moves a live or locked question into the revealed phase and
 // publishes its results. Revealing an already-revealed question is a no-op.
+// Any other revealed question for the event is superseded, so only the
+// question just revealed can stay on screen.
 func RevealQuestion(eventID, questionID int64) error {
 	res, err := DB.Exec("UPDATE questions SET status='revealed', show_results=1 WHERE id=? AND event_id=? AND status IN ('live','locked','revealed')", questionID, eventID)
 	if err != nil {
@@ -1769,7 +1773,19 @@ func RevealQuestion(eventID, questionID int64) error {
 		}
 		return fmt.Errorf("question cannot be revealed from status %q", status)
 	}
-	return nil
+	_, err = DB.Exec("UPDATE questions SET status='closed' WHERE event_id=? AND status='revealed' AND id<>?", eventID, questionID)
+	return err
+}
+
+// ExpireQuestion applies the duration_sec expiry transition for one question.
+// Auto-reveal questions publish their results and stay visible as 'revealed';
+// every other expired question is closed. It is the per-question step the
+// live reaper runs each tick.
+func ExpireQuestion(eventID, questionID int64, autoReveal bool) error {
+	if autoReveal {
+		return RevealQuestion(eventID, questionID)
+	}
+	return CloseQuestion(eventID, questionID)
 }
 
 // SetQuestionSeedKey stores the stable seed key for a question.
