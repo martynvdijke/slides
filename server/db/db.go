@@ -3045,9 +3045,10 @@ func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
 	}
 	defer tx.Rollback()
 	var src Event
-	var fo int
+	var fo, sm int
+	var fl, fq, fs, ff, flb int
 	var ca string
-	err = tx.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, created_at FROM events WHERE id=?", sourceID).Scan(&src.ID, &src.Code, &src.RoomCode, &src.Name, &src.Description, &src.EventDate, &src.Status, &fo, &ca)
+	err = tx.QueryRow("SELECT id, code, room_code, name, description, event_date, status, feedback_open, qa_slow_mode_s, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard, created_at FROM events WHERE id=?", sourceID).Scan(&src.ID, &src.Code, &src.RoomCode, &src.Name, &src.Description, &src.EventDate, &src.Status, &fo, &sm, &fl, &fq, &fs, &ff, &flb, &ca)
 	if err != nil {
 		return 0, err
 	}
@@ -3111,7 +3112,7 @@ func CloneEvent(sourceID int64, newCode, newName string) (int64, error) {
 	if strings.TrimSpace(name) == "" {
 		name = src.Name
 	}
-	res, err := tx.Exec("INSERT INTO events (code, room_code, name, description, event_date, status, feedback_open) VALUES (?, ?, ?, ?, ?, ?, ?)", newCode, newRoomCode, name, src.Description, src.EventDate, src.Status, fo)
+	res, err := tx.Exec("INSERT INTO events (code, room_code, name, description, event_date, status, feedback_open, qa_slow_mode_s, feature_live, feature_qa, feature_slides, feature_feedback, feature_leaderboard) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", newCode, newRoomCode, name, src.Description, src.EventDate, src.Status, fo, sm, fl, fq, fs, ff, flb)
 	if err != nil {
 		return 0, err
 	}

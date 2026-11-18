@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -46,6 +47,60 @@ func TestCloneEndpoint(t *testing.T) {
 	_ = json.Unmarshal(rr.Body.Bytes(), &dto)
 	if dto.Name != "NewName" {
 		t.Fatalf("name %s", dto.Name)
+	}
+}
+
+func TestCloneCopiesEventSettings(t *testing.T) {
+	if err := db.Init(filepath.Join(t.TempDir(), "ops-clone-settings.db")); err != nil {
+		t.Fatalf("init: %v", err)
+	}
+	defer db.Close()
+	ev, _ := db.CreateEvent("Orig", "orig-settings", "desc", "")
+	_, _ = db.UpdateEvent(ev.ID, map[string]any{
+		"qa_slow_mode_s":      30,
+		"feature_live":        false,
+		"feature_qa":          true,
+		"feature_slides":      false,
+		"feature_feedback":    false,
+		"feature_leaderboard": true,
+	})
+	_, _ = db.CreateQuestion(ev.ID, "poll", "live", "Q", []string{"A", "B"}, false, true, 0, "", "")
+	u, _ := db.CreateUser("admin", "h", "admin")
+	tok := "tok-clone-settings"
+	_ = db.CreateSession(tok, u, time.Now().Add(time.Hour))
+	mux := http.NewServeMux()
+	mux.Handle("POST /api/admin/events/{id}/clone", AdminAuth(http.HandlerFunc(AdminCloneEvent)))
+	body, _ := json.Marshal(map[string]any{"name": "Copy"})
+	id := strconv.FormatInt(ev.ID, 10)
+	req := httptest.NewRequest("POST", "/api/admin/events/"+id+"/clone", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.AddCookie(&http.Cookie{Name: "meetup_session", Value: tok})
+	req.SetPathValue("id", id)
+	rr := httptest.NewRecorder()
+	mux.ServeHTTP(rr, req)
+	if rr.Code != 200 {
+		t.Fatalf("clone %d %s", rr.Code, rr.Body.String())
+	}
+	var dto EventDTO
+	if err := json.Unmarshal(rr.Body.Bytes(), &dto); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if dto.ID == ev.ID {
+		t.Fatal("clone reuses the source event id")
+	}
+	if dto.Code == ev.Code || dto.RoomCode == "" || dto.RoomCode == ev.RoomCode {
+		t.Fatalf("clone needs its own code and room code, got %q / %q", dto.Code, dto.RoomCode)
+	}
+	if dto.QASlowModeS != 30 {
+		t.Fatalf("qa_slow_mode_s = %d, want 30", dto.QASlowModeS)
+	}
+	if dto.FeatureLive || !dto.FeatureQA || dto.FeatureSlides || dto.FeatureFeedback || !dto.FeatureLeaderboard {
+		t.Fatalf("feature flags not copied: live=%v qa=%v slides=%v feedback=%v leaderboard=%v",
+			dto.FeatureLive, dto.FeatureQA, dto.FeatureSlides, dto.FeatureFeedback, dto.FeatureLeaderboard)
+	}
+	qs, err := db.ListQuestions(dto.ID)
+	if err != nil || len(qs) != 1 || qs[0].Prompt != "Q" || qs[0].Status != "draft" {
+		t.Fatalf("cloned questions = %v (err %v)", qs, err)
 	}
 }
 
