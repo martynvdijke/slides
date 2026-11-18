@@ -215,7 +215,6 @@ a normal build.
 | --- | --- |
 | `DECK_SYNC_BASE_URL` | Backend origin (falls back to `VITE_LIVE_BASE_URL`) |
 | `DECK_SYNC_EVENT_ID` | Numeric event id (falls back to `VITE_EVENT_ID` / `EVENT_ID`) |
-| `DECK_SYNC_TOKEN` | Admin bearer token or session cookie (falls back to `ADMIN_TOKEN`) |
 | `DECK_SLUG` | Deck identifier for the `external_id` key |
 | `SLIDES_PATH` | Path to `slides.md` (default `./slides.md`) |
 

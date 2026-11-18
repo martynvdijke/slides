@@ -12,9 +12,11 @@
  * Env:
  *   DECK_SYNC_BASE_URL | VITE_LIVE_BASE_URL  — backend origin (e.g. http://localhost:8080)
  *   DECK_SYNC_EVENT_ID | VITE_EVENT_ID      — numeric event id for admin sync
- *   DECK_SYNC_TOKEN    | ADMIN_TOKEN        — admin bearer or cookie header value (optional, uses credentials:include when not set)
  *   DECK_SLUG          — deck identifier (default: from slides.md title or "deck")
  *   SLIDES_PATH        — path to slides.md (default: ./slides.md)
+ *
+ * Auth: the admin session cookie, sent with `credentials: include`. The admin
+ * API is cookie-session only, so there is no bearer-token option to set.
  *
  * Usage:
  *   node scripts/sync-deck.mjs
@@ -33,7 +35,6 @@ function env(k, fallback='') {
 
 const BASE_URL = (env('DECK_SYNC_BASE_URL') || env('VITE_LIVE_BASE_URL') || '').replace(/\/+$/,'')
 const EVENT_ID = env('DECK_SYNC_EVENT_ID') || env('VITE_EVENT_ID') || env('EVENT_ID') || ''
-const TOKEN = env('DECK_SYNC_TOKEN') || env('ADMIN_TOKEN') || ''
 const DECK_SLUG = env('DECK_SLUG') || ''
 const SLIDES_PATH = env('SLIDES_PATH') || resolve(process.cwd(), 'slides.md')
 
@@ -202,15 +203,11 @@ async function main() {
 
   const url = `${BASE_URL}/api/admin/events/${encodeURIComponent(EVENT_ID)}/deck/sync`
   const headers = { 'Content-Type': 'application/json' }
-  if (TOKEN) {
-    // support "Bearer xxx" or raw cookie header value — heuristic
-    if (TOKEN.includes('Bearer') || TOKEN.length > 40) headers['Authorization'] = TOKEN.startsWith('Bearer') ? TOKEN : `Bearer ${TOKEN}`
-    else headers['Authorization'] = `Bearer ${TOKEN}`
-  }
 
   const res = await fetch(url, {
     method: 'POST',
     headers,
+    // AdminAuth is cookie-session only; sign in via /api/auth/login first.
     credentials: 'include',
     body: JSON.stringify(payload),
   })

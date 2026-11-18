@@ -283,7 +283,6 @@ full deploy:
 ```bash
 DECK_SYNC_BASE_URL=http://localhost:6270 \
 DECK_SYNC_EVENT_ID=1 \
-DECK_SYNC_TOKEN=<admin bearer or session cookie> \
 DECK_SLUG=meetup \
 npm run sync:deck -w meetup
 
@@ -295,9 +294,11 @@ npm run sync:deck:dry -w meetup
 `scripts/sync-deck.mjs` parses the deck frontmatter and `POST`s
 `{ deck_slug, slides: [...] }` to
 `POST /api/admin/events/{id}/deck/sync`. The server upserts each slide keyed by
-`external_id`, resets it to `draft`, and closes (archives) any previously synced
-slide that is no longer present. It is a no-op when `BASE_URL` / `EVENT_ID` are
-unset, so a plain `slidev build` never fails.
+`external_id`, keeps the row's current status (so re-syncing does not demote a
+live question back to draft), and closes (archives) any previously synced slide
+that is no longer present. Authentication is the normal admin session cookie —
+sign in first; there is no bearer-token option. It is a no-op when
+`BASE_URL` / `EVENT_ID` are unset, so a plain `slidev build` never fails.
 
 In dev the optional Vite plugin `plugins/deck-sync.ts` watches `slides.md` and
 debounces the same sync on every save. It is a no-op unless the sync env vars
@@ -337,9 +338,9 @@ at build time, so the questions travel with the deck.
 | Field | Required | Default | Notes |
 | --- | --- | --- | --- |
 | `id` | no | slug of `prompt` | Upsert key; auto-generated when omitted, de-duplicated with `-2`, `-3`, … |
-| `kind` | no | `poll` | One of `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud`; an unknown kind falls back to `poll` (`grid2x2` is layout-only) |
+| `kind` | no | `poll` | One of `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud`, `grid2x2`; an unknown kind falls back to `poll` |
 | `prompt` | yes | — | The question text; blocks without a prompt are skipped |
-| `options` | for `poll`/`multi`/`ranking` | — | `poll`/`multi`/`ranking` need ≥ 2; ignored for other kinds |
+| `options` | for `poll`/`multi`/`ranking`/`grid2x2` | — | `poll`/`multi`/`ranking` need ≥ 2; `grid2x2` takes its four quadrant labels in order (top-left, top-right, bottom-left, bottom-right); ignored for other kinds |
 | `correct` | no | omitted | Correct answer as a 0-based index **or** exact option text (case-insensitive). Omit for a non-scored prompt |
 | `points` | no | `100` | Maps to `points_base` |
 | `mode` | no | `live` | `live` or `feedback` |
@@ -467,7 +468,7 @@ When authoring a question the presenter panel offers:
 
 | Field | Notes |
 | --- | --- |
-| Kind | `poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`, `wordcloud` |
+| Kind | `poll`, `multi`, `ranking`, `grid2x2`, `yesno`, `rating`, `nps`, `open`, `wordcloud` |
 | Show results | Whether the audience tally is shown (legacy instant feedback) |
 | Feedback | Route the question to the post-event feedback form |
 | Timer | `Untimed`, `5s` … `180s` — the auto-close duration |

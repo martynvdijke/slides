@@ -38,7 +38,6 @@ axes:
 ```bash
 DECK_SYNC_BASE_URL=http://localhost:8080 \
 DECK_SYNC_EVENT_ID=1 \
-DECK_SYNC_TOKEN=<admin bearer> \
 DECK_SLUG=my-deck \
 npm run sync:deck
 # or dry-run:

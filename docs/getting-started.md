@@ -91,10 +91,12 @@ interactive slides to a running backend while you edit:
 ```bash
 DECK_SYNC_BASE_URL=http://localhost:6270 \
 DECK_SYNC_EVENT_ID=1 \
-DECK_SYNC_TOKEN=<admin session cookie> \
 DECK_SLUG=meetup \
 npm run sync:deck -w meetup
 ```
+
+Sign in to the admin app first (browser session cookie); deck sync uses that
+cookie and has no separate token.
 
 ## Build everything
 
