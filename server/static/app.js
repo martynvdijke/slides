@@ -826,10 +826,8 @@
       var h2=document.createElement('h3'); h2.textContent='Waiting for the host…';
       var p2=document.createElement('p'); p2.textContent='The host will start a live question soon. Stay on this tab — it updates automatically.';
       w.appendChild(orb); w.appendChild(h2); w.appendChild(p2);
-      card.appendChild(w); return;
-      var h=document.createElement('h3'); h.textContent='Waiting for the host…';
-      var p=document.createElement('p'); p.textContent='The host will start a live question soon. Stay on this tab — it updates automatically.';
-      w.appendChild(orb); w.appendChild(h); w.appendChild(p);
+      // participant roster (hidden until someone joins) — populated from the
+      // initial fetch and subsequent "participants" broadcasts
       var roster=document.createElement('div'); roster.id='audience-roster'; roster.style.cssText='width:100%;display:flex;flex-direction:column;align-items:center;margin-top:12px';
       w.appendChild(roster); card.appendChild(w); try{ renderAudienceRoster(); }catch(e){}
       return;
