@@ -135,9 +135,8 @@ Then:
 3. Start it with `npm run dev -w my-new-deck`.
 
 The template already ships the live-question components, the interactive
-layouts (`poll`, `multi`, `ranking`, `yesno`, `rating`, `nps`, `open`,
-`wordcloud`, `qa`, `grid2x2`) and a `THEME.md` authoring guide — see
-[Decks](decks.md) for what each one does.
+layouts (`poll`, `nps`, `wordcloud`, `qa`, `grid2x2`) and a `THEME.md` authoring
+guide — see [Decks](decks.md) for what each one does.
 
 ### Deck metadata
 

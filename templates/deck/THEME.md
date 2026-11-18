@@ -1,6 +1,6 @@
 # Interactive Slides — Mentimeter-style on Slidev default theme
 
-No custom theme package — Slidev's **default theme stays the base**. These 10 interactive layouts (`layouts/poll.vue` … `layouts/grid2x2.vue`) just mash live behaviour onto default styling: they render the live question + results via the existing `LiveQuestion`/`LiveQa` midnight widgets, while the slide itself keeps default theme's look. Each interactive slide maps to a live question via stable `id` → `external_id = "{deck_slug}:{slide_id}"`.
+No custom theme package — Slidev's **default theme stays the base**. These 5 interactive layouts (`poll.vue`, `nps.vue`, `qa.vue`, `wordcloud.vue`, `grid2x2.vue`) just mash live behaviour onto default styling: they render the live question + results via the existing `LiveQuestion`/`LiveQa` midnight widgets, while the slide itself keeps default theme's look. Each interactive slide maps to a live question via stable `id` → `external_id = "{deck_slug}:{slide_id}"`.
 
 ## Authoring contract
 
@@ -8,7 +8,7 @@ Per-slide frontmatter:
 
 ```yaml
 ---
-layout: poll          # poll|multi|ranking|yesno|rating|nps|open|wordcloud|qa|grid2x2
+layout: poll          # poll|nps|wordcloud|qa|grid2x2
 interactive: true     # required to be synced (or use a known interactive layout)
 id: s03-poll-cicd     # REQUIRED stable slug — NEVER use slide index
 prompt: "Where are you on your cloud-native journey?"
@@ -67,15 +67,17 @@ Layouts reuse the existing Midnight widgets (`LiveQuestion`/`LiveQa`/`Leaderboar
 | Layout | Frontmatter `layout` | Renders |
 |--------|---------------------|---------|
 | `poll.vue` | `poll` | Single-choice poll |
-| `multi.vue` | `multi` | Multi-select |
-| `ranking.vue` | `ranking` | Ranked order |
-| `yesno.vue` | `yesno` | Yes / No |
-| `rating.vue` | `rating` | 1–5 stars |
 | `nps.vue` | `nps` | 0–10 |
-| `open.vue` | `open` | Open text |
 | `wordcloud.vue` | `wordcloud` | Cloud (port of audience app's renderer) |
 | `qa.vue` | `qa` | Q&A board (`LiveQa`) |
 | `grid2x2.vue` | `grid2x2` | Scatter/quadrant — degrades to heatmap when backend lacks kind |
+
+Only the five layouts above ship as slide files. The `multi`, `ranking`, `yesno`,
+`rating` and `open` **question kinds** remain fully supported end-to-end — the
+audience picker, the presenter panel, the admin composer, seed/import and
+`extract-questions` all handle them. Author those kinds with a
+`<!-- live-question -->` comment block, the presenter panel, or the API (there is
+simply no dedicated slide layout rendering them).
 
 ## PresenterPanel
 

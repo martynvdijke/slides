@@ -7,7 +7,7 @@ sync wiring in place.
 
 There are two ways to put a live question into a deck:
 
-- **Interactive slide layouts** — set `layout: poll` (or `multi`, `ranking`, …)
+- **Interactive slide layouts** — set `layout: poll` (or `wordcloud`, `qa`, …)
   in a slide's frontmatter and the slide renders the live question itself. The
   presenter's slide change auto-activates it.
 - **Markdown comment blocks** — write a `<!-- live-question … -->` YAML block
@@ -189,15 +189,17 @@ the shared `useDeckSlideQuestion` composable — no second WebSocket, and no
 | Layout | Frontmatter `layout` | Renders |
 | --- | --- | --- |
 | `poll.vue` | `poll` | Single-choice poll |
-| `multi.vue` | `multi` | Multi-select |
-| `ranking.vue` | `ranking` | Ranked order |
-| `yesno.vue` | `yesno` | Yes / No |
-| `rating.vue` | `rating` | 1–5 stars |
 | `nps.vue` | `nps` | 0–10 |
-| `open.vue` | `open` | Open text |
 | `wordcloud.vue` | `wordcloud` | Live word cloud |
 | `qa.vue` | `qa` | Q&A board (`LiveQa`) |
 | `grid2x2.vue` | `grid2x2` | 2×2 scatter/quadrant board |
+
+Only these five layouts exist as slide files. The `multi`, `ranking`, `yesno`,
+`rating` and `open` **question kinds** are still fully supported everywhere else
+— the presenter panel, admin composer, API, deck sync and
+`<!-- live-question -->` extraction all handle them. Author those kinds with a
+comment block, the presenter panel or the API; they have no dedicated slide
+layout.
 
 ### Layout frontmatter
 
@@ -240,7 +242,7 @@ axes:
 | `id` | `slide_id` / `external_id` | Required, stable; upsert key (`{deck_slug}:{id}`) |
 | `interactive` | — | `true` (or a known interactive `layout`) marks the slide for sync |
 | `prompt` | `prompt` | Falls back to `title`; required to be synced as a question |
-| `options` | `options` | Needed for `poll`/`multi`/`ranking` |
+| `options` | `options` | Needed for `poll`/`grid2x2` |
 | `kind` | `kind` | Optional; inferred from `layout` |
 | `points` | `points_base` | Default `100` |
 | `correct` | `correct_index` | 0-based index, or omit for a non-scored prompt |

@@ -109,7 +109,7 @@ the landing page. The live components are shared between `decks/meetup` and
 
 A deck authors live questions in one of two ways:
 
-- **Interactive slide layouts** — `layout: poll` (or `multi`, `ranking`, …) in
+- **Interactive slide layouts** — `layout: poll` (or `wordcloud`, `qa`, …) in
   the slide frontmatter. Each slide carries a stable `id`; the server keys its
   question by `external_id = "{deck_slug}:{slide_id}"`. When the presenter
   broadcasts a slide change, the server resolves that id and **auto-activates**

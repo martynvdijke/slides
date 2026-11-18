@@ -31,7 +31,7 @@ function refreshFm() {
     const g: any = (window as any).$slidev?.nav ?? (window as any).__slidev_nav__ ?? null
     const cur = g?.currentSlideRoute?.meta?.slide?.frontmatter ?? g?.currentSlide?.frontmatter ?? null
     fm.value = cur
-    aIsInteractive.value = !!(cur && (cur.interactive === true || cur.layout && ['poll','multi','ranking','yesno','rating','nps','open','wordcloud','qa','grid2x2'].includes(String(cur.layout))))
+    aIsInteractive.value = !!(cur && (cur.interactive === true || cur.layout && ['poll','nps','wordcloud','qa','grid2x2'].includes(String(cur.layout))))
   } catch {
     aIsInteractive.value = false
   }
