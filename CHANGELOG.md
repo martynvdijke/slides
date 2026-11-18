@@ -1,3 +1,12 @@
+## [1.25.1](https://github.com/martynvdijke/slides/compare/v1.25.0...v1.25.1) (2026-11-18)
+
+
+### Bug Fixes
+
+* **admin:** offer grid2x2 in the composer and render quadrant results ([3b508f7](https://github.com/martynvdijke/slides/commit/3b508f7b24975661798299ed0e5fcab901efdcb6))
+* **admin:** un-nest the forgot-password form from the login form ([e5382ee](https://github.com/martynvdijke/slides/commit/e5382ee4d2d59eab64430bd8f3b5bfa4f4d6da55)), closes [#form-forgot](https://github.com/martynvdijke/slides/issues/form-forgot) [#form-login](https://github.com/martynvdijke/slides/issues/form-login)
+* **server:** scope answer dedup per question and keep answered Q&A visible ([26b95b0](https://github.com/martynvdijke/slides/commit/26b95b014ffb8d424f2f130ee47f7d6ad00a6a66))
+
 # [1.25.0](https://github.com/martynvdijke/slides/compare/v1.24.5...v1.25.0) (2026-11-18)
 
 
