@@ -1,3 +1,11 @@
+## [1.24.4](https://github.com/martynvdijke/slides/compare/v1.24.3...v1.24.4) (2026-11-18)
+
+
+### Bug Fixes
+
+* **deck:** prefer answer-deadline countdown while answers are accepted ([ae61496](https://github.com/martynvdijke/slides/commit/ae61496594bb7e5079edc410f67e6262eaf0d903))
+* **server:** preserve live question status on deck re-sync ([2d63169](https://github.com/martynvdijke/slides/commit/2d63169f83f0d519de69ef28ce3bdb1fe64b8d7c))
+
 ## [1.24.3](https://github.com/martynvdijke/slides/compare/v1.24.2...v1.24.3) (2026-11-18)
 
 
