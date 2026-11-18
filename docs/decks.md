@@ -219,6 +219,8 @@ timeLimit: 30             # seconds, 0 = untimed
 duration: 60              # auto-close after N seconds (host auto-reveal respected)
 activate: auto            # auto (default) | manual — manual skips auto-activation
 showResults: true         # whether the audience sees the live tally
+media_url: /media/x.png   # optional image/video prompt
+media_type: image         # image | video (inferred from the URL extension if omitted)
 ---
 
 <!-- grid2x2 only: -->
@@ -246,7 +248,14 @@ axes:
 | `duration` | `duration_sec` | Auto-close timer |
 | `activate` | `auto_activate` | `auto` (default) or `manual` |
 | `showResults` | `show_results` | Default `true` |
+| `media_url` | `media_url` | Optional image/video prompt URL; values are trimmed |
+| `media_type` | `media_type` | `image` or `video`; inferred from the URL extension when omitted |
 | `axes` | — | Read by the `grid2x2` layout for its axis labels; not stored |
+
+!!! note "Legacy `media` key"
+    Older decks may still use `media: /x.png`. It is accepted as an alias for
+    `media_url` (the type is inferred from the extension), but new decks should
+    use the explicit `media_url` / `media_type` pair the backend expects.
 
 The `qa` layout renders the Q&A board and is not itself a question, so it has no
 `prompt` and is not part of the slide sync.

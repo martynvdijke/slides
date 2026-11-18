@@ -18,7 +18,8 @@ points: 100           # -> points_base
 correct: 1            # 0-based index, for poll|yesno
 timeLimit: 30         # seconds, 0 = untimed
 duration: 60          # auto-close after N seconds (host auto-reveal respected)
-media: /x.png         # image/video url
+media_url: /x.png     # image/video url
+media_type: image     # image | video (inferred from the url extension if omitted)
 activate: auto        # auto (default) | manual — manual skips auto-activate on slide enter
 showResults: true     # whether audience sees live results immediately
 # grid2x2 only:

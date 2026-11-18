@@ -3,7 +3,7 @@
  * sync-deck.mjs — parse a deck's slides.md frontmatter and POST to
  * POST /api/admin/events/{id}/deck/sync
  *
- * Body: { deck_slug, slides:[{slide_id,position,prompt,kind,options,points_base,correct_index,duration_sec,time_limit_s,show_results}] }
+ * Body: { deck_slug, slides:[{slide_id,position,prompt,kind,options,points_base,correct_index,duration_sec,time_limit_s,show_results,media_url,media_type}] }
  * Idempotent upsert keyed by external_id = "{deck_slug}:{slide_id}" (never by index).
  *
  * No-op when env is unset; never crashes a normal build. Debounced via file mtime.
@@ -26,6 +26,7 @@
 
 import { readFileSync, existsSync } from 'node:fs'
 import { resolve, basename, dirname } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 const DRY = process.argv.includes('--dry-run') || process.argv.includes('--dryRun')
 
@@ -60,6 +61,29 @@ function inferKind(layout, explicit) {
 function toInt(v, fallback=0) {
   const n = parseInt(String(v ?? ''), 10)
   return Number.isFinite(n) ? n : fallback
+}
+
+// The backend stores media_url/media_type verbatim and the clients pick a
+// renderer by media_type prefix, so infer a sensible type when a slide only
+// declares a URL (or uses the legacy `media` alias).
+const IMAGE_EXT = new Set(['png','jpg','jpeg','gif','webp','avif','svg','bmp'])
+const VIDEO_EXT = new Set(['mp4','webm','mov','m4v','ogv','ogg'])
+
+function inferMediaType(url) {
+  const clean = String(url).split(/[?#]/)[0].toLowerCase()
+  const dot = clean.lastIndexOf('.')
+  if (dot < 0) return ''
+  const ext = clean.slice(dot + 1)
+  if (IMAGE_EXT.has(ext)) return 'image'
+  if (VIDEO_EXT.has(ext)) return 'video'
+  return ''
+}
+
+function readMedia(fm) {
+  const url = String(fm.media_url ?? fm.mediaUrl ?? fm.media ?? '').trim()
+  if (!url) return { url: '', type: '' }
+  const explicit = String(fm.media_type ?? fm.mediaType ?? '').trim().toLowerCase()
+  return { url, type: explicit || inferMediaType(url) }
 }
 
 async function parseSlides(rawPath) {
@@ -119,7 +143,7 @@ async function parseSlides(rawPath) {
   return slides
 }
 
-function buildPayload(slides, deckSlug) {
+export function buildPayload(slides, deckSlug) {
   const out = []
   for (const { frontmatter: fm, position } of slides) {
     const isInteractive = fm.interactive === true || (fm.layout && INTERACTIVE_LAYOUTS.has(String(fm.layout).toLowerCase()))
@@ -142,6 +166,7 @@ function buildPayload(slides, deckSlug) {
     const duration = toInt(fm.duration ?? fm.duration_sec ?? 0, 0)
     const timeLimit = toInt(fm.timeLimit ?? fm.time_limit_s ?? 0, 0)
     const showResults = fm.showResults !== undefined ? !!fm.showResults : true
+    const media = readMedia(fm)
     out.push({
       slide_id: id,
       position,
@@ -156,7 +181,7 @@ function buildPayload(slides, deckSlug) {
       // pass through grid axes / activate for backend validation
       ...(fm.axes ? { axes: fm.axes } : {}),
       ...(fm.activate ? { activate: String(fm.activate) } : {}),
-      ...(fm.media ? { media: String(fm.media) } : {}),
+      ...(media.url ? { media_url: media.url, media_type: media.type } : {}),
     })
   }
   return { deck_slug: deckSlug, slides: out }
@@ -222,4 +247,6 @@ async function main() {
   console.log(`[sync-deck] synced →`, data)
 }
 
-main().catch(e => { console.error('[sync-deck] fatal', e); process.exitCode = 1 })
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(e => { console.error('[sync-deck] fatal', e); process.exitCode = 1 })
+}
