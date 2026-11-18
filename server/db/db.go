@@ -222,7 +222,15 @@ func Init(path string) error {
 	var err error
 	// WAL + per-connection busy_timeout let many readers run concurrently with
 	// a single writer; SQLite serialises writers itself.
-	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)"
+	//
+	// _txlock=immediate makes every DB.Begin() take the write lock up front.
+	// Without it a deferred transaction that SELECTs first and UPDATEs later
+	// (e.g. ActivateQuestion's existence check, then its status updates) can
+	// fail instantly with SQLITE_BUSY/SQLITE_BUSY_SNAPSHOT when another writer
+	// commits between the read snapshot and the write upgrade — a failure the
+	// busy_timeout does NOT retry. Taking the lock at BEGIN turns that into an
+	// ordinary wait.
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=foreign_keys(1)&_txlock=immediate"
 	DB, err = sql.Open("sqlite", dsn)
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
