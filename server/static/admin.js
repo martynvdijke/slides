@@ -468,7 +468,7 @@
   // questions
   var qKind=document.getElementById('aq-kind');
   var qOptsWrap=document.getElementById('aq-options-wrap');
-  var qOptionKinds=['poll','multi','ranking'];
+  var qOptionKinds=['poll','multi','ranking','grid2x2'];
   var aqCorrect=document.getElementById('aq-correct');
   var aqPoints=document.getElementById('aq-points');
   var aqScoringWrap=document.getElementById('aq-scoring-wrap');
@@ -561,7 +561,8 @@
     var optsRaw=document.getElementById('aq-options').value.trim();
     var opts = qOptionKinds.indexOf(kind)>=0 ? optsRaw.split(',').map(function(s){return s.trim()}).filter(Boolean) : [];
     if(!prompt) return;
-    if(qOptionKinds.indexOf(kind)>=0 && opts.length<2) return toast('Add at least 2 options','err');
+    var minOpts = kind==='grid2x2' ? 4 : 2;
+    if(qOptionKinds.indexOf(kind)>=0 && opts.length<minOpts) return toast(kind==='grid2x2' ? 'Add 4 quadrant labels: top-left, top-right, bottom-left, bottom-right' : 'Add at least 2 options','err');
     var payload={ kind:kind, mode:mode, prompt:prompt, options:opts, is_feedback: document.getElementById('aq-feedback').checked, show_results: document.getElementById('aq-show').checked, position: 0, media_url: qMedia.url, media_type: qMedia.type };
     var durVal = aqDuration ? parseInt(aqDuration.value,10) : 0;
     if(isNaN(durVal)) durVal=0;
@@ -1028,7 +1029,9 @@
           }
           card.appendChild(cloud);
         }
-        if(q.results && q.results.length){
+        if(q.kind==='grid2x2' && q.results && q.results.length){
+          card.appendChild(gridStatsBlock(q));
+        } else if(q.results && q.results.length){
           var wrap=document.createElement('div'); wrap.style.display='grid'; wrap.style.gap='8px'; wrap.style.marginTop='12px';
           if(q.kind==='nps' && typeof q.nps==='number'){
             var nps=document.createElement('div'); nps.style.fontWeight='700'; nps.style.marginTop='10px'; nps.style.fontSize='1rem'; nps.textContent='NPS score: '+q.nps;
@@ -1174,6 +1177,31 @@
     });
     if(state.selectedId && list.some(function(ev){return ev.id===state.selectedId})) sel.value=String(state.selectedId);
   }
+  // gridQuadrantIndex mirrors app.js/projector bucketing: y=1 is the top row,
+  // so indices run TL, TR, BL, BR.
+  function gridQuadrantIndex(x,y){ return (y>=0.5?0:2)+(x>=0.5?1:0); }
+  function gridStatsBlock(q){
+    var labels=(q.options||[]).slice(0,4);
+    var counts=[0,0,0,0];
+    (q.results||[]).forEach(function(r){
+      if(typeof r.x!=='number'||typeof r.y!=='number') return;
+      counts[gridQuadrantIndex(r.x,r.y)]+=r.count||0;
+    });
+    var max=Math.max.apply(null,counts)||1;
+    var grid=document.createElement('div');
+    grid.style.display='grid'; grid.style.gridTemplateColumns='1fr 1fr'; grid.style.gap='8px'; grid.style.marginTop='10px';
+    counts.forEach(function(count, idx){
+      var cell=document.createElement('div'); cell.className='grid-result';
+      cell.style.cssText='border:1px solid var(--border);border-radius:10px;padding:10px 12px;background:rgba(255,255,255,.04)';
+      var lab=document.createElement('div'); lab.style.cssText='font-size:.78rem;color:var(--muted);font-weight:700'; lab.textContent=labels[idx]||('Quadrant '+(idx+1));
+      var num=document.createElement('div'); num.style.cssText='font-size:1.1rem;font-weight:800;font-variant-numeric:tabular-nums'; num.textContent=String(count);
+      var track=document.createElement('div'); track.className='stat-bar';
+      var fill=document.createElement('i'); fill.style.width=(count/max*100)+'%'; track.appendChild(fill);
+      cell.appendChild(lab); cell.appendChild(num); cell.appendChild(track);
+      grid.appendChild(cell);
+    });
+    return grid;
+  }
   function statsQuestionCard(q){
     var card=document.createElement('div'); card.className='glass card-pad';
     var title=document.createElement('div'); title.style.fontWeight='700'; title.textContent=q.prompt;
@@ -1184,7 +1212,9 @@
       var nps=document.createElement('div'); nps.style.fontWeight='700'; nps.style.marginTop='8px'; nps.textContent='NPS score: '+q.nps;
       card.appendChild(nps);
     }
-    if(q.results && q.results.length){
+    if(q.kind==='grid2x2' && q.results && q.results.length){
+      card.appendChild(gridStatsBlock(q));
+    } else if(q.results && q.results.length){
       var maxScore=0;
       if(q.kind==='ranking'){ maxScore=Math.max.apply(null,q.results.map(function(x){return x.score||0})); }
       var wrap=document.createElement('div'); wrap.style.display='grid'; wrap.style.gap='8px'; wrap.style.marginTop='10px';
