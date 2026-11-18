@@ -554,20 +554,26 @@ func TestGetQuestionStats(t *testing.T) {
 func TestPresentations(t *testing.T) {
 	tmpDB(t)
 	ev, _ := CreateEvent("E", "C1", "", "")
-	pr, err := CreatePresentation(ev.ID, "Title", "Speaker", "file.pdf", 1234)
+	pr, err := CreatePresentation(ev.ID, "Title", "Speaker", "stored-uuid.pdf", "file.pdf", 1234)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if pr.Title != "Title" || pr.Size != 1234 {
 		t.Fatalf("pres %+v", pr)
 	}
+	if pr.Filename != "stored-uuid.pdf" || pr.OriginalFilename != "file.pdf" {
+		t.Fatalf("names stored=%q original=%q", pr.Filename, pr.OriginalFilename)
+	}
 	list, _ := ListPresentations(ev.ID)
 	if len(list) != 1 {
 		t.Fatalf("list %d", len(list))
 	}
+	if list[0].OriginalFilename != "file.pdf" {
+		t.Fatalf("list original %q", list[0].OriginalFilename)
+	}
 	got, _ := GetPresentation(pr.ID)
-	if got.Filename != "file.pdf" {
-		t.Fatalf("filename %q", got.Filename)
+	if got.Filename != "stored-uuid.pdf" || got.OriginalFilename != "file.pdf" {
+		t.Fatalf("filename %q original %q", got.Filename, got.OriginalFilename)
 	}
 	if err := DeletePresentation(pr.ID); err != nil {
 		t.Fatal(err)

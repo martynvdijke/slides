@@ -441,7 +441,7 @@ func DownloadPresentation(w http.ResponseWriter, r *http.Request) {
 	}
 	fpath := filepath.Join(MediaDir, p.Filename)
 	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": p.Filename}))
+	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": presentationDisplayName(*p)}))
 	http.ServeFile(w, r, fpath)
 }
 

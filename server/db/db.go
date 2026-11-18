@@ -72,13 +72,17 @@ type Event struct {
 }
 
 type Presentation struct {
-	ID        int64
-	EventID   int64
-	Title     string
-	Speaker   string
-	Filename  string
-	Size      int64
-	CreatedAt time.Time
+	ID      int64
+	EventID int64
+	Title   string
+	Speaker string
+	// Filename is the stored (safe, unique) name used to locate the file on
+	// disk. OriginalFilename is what the uploader called it and what the API
+	// shows/downloads; it is empty for rows created before the column existed.
+	Filename         string
+	OriginalFilename string
+	Size             int64
+	CreatedAt        time.Time
 }
 
 type Result struct {
@@ -563,6 +567,13 @@ func migrate() error {
 		return err
 	}
 	if err := ensureColumn("questions", "seed_key", "seed_key TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	// Presentations store the UUID file name (the file on disk) separately from
+	// the original upload name, which is what the admin/public API exposes and
+	// what a download is named. Existing rows keep an empty original name and
+	// fall back to the stored name.
+	if err := ensureColumn("presentations", "original_filename", "original_filename TEXT NOT NULL DEFAULT ''"); err != nil {
 		return err
 	}
 	for _, col := range []struct{ name, ddl string }{
@@ -1257,8 +1268,10 @@ func ListParticipants(eventID int64) ([]Participant, error) {
 
 // presentations
 
-func CreatePresentation(eventID int64, title, speaker, filename string, size int64) (*Presentation, error) {
-	res, err := DB.Exec("INSERT INTO presentations (event_id, title, speaker, filename, size) VALUES (?, ?, ?, ?, ?)", eventID, title, speaker, filename, size)
+// CreatePresentation records an upload. filename is the stored (unique) name on
+// disk; originalFilename is the name the uploader gave it and may be empty.
+func CreatePresentation(eventID int64, title, speaker, filename, originalFilename string, size int64) (*Presentation, error) {
+	res, err := DB.Exec("INSERT INTO presentations (event_id, title, speaker, filename, original_filename, size) VALUES (?, ?, ?, ?, ?, ?)", eventID, title, speaker, filename, originalFilename, size)
 	if err != nil {
 		return nil, err
 	}
@@ -1267,7 +1280,7 @@ func CreatePresentation(eventID int64, title, speaker, filename string, size int
 }
 
 func ListPresentations(eventID int64) ([]Presentation, error) {
-	rows, err := DB.Query("SELECT id, event_id, title, speaker, filename, size, created_at FROM presentations WHERE event_id=? ORDER BY created_at ASC, id ASC", eventID)
+	rows, err := DB.Query("SELECT id, event_id, title, speaker, filename, original_filename, size, created_at FROM presentations WHERE event_id=? ORDER BY created_at ASC, id ASC", eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -1276,7 +1289,7 @@ func ListPresentations(eventID int64) ([]Presentation, error) {
 	for rows.Next() {
 		var p Presentation
 		var ca string
-		if err := rows.Scan(&p.ID, &p.EventID, &p.Title, &p.Speaker, &p.Filename, &p.Size, &ca); err != nil {
+		if err := rows.Scan(&p.ID, &p.EventID, &p.Title, &p.Speaker, &p.Filename, &p.OriginalFilename, &p.Size, &ca); err != nil {
 			return nil, err
 		}
 		p.CreatedAt = parseTimePragmatic(ca)
@@ -1288,7 +1301,7 @@ func ListPresentations(eventID int64) ([]Presentation, error) {
 func GetPresentation(id int64) (*Presentation, error) {
 	var p Presentation
 	var ca string
-	err := DB.QueryRow("SELECT id, event_id, title, speaker, filename, size, created_at FROM presentations WHERE id=?", id).Scan(&p.ID, &p.EventID, &p.Title, &p.Speaker, &p.Filename, &p.Size, &ca)
+	err := DB.QueryRow("SELECT id, event_id, title, speaker, filename, original_filename, size, created_at FROM presentations WHERE id=?", id).Scan(&p.ID, &p.EventID, &p.Title, &p.Speaker, &p.Filename, &p.OriginalFilename, &p.Size, &ca)
 	if err != nil {
 		return nil, err
 	}

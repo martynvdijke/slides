@@ -491,12 +491,21 @@ func moderationAnswerDTO(a db.ModerationAnswer) ModerationAnswerDTO {
 	}
 }
 
+// presentationDisplayName is the file name shown to people: the original upload
+// name when known, otherwise the stored name (rows created before the column).
+func presentationDisplayName(p db.Presentation) string {
+	if strings.TrimSpace(p.OriginalFilename) != "" {
+		return p.OriginalFilename
+	}
+	return p.Filename
+}
+
 func presentationDTO(p db.Presentation, eventCode string) PresentationDTO {
 	return PresentationDTO{
 		ID:        p.ID,
 		Title:     p.Title,
 		Speaker:   p.Speaker,
-		Filename:  p.Filename,
+		Filename:  presentationDisplayName(p),
 		Size:      p.Size,
 		URL:       "/api/events/" + eventCode + "/presentations/" + strconv.FormatInt(p.ID, 10) + "/download",
 		CreatedAt: p.CreatedAt.Format(time.RFC3339),

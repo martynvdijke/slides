@@ -1512,7 +1512,7 @@ func AdminUploadPresentation(w http.ResponseWriter, r *http.Request) {
 	if title == "" {
 		title = origName
 	}
-	p, err := db.CreatePresentation(eid, title, speaker, displayFilename, size)
+	p, err := db.CreatePresentation(eid, title, speaker, storedName, displayFilename, size)
 	if err != nil {
 		_ = os.Remove(dest)
 		jsonError(w, "failed to create presentation", http.StatusInternalServerError)
@@ -1524,38 +1524,9 @@ func AdminUploadPresentation(w http.ResponseWriter, r *http.Request) {
 	if ev != nil {
 		code = ev.Code
 	}
-	// store mapping: we saved as storedName but db stores displayFilename; for delete we need to remove stored file
-	// Since db only knows display filename, we cannot map back. Workaround: rename handling?
-	// Instead store storedName in filename? But spec says Filename is original. We'll keep stored file and rely on size/title.
-	// To allow delete to remove file, we need to know stored name. We embed storedName in a sidecar? For now we keep dest as is and delete will try both.
-	// Actually we should store storedName as filename in db? Spec says sanitize/ignore client path (use Base on client filename for display Filename). Create row with title (default to filename), speaker, original filename, size (stat). So display filename is original.
-	// But then delete cannot find file. We solve by also writing a marker: the file is stored under MediaDir/storedName; delete will need to find it. Since db doesn't store storedName, we can't. Alternative: store file as MediaDir/<storedName> and also store mapping via filename not sufficient.
-	// Decision: store presentation with storedName as filename in db is not per spec. Instead we keep original filename but also we will on delete scan MediaDir? Simpler: override filename in db to be storedName but keep original as display? Spec says Filename = original, so that won't work.
-	// Workaround: store file using original name? No collision safe.
-	// Best: store file content under MediaDir/storedName but also create a symlink or record. Since we can't change db schema, we will store the presentation row with storedName as filename and return original as display via DTO override.
-	// Instead: after CreatePresentation, we need to ensure DTO returns original filename. presentationDTO uses p.Filename. So if we store storedName, DTO would show storedName, not original — breaks admin.js.
-	// So we keep as spec: db filename = original, but we need delete to work. We can on delete brute force: try to remove any file matching? Instead we can after creating row, we create an extra metadata file or we just store mapping in memory? Simpler: we store file as MediaDir/<id>_<storedName> ? still need mapping.
-	// Easiest: change file naming to use presentation ID: after CreatePresentation we rename file to include ID. Then delete can locate via listing MediaDir?
-	// For now: keep dest as storedName, and on delete we will attempt to find and remove files that match size? Not reliable.
-	// Alternative: store the presentation with title,speaker,storedName but return DTO with original filename overridden.
-	// We will update db row to contain storedName? Then override DTO filename to original for response. That way delete can find file by storedName.
-	_ = p
-	// Fix: update presentation row's filename to storedName while keeping original for response.
-	// Do direct update if we stored original.
-	if p.Filename != storedName {
-		if _, err := db.DB.Exec("UPDATE presentations SET filename=? WHERE id=?", storedName, p.ID); err != nil {
-			log.Printf("update presentation %d filename: %v", p.ID, err)
-			_ = os.Remove(filepath.Join(MediaDir, storedName))
-			_ = db.DeletePresentation(p.ID)
-			jsonError(w, "failed to save presentation", http.StatusInternalServerError)
-			return
-		}
-	}
-	// Return DTO with original filename for display but URL still works
-	dto := presentationDTO(*p, code)
-	dto.Filename = displayFilename
-	dto.Size = size
-	writeJSON(w, http.StatusOK, dto)
+	// filename is the UUID name used on disk; the DTO reports the original
+	// upload name so both the admin list and the download keep it.
+	writeJSON(w, http.StatusOK, presentationDTO(*p, code))
 }
 
 // AdminDeletePresentation deletes a presentation.
@@ -1568,19 +1539,29 @@ func AdminUploadPresentation(w http.ResponseWriter, r *http.Request) {
 // @Success  204 "no content"
 // @Router   /api/admin/events/{id}/presentations/{pid} [delete]
 func AdminDeletePresentation(w http.ResponseWriter, r *http.Request) {
+	eid := pathID(r, "id")
 	pid := pathID(r, "pid")
+	if eid == 0 || pid == 0 {
+		jsonError(w, "invalid id", http.StatusBadRequest)
+		return
+	}
 	p, err := db.GetPresentation(pid)
 	if err != nil || p == nil {
 		writeLookupFailure(w, err, "presentation")
+		return
+	}
+	// The event in the path is load-bearing: a presentation may only be deleted
+	// through the event that owns it.
+	if p.EventID != eid {
+		jsonError(w, "presentation does not belong to event", http.StatusBadRequest)
 		return
 	}
 	if err := db.DeletePresentation(pid); err != nil {
 		jsonError(w, "failed to delete", http.StatusInternalServerError)
 		return
 	}
-	// remove stored file; p.Filename may be storedName or original
+	// p.Filename is the stored (UUID) name the bytes live under.
 	_ = os.Remove(filepath.Join(MediaDir, p.Filename))
-	// also try to clean any file that might be the stored one if filename was original — scan not needed
 	w.WriteHeader(http.StatusNoContent)
 }
 
