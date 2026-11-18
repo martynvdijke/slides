@@ -3334,7 +3334,11 @@ func UpsertDeckQuestion(eventID int64, d DeckSlide, deckSlug string) (bool, erro
 	// check existence
 	var exists int
 	_ = DB.QueryRow("SELECT COUNT(*) FROM questions WHERE event_id=? AND external_id=?", eventID, externalID).Scan(&exists)
-	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, slide_index=excluded.slide_index, auto_activate=excluded.auto_activate, status='draft'`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, externalID, deckSlug, d.SlideID, d.Position, autoAct)
+	// On re-sync, keep the row's existing status: a live/locked/revealed
+	// question must not be demoted to draft while it is on screen. An archived
+	// ('closed') row still restarts as draft when it is re-added to the deck.
+	// Fresh inserts start as 'draft' (INSERT column value).
+	_, err := DB.Exec(`INSERT INTO questions (event_id, kind, prompt, options, position, status, show_results, points_base, correct_index, duration_sec, time_limit_s, external_id, deck_slug, slide_id, slide_index, auto_activate) VALUES (?, ?, ?, ?, ?, 'draft', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(event_id, external_id) WHERE external_id <> '' DO UPDATE SET prompt=excluded.prompt, kind=excluded.kind, options=excluded.options, points_base=excluded.points_base, correct_index=excluded.correct_index, duration_sec=excluded.duration_sec, time_limit_s=excluded.time_limit_s, show_results=excluded.show_results, position=excluded.position, deck_slug=excluded.deck_slug, slide_id=excluded.slide_id, slide_index=excluded.slide_index, auto_activate=excluded.auto_activate, status=CASE WHEN questions.status='closed' THEN 'draft' ELSE questions.status END`, eventID, d.Kind, d.Prompt, string(optsB), d.Position, btoi(d.ShowResults), d.PointsBase, ci, d.DurationSec, d.TimeLimitS, externalID, deckSlug, d.SlideID, d.Position, autoAct)
 	if err != nil {
 		return false, err
 	}
