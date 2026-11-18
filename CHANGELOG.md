@@ -1,3 +1,11 @@
+## [1.26.2](https://github.com/martynvdijke/slides/compare/v1.26.1...v1.26.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **server:** carry event settings through clone ([0ab6e15](https://github.com/martynvdijke/slides/commit/0ab6e150c88a3903946c22c365f07466d84f03fb))
+* **server:** scope question deletion to its event ([96ef81d](https://github.com/martynvdijke/slides/commit/96ef81d729df78a405ee11ad4c76a30bb451c01e))
+
 ## [1.26.1](https://github.com/martynvdijke/slides/compare/v1.26.0...v1.26.1) (2026-11-18)
 
 
