@@ -653,6 +653,7 @@
     meta.appendChild(author); meta.appendChild(votes);
     if(q.status==='pending'){ var chip=document.createElement('span'); chip.className='pill'; chip.textContent='Awaiting approval'; meta.appendChild(chip); }
     if(q.status==='flagged'){ var chip2=document.createElement('span'); chip2.className='pill'; chip2.textContent='Flagged'; chip2.style.background='rgba(244,63,94,.14)'; meta.appendChild(chip2); }
+    if(q.status==='answered'){ var chip3=document.createElement('span'); chip3.className='pill'; chip3.textContent='Answered'; meta.appendChild(chip3); }
     bodyWrap.appendChild(body); bodyWrap.appendChild(meta);
     var btn=document.createElement('button'); btn.className='vote-btn'+(q.voted?' voted':''); btn.type='button';
     btn.innerHTML='<svg viewBox="0 0 24 24" fill="'+(q.voted?'currentColor':'none')+'" stroke="currentColor" stroke-width="1.8"><path d="M12 5l7 7-1.4 1.4L12 7.8 6.4 13.4 5 12z"/><path d="M12 5v14"/></svg> '+(q.voted? q.votes : 'Vote');

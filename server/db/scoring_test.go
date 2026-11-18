@@ -215,6 +215,69 @@ func TestUpsertAnswerClientUUIDDedup(t *testing.T) {
 	}
 }
 
+// TestUpsertAnswerClientUUIDScopedToQuestion pins the dedup scope: client_uuid
+// is an idempotency key for one answer on one question, so the same value used
+// on two different questions inserts twice, while replaying the same answer for
+// the same question stays a no-op.
+func TestUpsertAnswerClientUUIDScopedToQuestion(t *testing.T) {
+	eventID, pid := scoringFixtures(t)
+
+	q1, err := CreateQuestion(eventID, "poll", "live", "First?", []string{"A", "B"}, false, false, 0, "", "")
+	if err != nil {
+		t.Fatalf("CreateQuestion q1: %v", err)
+	}
+	if _, err := UpdateQuestion(q1.ID, map[string]any{"correct_index": 0, "points_base": 100}); err != nil {
+		t.Fatalf("UpdateQuestion q1: %v", err)
+	}
+	setActivated(t, q1.ID, 0)
+
+	q2, err := CreateQuestion(eventID, "poll", "live", "Second?", []string{"A", "B"}, false, false, 0, "", "")
+	if err != nil {
+		t.Fatalf("CreateQuestion q2: %v", err)
+	}
+
+	// (a) Same client_uuid on two different questions: both must insert.
+	if _, _, total, err := UpsertAnswerWithScoring(q1.ID, pid, "A", "shared-uuid"); err != nil {
+		t.Fatalf("q1 first insert: %v", err)
+	} else if total != 100 {
+		t.Fatalf("q1 first total = %d, want 100", total)
+	}
+	if _, _, _, err := UpsertAnswerWithScoring(q2.ID, pid, "B", "shared-uuid"); err != nil {
+		t.Fatalf("q2 insert with same uuid: %v", err)
+	}
+	var n int
+	if err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE client_uuid=?", "shared-uuid").Scan(&n); err != nil {
+		t.Fatalf("count shared uuid: %v", err)
+	}
+	if n != 2 {
+		t.Fatalf("rows for shared client_uuid = %d, want 2 (one per question)", n)
+	}
+
+	// (b) Same client_uuid twice on the same question: dedup, one row.
+	if _, _, _, err := UpsertAnswerWithScoring(q2.ID, pid, "B", "shared-uuid"); err != nil {
+		t.Fatalf("q2 replay: %v", err)
+	}
+	if err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE question_id=? AND client_uuid=?", q2.ID, "shared-uuid").Scan(&n); err != nil {
+		t.Fatalf("count q2: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("rows for q2 = %d, want 1", n)
+	}
+
+	// (c) Replaying the scored answer returns its original scoring without
+	// double-counting the participant's total.
+	correct, replayPts, replayTotal, err := UpsertAnswerWithScoring(q1.ID, pid, "A", "shared-uuid")
+	if err != nil {
+		t.Fatalf("q1 replay: %v", err)
+	}
+	if !correct || replayPts != 100 {
+		t.Fatalf("q1 replay scoring = (%v, %d), want (true, 100)", correct, replayPts)
+	}
+	if replayTotal != 100 {
+		t.Fatalf("q1 replay total = %d, want 100 (no double count)", replayTotal)
+	}
+}
+
 func TestLeaderboardRankingAndLimit(t *testing.T) {
 	eventID, _ := scoringFixtures(t)
 	ev, err := GetEventByID(eventID)

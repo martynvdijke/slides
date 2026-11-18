@@ -496,7 +496,15 @@ func migrate() error {
 			return err
 		}
 	}
-	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_client_uuid ON answers(client_uuid) WHERE client_uuid IS NOT NULL"); err != nil {
+	// Answer dedup is scoped per question: client_uuid is an idempotency key for
+	// one answer, so the same value may legitimately appear on two different
+	// questions while a replay of the same answer stays a no-op. The old global
+	// index is dropped so existing databases migrate to the scoped one; the new
+	// constraint is looser, so no existing row can violate it.
+	if _, err := DB.Exec("DROP INDEX IF EXISTS idx_answers_client_uuid"); err != nil {
+		return err
+	}
+	if _, err := DB.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_answers_question_client_uuid ON answers(question_id, client_uuid) WHERE client_uuid IS NOT NULL"); err != nil {
 		return err
 	}
 	for _, col := range []struct{ name, ddl string }{
@@ -2286,7 +2294,33 @@ func CountAnswers(questionID int64) (int, error) {
 	return n, err
 }
 
-// UpsertAnswerWithScoring inserts or updates an answer with scoring and optional client_uuid dedup.
+// findExistingAnswerScoring looks up the scoring stored for an answer carrying
+// clientUUID on a specific question. The question scope is load-bearing: the
+// same client_uuid on another question is a different answer and must insert.
+func findExistingAnswerScoring(questionID, participantID int64, clientUUID string) (correct bool, pts int, total int, found bool, err error) {
+	var ic sql.NullInt64
+	var pa sql.NullInt64
+	err = DB.QueryRow("SELECT is_correct, points_awarded FROM answers WHERE question_id=? AND client_uuid=?", questionID, clientUUID).Scan(&ic, &pa)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, 0, 0, false, nil
+	}
+	if err != nil {
+		return false, 0, 0, false, err
+	}
+	if ic.Valid && ic.Int64 != 0 {
+		correct = true
+	}
+	if pa.Valid {
+		pts = int(pa.Int64)
+	}
+	total, _ = GetParticipantTotalPoints(participantID)
+	return correct, pts, total, true, nil
+}
+
+// UpsertAnswerWithScoring inserts or updates an answer with scoring and optional
+// client_uuid dedup. client_uuid dedup is scoped to one question (see
+// findExistingAnswerScoring), so replaying an offline-queued answer is
+// idempotent without colliding with the same uuid used on another question.
 // Returns is_correct, points_awarded, total_points.
 func UpsertAnswerWithScoring(questionID, participantID int64, value string, clientUUID string) (bool, int, int, error) {
 	return UpsertAnswerWithScoringStatus(questionID, participantID, value, clientUUID, "visible")
@@ -2300,22 +2334,11 @@ func UpsertAnswerWithScoringStatus(questionID, participantID int64, value string
 		status = "visible"
 	}
 	if clientUUID != "" {
-		var exists int
-		err := DB.QueryRow("SELECT COUNT(*) FROM answers WHERE client_uuid=?", clientUUID).Scan(&exists)
-		if err == nil && exists > 0 {
-			// duplicate, return existing scoring
-			var ic sql.NullInt64
-			var pa sql.NullInt64
-			_ = DB.QueryRow("SELECT is_correct, points_awarded FROM answers WHERE client_uuid=?", clientUUID).Scan(&ic, &pa)
-			correct := false
-			if ic.Valid && ic.Int64 != 0 {
-				correct = true
-			}
-			pts := 0
-			if pa.Valid {
-				pts = int(pa.Int64)
-			}
-			total, _ := GetParticipantTotalPoints(participantID)
+		if correct, pts, total, found, err := findExistingAnswerScoring(questionID, participantID, clientUUID); err != nil {
+			return false, 0, 0, err
+		} else if found {
+			// Replay of an answer already stored for this question: return the
+			// scoring we recorded the first time instead of inserting again.
 			return correct, pts, total, nil
 		}
 	}
@@ -2392,6 +2415,13 @@ func UpsertAnswerWithScoringStatus(questionID, participantID int64, value string
 	}
 	_, err = DB.Exec(`INSERT INTO answers (question_id, participant_id, value, status, is_correct, points_awarded, elapsed_ms, client_uuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(question_id, participant_id) DO UPDATE SET value=excluded.value, status=excluded.status, is_correct=excluded.is_correct, points_awarded=excluded.points_awarded, elapsed_ms=excluded.elapsed_ms, client_uuid=COALESCE(excluded.client_uuid, answers.client_uuid), created_at=CURRENT_TIMESTAMP`, questionID, participantID, value, status, icParam, pointsParam, elapsedParam, cuParam)
 	if err != nil {
+		// A concurrent replay can slip past the pre-check and trip the scoped
+		// unique index; treat it as the duplicate it is rather than an error.
+		if clientUUID != "" {
+			if correct, pts, total, found, lookupErr := findExistingAnswerScoring(questionID, participantID, clientUUID); lookupErr == nil && found {
+				return correct, pts, total, nil
+			}
+		}
 		return false, 0, 0, err
 	}
 	InvalidateQuestionStats(questionID)
@@ -2642,7 +2672,7 @@ func ListQAForParticipant(eventID, participantID int64) ([]QAQuestion, error) {
 		SELECT q.id, q.event_id, q.body, q.author, q.participant_id, q.flagged, q.status, q.created_at, COUNT(v.qa_id) as votes,
 		       CASE WHEN EXISTS(SELECT 1 FROM qa_votes WHERE qa_id=q.id AND participant_id=?) THEN 1 ELSE 0 END as voted
 		FROM qa_questions q LEFT JOIN qa_votes v ON v.qa_id=q.id
-		WHERE q.event_id=? AND q.status='approved'
+		WHERE q.event_id=? AND q.status IN ('approved','answered')
 		GROUP BY q.id ORDER BY q.flagged DESC, votes DESC, q.created_at ASC`, participantID, eventID)
 	if err != nil {
 		return nil, err

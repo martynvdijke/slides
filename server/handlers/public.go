@@ -293,11 +293,11 @@ func ListPublicQA(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			rows = r2
 		} else {
-			r2, _ := db.ListQA(ev.ID, "approved")
+			r2, _ := db.ListQA(ev.ID, "approved", "answered")
 			rows = r2
 		}
 	} else {
-		r2, _ := db.ListQA(ev.ID, "approved")
+		r2, _ := db.ListQA(ev.ID, "approved", "answered")
 		rows = r2
 	}
 	if rows == nil {

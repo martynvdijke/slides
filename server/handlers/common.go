@@ -553,7 +553,7 @@ func BuildState(ev *db.Event, participantID int64) StateDTO {
 
 	qaRows, err := db.ListQAForParticipant(ev.ID, participantID)
 	if err != nil {
-		qaRows, err = db.ListQA(ev.ID, "approved")
+		qaRows, err = db.ListQA(ev.ID, "approved", "answered")
 	}
 	if err == nil {
 		for _, q := range qaRows {

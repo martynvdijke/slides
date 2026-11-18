@@ -344,7 +344,7 @@ func TestQA(t *testing.T) {
 	if len(filt) != 1 || filt[0].ID != qa1.ID {
 		t.Fatalf("filtered %+v", filt)
 	}
-	// ListQAForParticipant returns only approved
+	// ListQAForParticipant returns approved and answered questions
 	ToggleVote(qa1.ID, p1) // p1 votes qa1
 	lp, _ := ListQAForParticipant(ev.ID, p1)
 	if len(lp) != 1 || !lp[0].Voted {
@@ -357,6 +357,14 @@ func TestQA(t *testing.T) {
 	lp2, _ := ListQAForParticipant(ev.ID, p2)
 	if len(lp2) != 1 || lp2[0].Voted {
 		t.Fatalf("lp2 voted should be false %+v", lp2)
+	}
+	// An answered question stays visible to participants; a pending one does not.
+	if err := UpdateQAStatus(qa1.ID, "answered"); err != nil {
+		t.Fatalf("mark answered: %v", err)
+	}
+	lp3, _ := ListQAForParticipant(ev.ID, p2)
+	if len(lp3) != 1 || lp3[0].ID != qa1.ID || lp3[0].Status != "answered" {
+		t.Fatalf("answered question should stay listed %+v", lp3)
 	}
 	// delete
 	DeleteQA(qa2.ID)
