@@ -1,3 +1,10 @@
+## [1.25.2](https://github.com/martynvdijke/slides/compare/v1.25.1...v1.25.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **audience:** show the roster on the waiting screen ([24db834](https://github.com/martynvdijke/slides/commit/24db8341e5ee12fa443521ef9b7ab6887cf575dc))
+
 ## [1.25.1](https://github.com/martynvdijke/slides/compare/v1.25.0...v1.25.1) (2026-11-18)
 
 
