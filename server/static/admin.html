@@ -131,12 +131,12 @@ details[open] .chev{transform:rotate(180deg)}
       <button class="btn btn-primary" type="submit">Sign in</button>
       <a id="btn-oidc-login" class="btn btn-ghost hidden" href="/api/auth/oidc/login">Sign in with OIDC</a>
       <div class="mt-2 hidden" id="forgot-wrap"><a href="#" id="btn-forgot">Forgot password?</a></div>
-      <form id="form-forgot" class="hidden mt-3 grid gap-2">
-        <div class="field"><label for="forgot-input">Email or username</label><input id="forgot-input" class="input" placeholder="you@example.com"></div>
-        <button class="btn btn-ghost btn-small" type="submit">Send reset link</button>
-        <div id="forgot-msg" class="text-[#9AA0B8] text-[0.88rem]"></div>
-      </form>
       <div id="login-msg" role="status" aria-live="polite" class="text-[#F87171] text-[0.88rem]"></div>
+    </form>
+    <form id="form-forgot" class="hidden mt-3 grid gap-2">
+      <div class="field"><label for="forgot-input">Email or username</label><input id="forgot-input" class="input" placeholder="you@example.com"></div>
+      <button class="btn btn-ghost btn-small" type="submit">Send reset link</button>
+      <div id="forgot-msg" class="text-[#9AA0B8] text-[0.88rem]"></div>
     </form>
   </div>
 </section>
