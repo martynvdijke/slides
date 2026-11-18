@@ -59,7 +59,7 @@ test.describe('feature-test deck', () => {
     await livePage.close()
   })
 
-  test('all 8 question kinds: prompt visible and answer+results', async ({ browser, request }) => {
+  test('all 9 question kinds: prompt visible and answer+results', async ({ browser, request }) => {
     test.setTimeout(120000)
     await login(request)
     const ev = await createEvent(request, `E2E FT kinds ${Date.now()}`)
@@ -174,6 +174,17 @@ test.describe('feature-test deck', () => {
           await expect(p.locator('#live-card .thanks')).toContainText('Thanks', { timeout: 10000 })
         },
       },
+      {
+        kind: 'grid2x2',
+        prompt: 'Grid FT?',
+        options: ['Top-left', 'Top-right', 'Bottom-left', 'Bottom-right'],
+        answer: async (p) => {
+          await expect(p.locator('#live-card .prompt')).toContainText('Grid FT?', { timeout: 15000 })
+          await expect(p.locator('#live-card .grid2x2-cell')).toHaveCount(4)
+          await p.locator('#live-card .grid2x2-cell', { hasText: 'Top-right' }).click()
+          await expect(p.locator('#live-card .thanks')).toContainText('Thanks', { timeout: 10000 })
+        },
+      },
     ]
 
     for (const k of kinds) {
@@ -204,6 +215,15 @@ test.describe('feature-test deck', () => {
         await expect(deck.locator('.live-q-bars').first().locator('.live-q-row')).toHaveCount(11, { timeout: 15000 })
         await expect(deck.locator('.live-q-total').first()).toContainText(/NPS/, { timeout: 15000 })
         await expect(deck.locator('.live-q-total').first()).toContainText(/1 (vote|ballot)/i, { timeout: 15000 })
+      } else if (k.kind === 'grid2x2') {
+        // Audience and deck tally per quadrant; the projector renders its own grid.
+        await expect(aud.locator('#live-card .grid-result')).toHaveCount(4, { timeout: 10000 })
+        await expect(aud.locator('#live-card .grid-result', { hasText: 'Top-right' })).toContainText('1')
+        await expect(deck.locator('.live-q-grid').first().locator('.live-q-grid-cell')).toHaveCount(4, { timeout: 15000 })
+        await expect(deck.locator('.live-q-grid').first().locator('.live-q-grid-cell', { hasText: 'Top-right' })).toContainText('1', { timeout: 15000 })
+        await expect(deck.locator('.live-q-total').first()).toContainText(/1 (vote|ballot)/i, { timeout: 15000 })
+        await expect(proj.locator('#grid2x2-results .grid2x2-result')).toHaveCount(4, { timeout: 15000 })
+        await expect(proj.locator('#grid2x2-results .grid2x2-result', { hasText: 'Top-right' })).toContainText('1')
       } else {
         await expect(aud.locator('#live-card .results .result-row').first()).toBeVisible({ timeout: 10000 })
         if (k.deckRows !== undefined) {

@@ -103,6 +103,7 @@ Live question kinds:
 - NPS
 - open text
 - word cloud
+- 2×2 grid
 
 Prompts accept image and video media.
 
@@ -177,4 +178,21 @@ prompt: What topic should we cover next?
 id: ft-wordcloud
 kind: wordcloud
 prompt: Describe today in one word.
+-->
+
+---
+
+# 2×2 grid
+
+<LiveQuestion />
+
+<!-- live-question
+id: ft-grid2x2
+kind: grid2x2
+prompt: Where in the room are you sitting?
+options:
+  - Top-left
+  - Top-right
+  - Bottom-left
+  - Bottom-right
 -->

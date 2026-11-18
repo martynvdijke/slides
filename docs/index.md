@@ -24,7 +24,7 @@ on GitHub Pages and point them at a hosted backend.
 
     ---
 
-    Eight question kinds, media prompts, scoring, time limits and the quiz loop.
+    Nine question kinds, media prompts, scoring, time limits and the quiz loop.
 
     [:octicons-arrow-right-24: Question kinds](questions.md)
 

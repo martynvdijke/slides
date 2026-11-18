@@ -71,6 +71,11 @@ test.describe('deck-authored questions seeded from markdown', () => {
         kind: 'wordcloud',
         options: [],
       },
+      {
+        prompt: 'Where in the room are you sitting?',
+        kind: 'grid2x2',
+        options: ['Top-left', 'Top-right', 'Bottom-left', 'Bottom-right'],
+      },
     ]
 
     for (const exp of expected) {
