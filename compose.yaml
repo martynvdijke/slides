@@ -71,7 +71,7 @@ services:
     restart: unless-stopped
 
   umami-db:
-    image: postgres:18-alpine
+    image: postgres:19-alpine
     container_name: umami-db
     profiles: [analytics]
     environment:
